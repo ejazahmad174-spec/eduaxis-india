@@ -31,7 +31,6 @@ export default function StudentDashboardPage() {
       }
 
       const { data: authData, error: authError } = await supabase.auth.getUser();
-
       if (authError || !authData.user) {
         router.replace('/student/login');
         return;
@@ -65,10 +64,7 @@ export default function StudentDashboardPage() {
     }
 
     loadStudent();
-
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [router]);
 
   async function handleSignOut() {
@@ -107,6 +103,7 @@ export default function StudentDashboardPage() {
   }
 
   const shortcuts = [
+    { title: 'My Profile', description: 'View and update your name, mobile number, state, district and password.', href: '/student/profile', label: 'Manage my profile' },
     { title: 'Study Materials', description: 'Explore free and premium study resources.', href: '/study-materials', label: 'Explore materials' },
     { title: 'Online Courses', description: 'Discover learning courses on EduAxis India.', href: '/courses', label: 'View courses' },
     { title: 'Mock Tests', description: 'Prepare with exam-oriented practice tests.', href: '/mock-tests', label: 'View mock tests' },
@@ -120,9 +117,14 @@ export default function StudentDashboardPage() {
           <Link href="/" style={{ color: '#fff', textDecoration: 'none', fontWeight: 800, fontSize: 21 }}>
             EduAxis <span style={{ color: '#55d2c6' }}>India</span>
           </Link>
-          <button onClick={handleSignOut} disabled={signingOut} style={{ background: '#fff', color: '#102d49', border: 0, borderRadius: 8, padding: '10px 15px', fontWeight: 750, cursor: signingOut ? 'wait' : 'pointer' }}>
-            {signingOut ? 'Signing out…' : 'Sign Out'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <Link href="/student/profile" style={{ color: '#fff', border: '1px solid rgba(255,255,255,.55)', textDecoration: 'none', borderRadius: 8, padding: '9px 13px', fontWeight: 700, fontSize: 14 }}>
+              My Profile
+            </Link>
+            <button onClick={handleSignOut} disabled={signingOut} style={{ background: '#fff', color: '#102d49', border: 0, borderRadius: 8, padding: '10px 15px', fontWeight: 750, cursor: signingOut ? 'wait' : 'pointer' }}>
+              {signingOut ? 'Signing out…' : 'Sign Out'}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -131,13 +133,14 @@ export default function StudentDashboardPage() {
           <div style={{ color: '#0b918d', fontSize: 12, fontWeight: 800, letterSpacing: 1.4 }}>STUDENT DASHBOARD</div>
           <h1 style={{ fontSize: 30, margin: '10px 0 8px' }}>Welcome, {profile?.full_name || 'Student'}!</h1>
           <p style={{ color: '#647b91', lineHeight: 1.6, margin: 0 }}>Your learning journey continues here. Choose a section below to get started.</p>
-
           {errorMessage && <p role="alert" style={{ color: '#bd2525', marginBottom: 0 }}>{errorMessage}</p>}
-
           <div style={{ marginTop: 22, padding: 16, borderRadius: 11, background: '#f3f7fa' }}>
             <div style={{ fontWeight: 750, marginBottom: 6 }}>Account details</div>
             <div style={{ color: '#647b91', fontSize: 14 }}>Name: {profile?.full_name || 'Student'}</div>
             <div style={{ color: '#647b91', fontSize: 14, marginTop: 4 }}>Email: {profile?.email}</div>
+            <div style={{ marginTop: 12 }}>
+              <Link href="/student/profile" style={{ color: '#087f7b', fontWeight: 750, textDecoration: 'none', fontSize: 14 }}>View or edit your profile →</Link>
+            </div>
           </div>
         </section>
 
