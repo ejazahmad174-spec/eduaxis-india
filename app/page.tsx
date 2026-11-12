@@ -31,7 +31,7 @@ export default function Home() {
           <a href="/study-materials">Study Materials</a>
           <a href="#courses">Courses</a>
           <a href="#mock-tests">Mock Tests</a>
-          <a href="#news">Education News</a>
+          <a href="#blogs">Educational Blogs</a>
         </nav>
 
         <a className="login" href="/student/login">Student Login</a>
@@ -42,13 +42,14 @@ export default function Home() {
           <div>
             <label>YOUR LEARNING. YOUR FUTURE.</label>
             <h1>
-              Learn today.
-              <br />
-              <em>Lead tomorrow.</em>
+              Your one-stop platform for smart preparation and career growth.
             </h1>
             <p>
-              One platform for study materials, exam preparation,
-              government job updates and career-focused learning.
+              Find exam-ready study materials for school, college and competitive
+              examinations, timely government job updates, and practical,
+              career-focused educational blogs — all in one place. Learn smarter,
+              stay informed and take confident steps towards your career goals
+              with trusted, easy-to-understand content for every learner.
             </p>
 
             <div className="actions">
@@ -147,7 +148,7 @@ export default function Home() {
         <p className="sub">Topic-wise and full-length practice tests will be available here.</p>
       </section>
 
-      <footer id="news">
+      <footer id="blogs">
         <div className="wrap">
           <b>EduAxis India</b>
           <p>Empowering learners with knowledge, preparation and opportunity.</p>
