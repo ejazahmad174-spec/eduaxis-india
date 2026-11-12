@@ -46,7 +46,7 @@ export default function Home() {
             </h1>
             <p>
               Find exam-ready study materials for school, college and competitive
-              examinations, timely government job updates, and practical,
+              examinations, timely government job updates,
               career-focused educational blogs — all in one place. Learn smarter,
               stay informed and take confident steps towards your career goals
               with trusted, easy-to-understand content for every learner.
