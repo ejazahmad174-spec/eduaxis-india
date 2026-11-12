@@ -1,26 +1,282 @@
+
 'use client';
-import {useEffect,useState} from 'react'; import {useRouter} from 'next/navigation'; import {supabase} from '@/lib/supabase'; import '../admin.css';
-type Counts={materials:number;jobs:number;courses:number;tests:number;news:number};
-export default function AdminDashboardPage(){
- const router=useRouter();const [email,setEmail]=useState('');const [loading,setLoading]=useState(true);const [notice,setNotice]=useState('');const [counts,setCounts]=useState<Counts>({materials:0,jobs:0,courses:0,tests:0,news:0});
- useEffect(()=>{let active=true;async function load(){if(!supabase){router.replace('/admin/login');return;}const {data:{user},error}=await supabase.auth.getUser();if(error||!user){router.replace('/admin/login');return;}
- const {data:profile,error:pe}=await supabase.from('profiles').select('role').eq('id',user.id).maybeSingle();if(pe||profile?.role!=='admin'){await supabase.auth.signOut();router.replace('/admin/login');return;}
- const [m,j,c,t,n]=await Promise.all([supabase.from('study_materials').select('*',{count:'exact',head:true}),supabase.from('government_jobs').select('*',{count:'exact',head:true}),supabase.from('courses').select('*',{count:'exact',head:true}),supabase.from('mock_tests').select('*',{count:'exact',head:true}),supabase.from('education_news').select('*',{count:'exact',head:true})]);if(!active)return;
- if([m.error,j.error,c.error,t.error,n.error].some(Boolean))setNotice('Some summary counts could not be loaded. Please check Supabase permissions.');
- setEmail(user.email||'Administrator');setCounts({materials:m.count||0,jobs:j.count||0,courses:c.count||0,tests:t.count||0,news:n.count||0});setLoading(false);}
- load();return()=>{active=false;};},[router]);
- async function signOut(){if(supabase)await supabase.auth.signOut();router.replace('/admin/login');router.refresh();}
- if(loading)return <main className="admin-loading">Checking administrator access…</main>;
- const cards=[['📚','Study materials',counts.materials,'PDFs and learning resources'],['💼','Government jobs',counts.jobs,'Recruitment notifications'],['🎓','Online courses',counts.courses,'Courses and lessons'],['📝','Mock tests',counts.tests,'Practice tests'],['📰','Education news',counts.news,'News and announcements']];
- return <main className="admin-shell"><aside className="admin-sidebar"><a href="/" className="admin-brand"><span className="admin-brand-mark">E</span><span>EduAxis <b>India</b><small>ADMINISTRATION</small></span></a><div className="admin-side-label">WORKSPACE</div><a className="admin-side-link active" href="/admin/dashboard">▦ &nbsp; Dashboard</a><div className="admin-side-label">CONTENT MANAGEMENT</div>{
-<a className="admin-side-link" href="/admin/study-materials">▤ &nbsp; Study Materials</a>
 
-<a className="admin-side-link" href="/admin/study-materials">▤ &nbsp; Study Materials</a>
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+import '../admin.css';
 
-<div className="admin-side-link muted">▤ &nbsp; Government Jobs <small>Coming next</small></div>
-<div className="admin-side-link muted">▤ &nbsp; Online Courses <small>Coming next</small></div>
-<div className="admin-side-link muted">▤ &nbsp; Mock Tests <small>Coming next</small></div>
-<div className="admin-side-link muted">▤ &nbsp; Education News <small>Coming next</small></div>
+type Counts = {
+  materials: number;
+  jobs: number;
+  courses: number;
+  tests: number;
+  news: number;
+};
 
-}<div className="admin-sidebar-bottom"><a href="/">← View public website</a></div></aside><section className="admin-main"><header className="admin-topbar"><div><div className="admin-kicker">EDUAXIS INDIA / ADMIN</div><h1>Dashboard</h1></div><div className="admin-user"><span className="admin-avatar">A</span><span><b>Administrator</b><small>{email}</small></span><button onClick={signOut} className="admin-logout">Sign out</button></div></header><div className="admin-welcome"><div><h2>Welcome back!</h2><p>Here is an overview of your EduAxis India platform.</p></div><span className="admin-secure">✓ Secure admin session</span></div>{notice&&<div className="admin-notice">{notice}</div>}<div className="admin-stats">{cards.map(([icon,label,count,detail])=><article className="admin-stat" key={String(label)}><div className="admin-stat-top"><span>{icon}</span><small>ALL RECORDS</small></div><strong>{count}</strong><b>{label}</b><p>{detail}</p></article>)}</div><section className="admin-next"><div><div className="admin-kicker">NEXT DEVELOPMENT STEP</div><h2>Manage your educational content</h2><p>Your administrator account is connected. Next we will add working forms for uploading PDFs and publishing jobs, courses, tests and news.</p></div><div className="admin-next-badge">CONTENT TOOLS<br/><b>COMING NEXT</b></div></section><footer className="admin-footer">EduAxis India · Learn. Prepare. Progress.</footer></section></main>;
+export default function AdminDashboardPage() {
+  const router = useRouter();
+
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState('');
+  const [counts, setCounts] = useState<Counts>({
+    materials: 0,
+    jobs: 0,
+    courses: 0,
+    tests: 0,
+    news: 0,
+  });
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadDashboard() {
+      if (!supabase) {
+        router.replace('/admin/login');
+        return;
+      }
+
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+
+      if (error || !user) {
+        router.replace('/admin/login');
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (profileError || profile?.role !== 'admin') {
+        await supabase.auth.signOut();
+        router.replace('/admin/login');
+        return;
+      }
+
+      const [m, j, c, t, n] = await Promise.all([
+        supabase.from('study_materials').select('*', { count: 'exact', head: true }),
+        supabase.from('government_jobs').select('*', { count: 'exact', head: true }),
+        supabase.from('courses').select('*', { count: 'exact', head: true }),
+        supabase.from('mock_tests').select('*', { count: 'exact', head: true }),
+        supabase.from('education_news').select('*', { count: 'exact', head: true }),
+      ]);
+
+      if (!active) return;
+
+      if ([m.error, j.error, c.error, t.error, n.error].some(Boolean)) {
+        setNotice('Some dashboard statistics could not be loaded. Please check Supabase permissions.');
+      }
+
+      setEmail(user.email || 'Administrator');
+
+      setCounts({
+        materials: m.count || 0,
+        jobs: j.count || 0,
+        courses: c.count || 0,
+        tests: t.count || 0,
+        news: n.count || 0,
+      });
+
+      setLoading(false);
+    }
+
+    loadDashboard();
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
+  async function signOut() {
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+
+    router.replace('/admin/login');
+    router.refresh();
+  }
+
+  if (loading) {
+    return (
+      <main className="admin-loading">
+        Checking administrator access...
+      </main>
+    );
+  }
+
+  const cards = [
+    ['📚', 'Study materials', counts.materials, 'PDFs and learning resources'],
+    ['💼', 'Government jobs', counts.jobs, 'Recruitment notifications'],
+    ['🎓', 'Online courses', counts.courses, 'Courses and lessons'],
+    ['📝', 'Mock tests', counts.tests, 'Practice tests'],
+    ['📰', 'Education news', counts.news, 'News and announcements'],
+  ];
+
+  return (
+    <main className="admin-shell">
+
+      <aside className="admin-sidebar">
+
+        <a href="/" className="admin-brand">
+          <span className="admin-brand-mark">E</span>
+          <span>
+            EduAxis <b>India</b>
+            <small>ADMINISTRATION</small>
+          </span>
+        </a>
+
+        <div className="admin-side-label">WORKSPACE</div>
+
+        <a
+          className="admin-side-link active"
+          href="/admin/dashboard"
+        >
+          ▦ &nbsp; Dashboard
+        </a>
+
+        <div className="admin-side-label">
+          CONTENT MANAGEMENT
+        </div>
+
+        <a
+          className="admin-side-link"
+          href="/admin/study-materials"
+        >
+          ▤ &nbsp; Study Materials
+        </a>
+
+        <div className="admin-side-link muted">
+          ▤ &nbsp; Government Jobs
+          <small>Coming next</small>
+        </div>
+
+        <div className="admin-side-link muted">
+          ▤ &nbsp; Online Courses
+          <small>Coming next</small>
+        </div>
+
+        <div className="admin-side-link muted">
+          ▤ &nbsp; Mock Tests
+          <small>Coming next</small>
+        </div>
+
+        <div className="admin-side-link muted">
+          ▤ &nbsp; Education News
+          <small>Coming next</small>
+        </div>
+
+        <div className="admin-sidebar-bottom">
+          <a href="/">← View public website</a>
+        </div>
+
+      </aside>
+
+      <section className="admin-main">
+
+        <header className="admin-topbar">
+
+          <div>
+            <div className="admin-kicker">
+              EDUAXIS INDIA / ADMIN
+            </div>
+            <h1>Dashboard</h1>
+          </div>
+
+          <div className="admin-user">
+            <span className="admin-avatar">A</span>
+
+            <span>
+              <b>Administrator</b>
+              <small>{email}</small>
+            </span>
+
+            <button
+              onClick={signOut}
+              className="admin-logout"
+            >
+              Sign out
+            </button>
+          </div>
+
+        </header>
+
+        <div className="admin-welcome">
+
+          <div>
+            <h2>Welcome back!</h2>
+            <p>
+              Here is an overview of your EduAxis India platform.
+            </p>
+          </div>
+
+          <span className="admin-secure">
+            ✓ Secure admin session
+          </span>
+
+        </div>
+
+        {notice && (
+          <div className="admin-notice">
+            {notice}
+          </div>
+        )}
+
+        <div className="admin-stats">
+
+          {cards.map(([icon, label, count, detail]) => (
+            <article
+              className="admin-stat"
+              key={String(label)}
+            >
+              <div className="admin-stat-top">
+                <span>{icon}</span>
+                <small>ALL RECORDS</small>
+              </div>
+
+              <strong>{count}</strong>
+              <b>{label}</b>
+              <p>{detail}</p>
+            </article>
+          ))}
+
+        </div>
+
+        <section className="admin-next">
+
+          <div>
+            <div className="admin-kicker">
+              NEXT DEVELOPMENT STEP
+            </div>
+
+            <h2>Manage your educational content</h2>
+
+            <p>
+              Your administrator account is connected.
+              You can now manage Study Materials.
+              Other content management tools will be added next.
+            </p>
+          </div>
+
+          <div className="admin-next-badge">
+            CONTENT TOOLS
+            <br />
+            <b>IN DEVELOPMENT</b>
+          </div>
+
+        </section>
+
+        <footer className="admin-footer">
+          EduAxis India · Learn. Prepare. Progress.
+        </footer>
+
+      </section>
+
+    </main>
+  );
 }
