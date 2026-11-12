@@ -1,9 +1,8 @@
-
 const cards = [
   ['📘', 'Study Materials', 'Free and premium notes, PDFs and exam-wise resources.', '/study-materials'],
   ['🧪', 'Mock Tests', 'Practice with topic-wise and full-length tests.', '#mock-tests'],
   ['🎓', 'Online Courses', 'Structured learning for school and competitive exams.', '#courses'],
-  ['💼', 'Government Jobs', 'Teaching and other government vacancy updates.', '#jobs'],
+  ['💼', 'Government Jobs', 'Teaching and other government vacancy updates.', '/government-jobs'],
 ];
 
 const exams = ['BPSC TRE', 'Bihar STET', 'CTET', 'DSSSB', 'KVS & NVS', 'BPSC', 'SSC', 'UPSC'];
@@ -28,7 +27,7 @@ export default function Home() {
         </a>
 
         <nav>
-          <a href="#jobs">Latest Jobs</a>
+          <a href="/government-jobs">Latest Government Jobs</a>
           <a href="/study-materials">Study Materials</a>
           <a href="#courses">Courses</a>
           <a href="#mock-tests">Mock Tests</a>
@@ -56,7 +55,7 @@ export default function Home() {
               <a className="btn" href="/study-materials">
                 Explore Study Materials →
               </a>
-              <a className="outline" href="#jobs">
+              <a className="outline" href="/government-jobs">
                 Latest Government Jobs
               </a>
             </div>
@@ -125,10 +124,11 @@ export default function Home() {
 
       <section className="wrap section" id="jobs">
         <label>STAY INFORMED</label>
-        <h2>Government Jobs & Updates</h2>
+        <h2>Latest Government Jobs</h2>
         <div className="notice">
-          <b>Latest recruitment notifications</b>
-          <p>Government job notifications and application updates will appear here.</p>
+          <b>Find the latest recruitment notifications</b>
+          <p>Explore Central and State Government vacancies, teaching jobs and other recruitment updates. Check eligibility and important dates, then apply through official websites.</p>
+          <a className="btn" href="/government-jobs">Explore Latest Government Jobs →</a>
         </div>
       </section>
 
