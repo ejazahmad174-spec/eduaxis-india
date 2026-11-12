@@ -14,6 +14,13 @@ export default function AdminDashboardPage(){
  const cards=[['📚','Study materials',counts.materials,'PDFs and learning resources'],['💼','Government jobs',counts.jobs,'Recruitment notifications'],['🎓','Online courses',counts.courses,'Courses and lessons'],['📝','Mock tests',counts.tests,'Practice tests'],['📰','Education news',counts.news,'News and announcements']];
  return <main className="admin-shell"><aside className="admin-sidebar"><a href="/" className="admin-brand"><span className="admin-brand-mark">E</span><span>EduAxis <b>India</b><small>ADMINISTRATION</small></span></a><div className="admin-side-label">WORKSPACE</div><a className="admin-side-link active" href="/admin/dashboard">▦ &nbsp; Dashboard</a><div className="admin-side-label">CONTENT MANAGEMENT</div>{
 <a className="admin-side-link" href="/admin/study-materials">▤ &nbsp; Study Materials</a>
-{['Government Jobs','Online Courses','Mock Tests','Education News'].map(x=><div className="admin-side-link muted" key={x}>▤ &nbsp; {x}<small>Coming next</small></div>)}
+
+<a className="admin-side-link" href="/admin/study-materials">▤ &nbsp; Study Materials</a>
+
+<div className="admin-side-link muted">▤ &nbsp; Government Jobs <small>Coming next</small></div>
+<div className="admin-side-link muted">▤ &nbsp; Online Courses <small>Coming next</small></div>
+<div className="admin-side-link muted">▤ &nbsp; Mock Tests <small>Coming next</small></div>
+<div className="admin-side-link muted">▤ &nbsp; Education News <small>Coming next</small></div>
+
 }<div className="admin-sidebar-bottom"><a href="/">← View public website</a></div></aside><section className="admin-main"><header className="admin-topbar"><div><div className="admin-kicker">EDUAXIS INDIA / ADMIN</div><h1>Dashboard</h1></div><div className="admin-user"><span className="admin-avatar">A</span><span><b>Administrator</b><small>{email}</small></span><button onClick={signOut} className="admin-logout">Sign out</button></div></header><div className="admin-welcome"><div><h2>Welcome back!</h2><p>Here is an overview of your EduAxis India platform.</p></div><span className="admin-secure">✓ Secure admin session</span></div>{notice&&<div className="admin-notice">{notice}</div>}<div className="admin-stats">{cards.map(([icon,label,count,detail])=><article className="admin-stat" key={String(label)}><div className="admin-stat-top"><span>{icon}</span><small>ALL RECORDS</small></div><strong>{count}</strong><b>{label}</b><p>{detail}</p></article>)}</div><section className="admin-next"><div><div className="admin-kicker">NEXT DEVELOPMENT STEP</div><h2>Manage your educational content</h2><p>Your administrator account is connected. Next we will add working forms for uploading PDFs and publishing jobs, courses, tests and news.</p></div><div className="admin-next-badge">CONTENT TOOLS<br/><b>COMING NEXT</b></div></section><footer className="admin-footer">EduAxis India · Learn. Prepare. Progress.</footer></section></main>;
 }
