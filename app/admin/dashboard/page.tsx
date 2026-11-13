@@ -161,13 +161,21 @@ export default function AdminDashboardPage() {
           <small>Coming next</small>
         </div>
 
-        <a
-          className="admin-side-link"
-          href="/admin/mock-tests"
-        >
-          ▤ &nbsp; Mock Tests
-          <small>Manage tests →</small>
-        </a>
+<a
+  className="admin-side-link"
+  href="/admin/mock-tests"
+  style={{
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: '5px',
+  }}
+>
+  <span>▤ &nbsp; Mock Tests</span>
+  <small style={{ marginLeft: '24px' }}>
+    Manage tests →
+  </small>
+</a>
 
         <div className="admin-side-link muted">
           ▤ &nbsp; Education News
