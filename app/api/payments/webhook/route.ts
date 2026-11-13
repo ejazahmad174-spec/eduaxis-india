@@ -61,7 +61,109 @@ export async function POST(request: Request) {
 
     const event = JSON.parse(rawBody);
 
-    // This endpoint handles the two events configured in Razorpay.
+    const adminClient = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    const razorpay = new Razorpay({
+      key_id: razorpayKeyId,
+      key_secret: razorpayKeySecret,
+    });
+
+    // --------------------------------------------------
+    // 1. HANDLE SUCCESSFULLY PROCESSED REFUNDS
+    // --------------------------------------------------
+
+    if (event.event === "refund.processed") {
+      const refund = event?.payload?.refund?.entity;
+
+      if (!refund?.id || !refund?.payment_id || !refund?.amount) {
+        return NextResponse.json(
+          { error: "Refund details are missing." },
+          { status: 400 }
+        );
+      }
+
+      // Independently verify the refund with Razorpay.
+      const verifiedRefund = await razorpay.refunds.fetch(refund.id);
+
+      if (
+        verifiedRefund.id !== refund.id ||
+        verifiedRefund.payment_id !== refund.payment_id ||
+        verifiedRefund.amount !== Number(refund.amount) ||
+        verifiedRefund.status !== "processed"
+      ) {
+        console.error("Razorpay refund verification mismatch.");
+
+        return NextResponse.json(
+          { error: "Refund details could not be verified." },
+          { status: 400 }
+        );
+      }
+
+      // Find the original EduAxis payment.
+      const { data: order, error: orderError } = await adminClient
+        .from("payment_orders")
+        .select("*")
+        .eq("razorpay_payment_id", verifiedRefund.payment_id)
+        .maybeSingle();
+
+      if (orderError) {
+        console.error("Refund order lookup failed:", orderError);
+
+        return NextResponse.json(
+          { error: "Could not find the original payment." },
+          { status: 500 }
+        );
+      }
+
+      // Ignore refunds that do not belong to EduAxis India.
+      if (!order) {
+        return NextResponse.json({ received: true });
+      }
+
+      // Record refund and revoke access if fully refunded.
+      const { data: refundResult, error: refundError } =
+        await adminClient.rpc("process_mock_test_refund", {
+          p_refund_id: verifiedRefund.id,
+          p_payment_id: verifiedRefund.payment_id,
+          p_amount_paise: verifiedRefund.amount,
+        });
+
+      if (refundError) {
+        console.error("Refund processing failed:", refundError);
+
+        return NextResponse.json(
+          { error: "Refund recording failed. Retry required." },
+          { status: 500 }
+        );
+      }
+
+      if (!refundResult?.success) {
+        return NextResponse.json(
+          { error: "Refund processing could not be confirmed." },
+          { status: 500 }
+        );
+      }
+
+      console.log("EduAxis refund processed:", {
+        refundId: verifiedRefund.id,
+        paymentId: verifiedRefund.payment_id,
+        fullyRefunded: refundResult.fully_refunded,
+      });
+
+      return NextResponse.json({
+        received: true,
+        success: true,
+        fully_refunded: refundResult.fully_refunded,
+        message: refundResult.message,
+      });
+    }
+
+    // --------------------------------------------------
+    // 2. HANDLE EXISTING PAYMENT EVENTS
+    // --------------------------------------------------
+
     if (
       !["payment.captured", "payment.failed"].includes(event.event)
     ) {
@@ -77,11 +179,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const adminClient = createClient(supabaseUrl, serviceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
-    // Find the corresponding EduAxis payment order.
     const { data: order, error: orderError } = await adminClient
       .from("payment_orders")
       .select("*")
@@ -90,13 +187,13 @@ export async function POST(request: Request) {
 
     if (orderError) {
       console.error("Webhook order lookup failed:", orderError);
+
       return NextResponse.json(
         { error: "Could not look up the payment order." },
         { status: 500 }
       );
     }
 
-    // Ignore payments that do not belong to EduAxis India.
     if (!order) {
       return NextResponse.json({ received: true });
     }
@@ -112,6 +209,7 @@ export async function POST(request: Request) {
 
         if (updateError) {
           console.error("Could not record failed payment:", updateError);
+
           return NextResponse.json(
             { error: "Could not record payment failure." },
             { status: 500 }
@@ -131,12 +229,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true });
     }
 
-    // Prevent a different payment ID from replacing an existing one.
     if (
       order.razorpay_payment_id &&
       order.razorpay_payment_id !== payment.id
     ) {
       console.error("Webhook payment ID mismatch.");
+
       return NextResponse.json(
         { error: "Payment ID does not match the order." },
         { status: 409 }
@@ -144,11 +242,6 @@ export async function POST(request: Request) {
     }
 
     // Independently confirm payment details with Razorpay.
-    const razorpay = new Razorpay({
-      key_id: razorpayKeyId,
-      key_secret: razorpayKeySecret,
-    });
-
     const verifiedPayment = await razorpay.payments.fetch(payment.id);
 
     if (
@@ -158,13 +251,13 @@ export async function POST(request: Request) {
       verifiedPayment.currency !== order.currency
     ) {
       console.error("Razorpay payment verification mismatch.");
+
       return NextResponse.json(
         { error: "Payment details do not match the order." },
         { status: 400 }
       );
     }
 
-    // Use the same central activation function as the verification API.
     const { data: activation, error: activationError } =
       await adminClient.rpc("activate_mock_test_purchase", {
         p_payment_order_id: order.id,
@@ -174,7 +267,6 @@ export async function POST(request: Request) {
     if (activationError) {
       console.error("Webhook purchase activation failed:", activationError);
 
-      // A 500 response allows Razorpay to retry the webhook.
       return NextResponse.json(
         { error: "Payment received, but purchase activation needs retry." },
         { status: 500 }
