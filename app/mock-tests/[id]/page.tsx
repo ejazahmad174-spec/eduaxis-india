@@ -138,8 +138,44 @@ export default function MockTestExamPage() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState("");
+  const [authChecking, setAuthChecking] = useState(true);
 
   const t = labels[language];
+
+  // Protect the individual test URL: require login before showing the test page.
+  useEffect(() => {
+    let active = true;
+
+    const checkStudentLogin = async () => {
+      if (!supabase) {
+        if (active) {
+          setError("Unable to connect. Please refresh the page and try again.");
+          setAuthChecking(false);
+        }
+        return;
+      }
+
+      const { data, error: authError } = await supabase.auth.getUser();
+
+      if (!active) return;
+
+      if (authError || !data.user) {
+        const nextPath = window.location.pathname + window.location.search;
+        window.location.replace(
+          `/student/login?next=${encodeURIComponent(nextPath)}`
+        );
+        return;
+      }
+
+      setAuthChecking(false);
+    };
+
+    checkStudentLogin();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const startExam = async () => {
     if (!supabase) return;
@@ -150,7 +186,8 @@ export default function MockTestExamPage() {
     const { data: auth } = await supabase.auth.getUser();
 
     if (!auth.user) {
-      window.location.href = "/student/login";
+      const nextPath = window.location.pathname + window.location.search;
+      window.location.href = `/student/login?next=${encodeURIComponent(nextPath)}`;
       return;
     }
 
@@ -281,6 +318,15 @@ export default function MockTestExamPage() {
     .notice { color:#b91c1c; }
     @media(max-width:750px) { .layout { grid-template-columns:1fr; } }
   `;
+
+  if (authChecking) {
+    return (
+      <main className="page">
+        <style>{style}</style>
+        <div className="card">Checking your login...</div>
+      </main>
+    );
+  }
 
   if (result) {
     const review = result.review || [];
