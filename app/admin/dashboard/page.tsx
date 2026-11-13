@@ -161,10 +161,13 @@ export default function AdminDashboardPage() {
           <small>Coming next</small>
         </div>
 
-        <div className="admin-side-link muted">
+        <a
+          className="admin-side-link"
+          href="/admin/mock-tests"
+        >
           ▤ &nbsp; Mock Tests
-          <small>Coming next</small>
-        </div>
+          <small>Manage tests →</small>
+        </a>
 
         <div className="admin-side-link muted">
           ▤ &nbsp; Education News
@@ -251,22 +254,22 @@ export default function AdminDashboardPage() {
 
           <div>
             <div className="admin-kicker">
-              NEXT DEVELOPMENT STEP
+              CONTENT MANAGEMENT
             </div>
 
             <h2>Manage your educational content</h2>
 
             <p>
-              Your administrator account is connected.
-              You can now manage Study Materials.
-              Other content management tools will be added next.
+              You can manage Study Materials and Mock Tests
+              from your administrator account. More content
+              management tools will be connected as they become ready.
             </p>
           </div>
 
           <div className="admin-next-badge">
-            CONTENT TOOLS
+            AVAILABLE TOOLS
             <br />
-            <b>IN DEVELOPMENT</b>
+            <b>STUDY MATERIALS & MOCK TESTS</b>
           </div>
 
         </section>
