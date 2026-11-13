@@ -345,12 +345,15 @@ export default function StudentMockTestsPage() {
 
   return (
     <main className="mock-page">
-      <style jsx>{`
+      <style>{`
         .mock-page {
+          box-sizing: border-box;
           max-width: 1100px;
-          margin: auto;
+          min-height: 100vh;
+          margin: 0 auto;
           padding: 35px 20px 60px;
           color: #172033;
+          background: #f4f7fb;
         }
 
         .page-link {
@@ -360,9 +363,11 @@ export default function StudentMockTestsPage() {
         }
 
         .page-title {
-          font-size: 32px;
-          margin-top: 25px;
+          font-size: 34px;
+          line-height: 1.2;
+          margin: 25px 0 12px;
           color: #102d49;
+          font-weight: 800;
         }
 
         .page-description {
@@ -378,11 +383,18 @@ export default function StudentMockTestsPage() {
         }
 
         .test-card {
-          border: 1px solid #e2e8f0;
-          border-radius: 13px;
-          padding: 22px;
-          background: white;
-          box-shadow: 0 3px 12px rgba(0, 0, 0, 0.04);
+          box-sizing: border-box;
+          border: 1px solid #dbe5f0;
+          border-radius: 14px;
+          padding: 24px;
+          background: #ffffff;
+          box-shadow: 0 5px 18px rgba(15, 45, 80, 0.08);
+          transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .test-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 9px 24px rgba(15, 45, 80, 0.13);
         }
 
         .test-card h2 {
@@ -444,6 +456,11 @@ export default function StudentMockTestsPage() {
 
         .test-section {
           margin-top: 40px;
+          padding: 26px;
+          border: 1px solid #e2eaf3;
+          border-radius: 16px;
+          background: #ffffff;
+          box-shadow: 0 3px 14px rgba(15, 45, 80, 0.04);
         }
 
         .test-section h2 {
@@ -473,6 +490,30 @@ export default function StudentMockTestsPage() {
         .purchased-message {
           color: #15803d;
           margin-top: 12px;
+          font-weight: 650;
+        }
+
+        .message {
+          border: 1px solid #bfdbfe;
+        }
+
+        @media (max-width: 640px) {
+          .mock-page {
+            padding: 24px 14px 40px;
+          }
+
+          .test-section {
+            padding: 17px;
+            margin-top: 28px;
+          }
+
+          .test-card {
+            padding: 19px;
+          }
+
+          .page-title {
+            font-size: 28px;
+          }
         }
       `}</style>
 
