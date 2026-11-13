@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type MockTest = {
@@ -60,6 +61,8 @@ function loadRazorpayScript(): Promise<boolean> {
 }
 
 export default function StudentMockTestsPage() {
+  const router = useRouter();
+
   const [tests, setTests] = useState<MockTest[]>([]);
   const [purchasedTests, setPurchasedTests] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,6 +72,8 @@ export default function StudentMockTestsPage() {
   const [loggedIn, setLoggedIn] = useState(false);
 
   useEffect(() => {
+    let active = true;
+
     async function loadTests() {
       if (!supabase) {
         setError("Website connection is not configured.");
@@ -76,10 +81,24 @@ export default function StudentMockTestsPage() {
         return;
       }
 
-      const { data: authData } = await supabase.auth.getUser();
+      // Require student login before loading mock tests.
+      const {
+        data: authData,
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (!active) return;
+
       const user = authData.user;
 
-      setLoggedIn(!!user);
+      if (authError || !user) {
+        router.replace(
+          `/student/login?next=${encodeURIComponent("/mock-tests")}`
+        );
+        return;
+      }
+
+      setLoggedIn(true);
 
       const { data, error: testError } = await supabase
         .from("mock_tests")
@@ -89,6 +108,8 @@ export default function StudentMockTestsPage() {
         .eq("status", "published")
         .order("created_at", { ascending: false });
 
+      if (!active) return;
+
       if (testError) {
         setError(testError.message);
         setLoading(false);
@@ -97,28 +118,32 @@ export default function StudentMockTestsPage() {
 
       setTests((data || []) as MockTest[]);
 
-      if (user) {
-        const { data: purchases, error: purchaseError } = await supabase
-          .from("mock_test_purchases")
-          .select("mock_test_id")
-          .eq("student_id", user.id);
+      const { data: purchases, error: purchaseError } = await supabase
+        .from("mock_test_purchases")
+        .select("mock_test_id")
+        .eq("student_id", user.id);
 
-        if (purchaseError) {
-          setError(
-            "Unable to load your purchase history. Please refresh the page."
-          );
-        } else {
-          setPurchasedTests(
-            (purchases || []).map((item) => item.mock_test_id)
-          );
-        }
+      if (!active) return;
+
+      if (purchaseError) {
+        setError(
+          "Unable to load your purchase history. Please refresh the page."
+        );
+      } else {
+        setPurchasedTests(
+          (purchases || []).map((item) => item.mock_test_id)
+        );
       }
 
       setLoading(false);
     }
 
     loadTests();
-  }, []);
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   async function purchaseTest(test: MockTest) {
     if (!supabase || processingTest) return;
@@ -129,7 +154,9 @@ export default function StudentMockTestsPage() {
       await supabase.auth.getUser();
 
     if (authError || !authData.user) {
-      window.location.href = "/student/login";
+      router.replace(
+        `/student/login?next=${encodeURIComponent("/mock-tests")}`
+      );
       return;
     }
 
@@ -249,22 +276,107 @@ export default function StudentMockTestsPage() {
     }
   }
 
+  const freeTests = tests.filter(
+    (test) => test.access_type === "free"
+  );
+
+  const premiumTests = tests.filter(
+    (test) => test.access_type === "paid"
+  );
+
+  function TestCard({ test }: { test: MockTest }) {
+    const isFree = test.access_type === "free";
+    const isPurchased = purchasedTests.includes(test.id);
+    const isProcessing = processingTest === test.id;
+
+    return (
+      <article className="test-card">
+        <span className={isFree ? "free-tag" : "paid-tag"}>
+          {isFree ? "FREE TEST" : "PREMIUM TEST"}
+        </span>
+
+        <h2>{test.title}</h2>
+
+        <div className="test-info">
+          <div>
+            <strong>Examination:</strong> {test.exam_category}
+          </div>
+          <div>
+            <strong>Duration:</strong> {test.duration_minutes} minutes
+          </div>
+          <div>
+            <strong>Total Marks:</strong> {test.total_marks}
+          </div>
+
+          {!isFree && (
+            <div>
+              <strong>Price:</strong> ₹{test.price ?? 0}
+            </div>
+          )}
+        </div>
+
+        {isFree || isPurchased ? (
+          <>
+            {isPurchased && (
+              <p className="purchased-message">
+                ✓ Purchased – Access available
+              </p>
+            )}
+
+            <a
+              className="test-button"
+              href={`/mock-tests/${test.id}`}
+            >
+              View Test & Start
+            </a>
+          </>
+        ) : (
+          <button
+            className="test-button"
+            onClick={() => purchaseTest(test)}
+            disabled={!!processingTest}
+          >
+            {isProcessing ? "Processing..." : "Purchase Now"}
+          </button>
+        )}
+      </article>
+    );
+  }
+
   return (
-    <main
-      style={{
-        maxWidth: 1100,
-        margin: "auto",
-        padding: "35px 20px 60px",
-        color: "#172033",
-      }}
-    >
+    <main className="mock-page">
       <style jsx>{`
+        .mock-page {
+          max-width: 1100px;
+          margin: auto;
+          padding: 35px 20px 60px;
+          color: #172033;
+        }
+
+        .page-link {
+          color: #174ea6;
+          text-decoration: none;
+          font-weight: 600;
+        }
+
+        .page-title {
+          font-size: 32px;
+          margin-top: 25px;
+          color: #102d49;
+        }
+
+        .page-description {
+          color: #64748b;
+          line-height: 1.7;
+        }
+
         .test-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
           gap: 18px;
           margin-top: 25px;
         }
+
         .test-card {
           border: 1px solid #e2e8f0;
           border-radius: 13px;
@@ -272,15 +384,18 @@ export default function StudentMockTestsPage() {
           background: white;
           box-shadow: 0 3px 12px rgba(0, 0, 0, 0.04);
         }
+
         .test-card h2 {
           font-size: 19px;
           margin: 12px 0;
         }
+
         .test-info {
           color: #64748b;
           font-size: 14px;
           line-height: 1.9;
         }
+
         .test-button {
           display: inline-block;
           margin-top: 15px;
@@ -294,10 +409,12 @@ export default function StudentMockTestsPage() {
           cursor: pointer;
           font-size: 14px;
         }
+
         .test-button:disabled {
           opacity: 0.6;
           cursor: not-allowed;
         }
+
         .free-tag {
           color: #15803d;
           background: #dcfce7;
@@ -306,6 +423,7 @@ export default function StudentMockTestsPage() {
           font-size: 12px;
           font-weight: 700;
         }
+
         .paid-tag {
           color: #92400e;
           background: #fef3c7;
@@ -314,6 +432,7 @@ export default function StudentMockTestsPage() {
           font-size: 12px;
           font-weight: 700;
         }
+
         .message {
           margin-top: 20px;
           padding: 13px;
@@ -322,31 +441,55 @@ export default function StudentMockTestsPage() {
           border-radius: 8px;
           line-height: 1.6;
         }
+
+        .test-section {
+          margin-top: 40px;
+        }
+
+        .test-section h2 {
+          font-size: 25px;
+          color: #102d49;
+          margin-bottom: 8px;
+        }
+
+        .section-description {
+          color: #64748b;
+          line-height: 1.6;
+        }
+
+        .empty-state {
+          padding: 25px;
+          margin-top: 20px;
+          background: #f8fafc;
+          border-radius: 12px;
+          color: #64748b;
+        }
+
+        .empty-state h3 {
+          color: #102d49;
+          margin-top: 0;
+        }
+
+        .purchased-message {
+          color: #15803d;
+          margin-top: 12px;
+        }
       `}</style>
 
-      <a href="/student/dashboard">← Back to Student Dashboard</a>
+      <a className="page-link" href="/student/dashboard">
+        ← Back to Student Dashboard
+      </a>
 
-      <h1 style={{ fontSize: 32, marginTop: 25 }}>
-        Online Mock Tests
-      </h1>
+      <h1 className="page-title">Online Mock Tests</h1>
 
-      <p style={{ color: "#64748b", lineHeight: 1.7 }}>
+      <p className="page-description">
         Practise with examination-oriented tests, evaluate your preparation
         and improve your performance with EduAxis India.
       </p>
 
       {message && <div className="message">{message}</div>}
 
-      {!loggedIn && !loading && (
-        <p style={{ color: "#64748b", marginTop: 15 }}>
-          Please log in to purchase premium tests and access your test
-          history.
-          {" "}
-          <a href="/student/login">Student Login</a>
-        </p>
-      )}
-
-      {loading && <p>Loading available mock tests...</p>}
+      {loading && <p>Checking login and loading available mock tests...</p>}
 
       {error && (
         <p style={{ color: "#b91c1c" }}>
@@ -354,85 +497,49 @@ export default function StudentMockTestsPage() {
         </p>
       )}
 
-      {!loading && !error && tests.length === 0 && (
-        <div
-          style={{
-            padding: 25,
-            marginTop: 25,
-            background: "#f8fafc",
-            borderRadius: 12,
-          }}
-        >
-          <h2>No mock tests available yet.</h2>
-          <p>New tests will appear here after they are published.</p>
-        </div>
-      )}
+      {!loading && !error && (
+        <>
+          <section className="test-section">
+            <h2>Free Mock Tests</h2>
+            <p className="section-description">
+              Practise and evaluate your preparation with free tests.
+            </p>
 
-      <div className="test-grid">
-        {tests.map((test) => {
-          const isFree = test.access_type === "free";
-          const isPurchased = purchasedTests.includes(test.id);
-          const isProcessing = processingTest === test.id;
-
-          return (
-            <article className="test-card" key={test.id}>
-              <span className={isFree ? "free-tag" : "paid-tag"}>
-                {isFree ? "FREE TEST" : "PAID TEST"}
-              </span>
-
-              <h2>{test.title}</h2>
-
-              <div className="test-info">
-                <div>
-                  <strong>Examination:</strong> {test.exam_category}
-                </div>
-                <div>
-                  <strong>Duration:</strong> {test.duration_minutes} minutes
-                </div>
-                <div>
-                  <strong>Total Marks:</strong> {test.total_marks}
-                </div>
-
-                {!isFree && (
-                  <div>
-                    <strong>Price:</strong> ₹{test.price ?? 0}
-                  </div>
-                )}
+            {freeTests.length === 0 ? (
+              <div className="empty-state">
+                <h3>No free mock tests available yet.</h3>
+                <p>New free tests will appear here after they are published.</p>
               </div>
+            ) : (
+              <div className="test-grid">
+                {freeTests.map((test) => (
+                  <TestCard key={test.id} test={test} />
+                ))}
+              </div>
+            )}
+          </section>
 
-              {isFree || isPurchased ? (
-                <>
-                  {isPurchased && (
-                    <p style={{ color: "#15803d", marginTop: 12 }}>
-                      ✓ Purchased – Access available
-                    </p>
-                  )}
-                  <a
-                    className="test-button"
-                    href={`/mock-tests/${test.id}`}
-                  >
-                    View Test & Start
-                  </a>
-                </>
-              ) : (
-                <>
-                  <button
-                    className="test-button"
-                    onClick={() => purchaseTest(test)}
-                    disabled={!!processingTest}
-                  >
-                    {isProcessing
-                      ? "Processing..."
-                      : loggedIn
-                        ? "Purchase Now"
-                        : "Login to Purchase"}
-                  </button>
-                </>
-              )}
-            </article>
-          );
-        })}
-      </div>
+          <section className="test-section">
+            <h2>Premium Mock Tests</h2>
+            <p className="section-description">
+              Unlock premium examination tests and specialised test series.
+            </p>
+
+            {premiumTests.length === 0 ? (
+              <div className="empty-state">
+                <h3>Premium mock tests coming soon.</h3>
+                <p>Premium tests will appear here when they are published.</p>
+              </div>
+            ) : (
+              <div className="test-grid">
+                {premiumTests.map((test) => (
+                  <TestCard key={test.id} test={test} />
+                ))}
+              </div>
+            )}
+          </section>
+        </>
+      )}
     </main>
   );
 }
