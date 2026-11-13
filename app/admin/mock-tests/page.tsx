@@ -13,29 +13,35 @@ type Test = {
   duration_minutes: number;
   total_marks: number;
   access_type: string;
+  price: number | null;
   status: string;
+  negative_marking?: number;
+  pass_marks?: number | null;
+  instructions?: string | null;
+  instructions_hi?: string | null;
 };
 
 const HEADERS = [
-  "Question (English)",
-  "Question (Hindi)",
-  "Option A (English)",
-  "Option A (Hindi)",
-  "Option B (English)",
-  "Option B (Hindi)",
-  "Option C (English)",
-  "Option C (Hindi)",
-  "Option D (English)",
-  "Option D (Hindi)",
-  "Correct Option",
-  "Explanation (English)",
-  "Explanation (Hindi)",
-  "Marks",
+  "Question (English)", "Question (Hindi)",
+  "Option A (English)", "Option A (Hindi)",
+  "Option B (English)", "Option B (Hindi)",
+  "Option C (English)", "Option C (Hindi)",
+  "Option D (English)", "Option D (Hindi)",
+  "Correct Option", "Explanation (English)",
+  "Explanation (Hindi)", "Marks"
 ];
 
 export default function AdminMockTests() {
   const [tests, setTests] = useState<Test[]>([]);
   const [selected, setSelected] = useState("");
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [preview, setPreview] = useState<any[]>([]);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // New test fields
   const [title, setTitle] = useState(
     "Bihar SLET 2026 - Library Science - Mock Test 1"
   );
@@ -52,12 +58,21 @@ export default function AdminMockTests() {
   const [instructionsHi, setInstructionsHi] = useState(
     "सबसे उपयुक्त उत्तर चुनें। प्रत्येक प्रश्न के चार विकल्प हैं।"
   );
-  const [questions, setQuestions] = useState<any[]>([]);
-  const [preview, setPreview] = useState<any[]>([]);
-  const [errors, setErrors] = useState<string[]>([]);
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [newAccess, setNewAccess] = useState("free");
+  const [newPrice, setNewPrice] = useState("0");
+
+  // Existing test editing
+  const [editingId, setEditingId] = useState("");
+  const [editTitle, setEditTitle] = useState("");
+  const [editTitleHi, setEditTitleHi] = useState("");
+  const [editDuration, setEditDuration] = useState("");
+  const [editTotalMarks, setEditTotalMarks] = useState("");
+  const [editNegative, setEditNegative] = useState("0");
+  const [editPassMarks, setEditPassMarks] = useState("");
+  const [editInstructions, setEditInstructions] = useState("");
+  const [editInstructionsHi, setEditInstructionsHi] = useState("");
+  const [editAccess, setEditAccess] = useState("free");
+  const [editPrice, setEditPrice] = useState("0");
 
   async function loadTests() {
     if (!supabase) return;
@@ -70,7 +85,7 @@ export default function AdminMockTests() {
     if (error) {
       setMessage(error.message);
     } else {
-      setTests(data || []);
+      setTests((data || []) as Test[]);
       if (data?.length && !selected) setSelected(data[0].id);
     }
 
@@ -133,6 +148,18 @@ export default function AdminMockTests() {
     e.preventDefault();
     if (!supabase) return;
 
+    const price = newAccess === "paid" ? Number(newPrice) : 0;
+
+    if (newAccess === "paid" && (!Number.isFinite(price) || price <= 0)) {
+      setMessage("Please enter a valid price for the paid test.");
+      return;
+    }
+
+    if (Number(duration) <= 0 || Number(totalMarks) <= 0) {
+      setMessage("Duration and total marks must be greater than zero.");
+      return;
+    }
+
     setBusy(true);
     setMessage("");
 
@@ -146,14 +173,14 @@ export default function AdminMockTests() {
         exam_category: "SLET - Library Science",
         duration_minutes: Number(duration),
         total_marks: Number(totalMarks),
-        access_type: "free",
-        price: 0,
+        access_type: newAccess,
+        price,
         negative_marking: Number(negative),
         pass_marks: passMarks === "" ? null : Number(passMarks),
         instructions,
         instructions_hi: instructionsHi,
         status: "draft",
-        created_by: auth.user?.id,
+        created_by: auth.user?.id
       })
       .select()
       .single();
@@ -161,9 +188,86 @@ export default function AdminMockTests() {
     if (error) {
       setMessage("Could not create test: " + error.message);
     } else {
-      setTests((current) => [data, ...current]);
+      setTests((current) => [data as Test, ...current]);
       setSelected(data.id);
       setMessage("Mock test created successfully. It is saved as Draft.");
+    }
+
+    setBusy(false);
+  }
+
+  function startEditing(test: Test) {
+    setEditingId(test.id);
+    setEditTitle(test.title || "");
+    setEditTitleHi(test.title_hi || "");
+    setEditDuration(String(test.duration_minutes));
+    setEditTotalMarks(String(test.total_marks));
+    setEditNegative(String(test.negative_marking ?? 0));
+    setEditPassMarks(
+      test.pass_marks === null || test.pass_marks === undefined
+        ? ""
+        : String(test.pass_marks)
+    );
+    setEditInstructions(test.instructions || "");
+    setEditInstructionsHi(test.instructions_hi || "");
+    setEditAccess(test.access_type || "free");
+    setEditPrice(String(test.price ?? 0));
+    setMessage("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function saveEditedTest(e: React.FormEvent) {
+    e.preventDefault();
+    if (!supabase || !editingId) return;
+
+    const price = editAccess === "paid" ? Number(editPrice) : 0;
+
+    if (editAccess === "paid" && (!Number.isFinite(price) || price <= 0)) {
+      setMessage("Please enter a valid price for the paid test.");
+      return;
+    }
+
+    if (
+      !editTitle.trim() ||
+      !editTitleHi.trim() ||
+      Number(editDuration) <= 0 ||
+      Number(editTotalMarks) <= 0
+    ) {
+      setMessage("Please complete the required fields with valid values.");
+      return;
+    }
+
+    setBusy(true);
+    setMessage("");
+
+    const { data, error } = await supabase
+      .from("mock_tests")
+      .update({
+        title: editTitle.trim(),
+        title_hi: editTitleHi.trim(),
+        duration_minutes: Number(editDuration),
+        total_marks: Number(editTotalMarks),
+        negative_marking: Number(editNegative),
+        pass_marks: editPassMarks === "" ? null : Number(editPassMarks),
+        instructions: editInstructions,
+        instructions_hi: editInstructionsHi,
+        access_type: editAccess,
+        price
+      })
+      .eq("id", editingId)
+      .select()
+      .single();
+
+    if (error) {
+      setMessage("Could not update test: " + error.message);
+    } else {
+      setTests((current) =>
+        current.map((test) =>
+          test.id === editingId ? (data as Test) : test
+        )
+      );
+      setMessage("Test details updated successfully.");
+      setEditingId("");
     }
 
     setBusy(false);
@@ -172,9 +276,11 @@ export default function AdminMockTests() {
   function downloadTemplate() {
     const worksheet = XLSX.utils.aoa_to_sheet([HEADERS]);
     const workbook = XLSX.utils.book_new();
-
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Bilingual Questions");
-
+    XLSX.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      "Bilingual Questions"
+    );
     XLSX.writeFile(workbook, "EduAxis_Bilingual_Mock_Test_Template.xlsx");
   }
 
@@ -194,9 +300,8 @@ export default function AdminMockTests() {
 
       if (!rows.length) throw new Error("No questions found in the Excel file.");
 
-      const required = HEADERS;
       const headers = Object.keys(rows[0]).map((x) => x.trim().toLowerCase());
-      const missing = required.filter(
+      const missing = HEADERS.filter(
         (x) => !headers.includes(x.toLowerCase())
       );
 
@@ -244,28 +349,17 @@ export default function AdminMockTests() {
 
         const rowNumber = index + 2;
 
-        if (!question) {
-          problems.push(`Row ${rowNumber}: English question is missing.`);
-        }
-
-        if (!questionHi) {
-          problems.push(`Row ${rowNumber}: Hindi question is missing.`);
-        }
-
+        if (!question) problems.push(`Row ${rowNumber}: English question is missing.`);
+        if (!questionHi) problems.push(`Row ${rowNumber}: Hindi question is missing.`);
         if (!a || !b || !c || !d) {
           problems.push(`Row ${rowNumber}: All English options are required.`);
         }
-
         if (!aHi || !bHi || !cHi || !dHi) {
           problems.push(`Row ${rowNumber}: All Hindi options are required.`);
         }
-
         if (!["A", "B", "C", "D"].includes(correct)) {
-          problems.push(
-            `Row ${rowNumber}: Correct Option must be A, B, C or D.`
-          );
+          problems.push(`Row ${rowNumber}: Correct Option must be A, B, C or D.`);
         }
-
         if (!Number.isFinite(marks) || marks <= 0) {
           problems.push(`Row ${rowNumber}: Marks must be positive.`);
         }
@@ -276,7 +370,6 @@ export default function AdminMockTests() {
         if (englishKey && seen.has(englishKey)) {
           problems.push(`Row ${rowNumber}: Duplicate English question.`);
         }
-
         if (hindiKey && seen.has(hindiKey)) {
           problems.push(`Row ${rowNumber}: Duplicate Hindi question.`);
         }
@@ -285,35 +378,21 @@ export default function AdminMockTests() {
         if (hindiKey) seen.add(hindiKey);
 
         if (
-          question &&
-          questionHi &&
-          a &&
-          aHi &&
-          b &&
-          bHi &&
-          c &&
-          cHi &&
-          d &&
-          dHi &&
+          question && questionHi &&
+          a && aHi && b && bHi && c && cHi && d && dHi &&
           ["A", "B", "C", "D"].includes(correct) &&
-          Number.isFinite(marks) &&
-          marks > 0
+          Number.isFinite(marks) && marks > 0
         ) {
           parsed.push({
             question_text: question,
             question_text_hi: questionHi,
             options: { A: a, B: b, C: c, D: d },
-            options_hi: {
-              A: aHi,
-              B: bHi,
-              C: cHi,
-              D: dHi,
-            },
+            options_hi: { A: aHi, B: bHi, C: cHi, D: dHi },
             correct_option: correct,
             explanation: explanation || null,
             explanation_hi: explanationHi || null,
             marks,
-            sort_order: index + 1,
+            sort_order: index + 1
           });
         }
       });
@@ -322,9 +401,7 @@ export default function AdminMockTests() {
       setPreview(parsed);
 
       if (problems.length) {
-        setMessage(
-          "Please correct the errors in Excel and select the file again."
-        );
+        setMessage("Please correct the errors in Excel and select the file again.");
       } else {
         setMessage(
           `${parsed.length} bilingual questions passed validation. Review before uploading.`
@@ -341,12 +418,8 @@ export default function AdminMockTests() {
     const existing = new Set<string>();
 
     questions.forEach((q) => {
-      if (q.question_text) {
-        existing.add(q.question_text.trim().toLowerCase());
-      }
-      if (q.question_text_hi) {
-        existing.add(q.question_text_hi.trim().toLowerCase());
-      }
+      if (q.question_text) existing.add(q.question_text.trim().toLowerCase());
+      if (q.question_text_hi) existing.add(q.question_text_hi.trim().toLowerCase());
     });
 
     const fresh = preview.filter(
@@ -374,7 +447,7 @@ export default function AdminMockTests() {
         fresh.map((q, i) => ({
           ...q,
           mock_test_id: selected,
-          sort_order: start + i,
+          sort_order: start + i
         }))
       );
 
@@ -415,7 +488,7 @@ export default function AdminMockTests() {
       setMessage(error.message);
     } else {
       setTests((current) =>
-        current.map((t) => (t.id === test.id ? data : t))
+        current.map((t) => (t.id === test.id ? (data as Test) : t))
       );
       setMessage(status === "published" ? "Test published." : "Test moved to Draft.");
     }
@@ -463,9 +536,7 @@ export default function AdminMockTests() {
           font-weight: 600;
           margin-bottom: 5px;
         }
-        input,
-        textarea,
-        select {
+        input, textarea, select {
           width: 100%;
           padding: 10px;
           border: 1px solid #bbb;
@@ -481,9 +552,7 @@ export default function AdminMockTests() {
           cursor: pointer;
           margin: 4px;
         }
-        button:disabled {
-          opacity: 0.5;
-        }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
         .notice {
           padding: 12px;
           background: #eef5ff;
@@ -496,21 +565,15 @@ export default function AdminMockTests() {
           color: #a00;
           border-radius: 8px;
         }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-        }
-        th,
-        td {
+        table { width: 100%; border-collapse: collapse; }
+        th, td {
           border-bottom: 1px solid #ddd;
           padding: 9px;
           text-align: left;
           vertical-align: top;
         }
         @media (max-width: 650px) {
-          .grid {
-            grid-template-columns: 1fr;
-          }
+          .grid { grid-template-columns: 1fr; }
         }
       `}</style>
 
@@ -530,6 +593,68 @@ export default function AdminMockTests() {
         </div>
       )}
 
+      {editingId && (
+        <section className="card">
+          <h2>Edit Existing Mock Test</h2>
+
+          <form onSubmit={saveEditedTest}>
+            <label>Test title (English)</label>
+            <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} required />
+
+            <label>Test title (Hindi)</label>
+            <input value={editTitleHi} onChange={(e) => setEditTitleHi(e.target.value)} required />
+
+            <div className="grid">
+              <div>
+                <label>Duration (minutes)</label>
+                <input type="number" min="1" value={editDuration} onChange={(e) => setEditDuration(e.target.value)} required />
+              </div>
+              <div>
+                <label>Total marks</label>
+                <input type="number" min="1" value={editTotalMarks} onChange={(e) => setEditTotalMarks(e.target.value)} required />
+              </div>
+              <div>
+                <label>Negative marking per wrong answer</label>
+                <input type="number" min="0" step="0.01" value={editNegative} onChange={(e) => setEditNegative(e.target.value)} />
+              </div>
+              <div>
+                <label>Pass marks (optional)</label>
+                <input type="number" min="0" step="0.01" value={editPassMarks} onChange={(e) => setEditPassMarks(e.target.value)} />
+              </div>
+            </div>
+
+            <label>Access type</label>
+            <select value={editAccess} onChange={(e) => {
+              setEditAccess(e.target.value);
+              if (e.target.value === "free") setEditPrice("0");
+            }}>
+              <option value="free">Free</option>
+              <option value="paid">Paid</option>
+            </select>
+
+            {editAccess === "paid" && (
+              <>
+                <label>Price (₹)</label>
+                <input type="number" min="1" step="0.01" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} required />
+              </>
+            )}
+
+            <label>Student instructions (English)</label>
+            <textarea rows={3} value={editInstructions} onChange={(e) => setEditInstructions(e.target.value)} />
+
+            <label>Student instructions (Hindi)</label>
+            <textarea rows={3} value={editInstructionsHi} onChange={(e) => setEditInstructionsHi(e.target.value)} />
+
+            <button type="submit" disabled={busy}>
+              {busy ? "Saving..." : "Save Test Changes"}
+            </button>
+            <button type="button" onClick={() => setEditingId("")}>
+              Cancel
+            </button>
+          </form>
+        </section>
+      )}
+
       <section className="card">
         <h2>Create a New Mock Test</h2>
 
@@ -545,22 +670,35 @@ export default function AdminMockTests() {
               <label>Duration (minutes)</label>
               <input type="number" min="1" value={duration} onChange={(e) => setDuration(e.target.value)} required />
             </div>
-
             <div>
               <label>Total marks</label>
               <input type="number" min="1" value={totalMarks} onChange={(e) => setTotalMarks(e.target.value)} required />
             </div>
-
             <div>
               <label>Negative marking per wrong answer</label>
               <input type="number" min="0" step="0.01" value={negative} onChange={(e) => setNegative(e.target.value)} />
             </div>
-
             <div>
               <label>Pass marks (optional)</label>
               <input type="number" min="0" step="0.01" value={passMarks} onChange={(e) => setPassMarks(e.target.value)} />
             </div>
           </div>
+
+          <label>Access type</label>
+          <select value={newAccess} onChange={(e) => {
+            setNewAccess(e.target.value);
+            if (e.target.value === "free") setNewPrice("0");
+          }}>
+            <option value="free">Free</option>
+            <option value="paid">Paid</option>
+          </select>
+
+          {newAccess === "paid" && (
+            <>
+              <label>Price (₹)</label>
+              <input type="number" min="1" step="0.01" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} required />
+            </>
+          )}
 
           <label>Student instructions (English)</label>
           <textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={3} />
@@ -570,7 +708,6 @@ export default function AdminMockTests() {
 
           <p>
             <strong>Examination:</strong> SLET - Library Science |
-            <strong> Access:</strong> Free |
             <strong> Initial status:</strong> Draft
           </p>
 
@@ -590,10 +727,11 @@ export default function AdminMockTests() {
             <strong>{test.title}</strong>
             {test.title_hi && <p>{test.title_hi}</p>}
             <p>
-              {test.exam_category} · {test.duration_minutes} minutes ·{" "}
-              {test.total_marks} marks · {test.status}
+              {test.exam_category} · {test.duration_minutes} minutes ·
+              {" "}{test.total_marks} marks · {test.access_type === "paid" ? `Paid · ₹${test.price ?? 0}` : "Free"} · {test.status}
             </p>
 
+            <button onClick={() => startEditing(test)}>Edit Test</button>
             <button onClick={() => setSelected(test.id)}>Manage Questions</button>
 
             {test.status === "published" ? (
@@ -610,10 +748,7 @@ export default function AdminMockTests() {
 
         {selectedTest ? (
           <>
-            <p>
-              <strong>Selected test:</strong> {selectedTest.title}
-            </p>
-
+            <p><strong>Selected test:</strong> {selectedTest.title}</p>
             <p>
               Every question and all four options must be entered in both
               English and Hindi. The correct option is shared by both languages.
@@ -637,7 +772,6 @@ export default function AdminMockTests() {
             {preview.length > 0 && (
               <>
                 <h3>Preview: {preview.length} valid bilingual questions</h3>
-
                 <table>
                   <thead>
                     <tr>
@@ -648,7 +782,6 @@ export default function AdminMockTests() {
                       <th>Marks</th>
                     </tr>
                   </thead>
-
                   <tbody>
                     {preview.slice(0, 5).map((q, i) => (
                       <tr key={i}>
@@ -666,12 +799,10 @@ export default function AdminMockTests() {
                   {busy ? "Uploading..." : `Upload ${preview.length} Questions`}
                 </button>
 
-                <button
-                  onClick={() => {
-                    setPreview([]);
-                    setErrors([]);
-                  }}
-                >
+                <button onClick={() => {
+                  setPreview([]);
+                  setErrors([]);
+                }}>
                   Clear Preview
                 </button>
               </>
