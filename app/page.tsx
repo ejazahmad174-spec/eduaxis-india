@@ -1,7 +1,8 @@
+
 const cards = [
   ['📘', 'Study Materials', 'Free and premium notes, PDFs and exam-wise resources.', '/study-materials'],
-  ['🧪', 'Mock Tests', 'Practice with topic-wise and full-length tests.', '#mock-tests'],
-  ['🎓', 'Online Courses', 'Structured learning for school and competitive exams.', '#courses'],
+  ['🧪', 'Mock Tests', 'Practice with topic-wise and full-length tests.', '/mock-tests'],
+  ['🎓', 'Online Courses', 'Structured learning for school and competitive exams.', '/courses'],
   ['💼', 'Government Jobs', 'Teaching and other government vacancy updates.', '/government-jobs'],
 ];
 
@@ -29,9 +30,9 @@ export default function Home() {
         <nav>
           <a href="/government-jobs">Latest Government Jobs</a>
           <a href="/study-materials">Study Materials</a>
-          <a href="#courses">Courses</a>
-          <a href="#mock-tests">Mock Tests</a>
-          <a href="#blogs">Educational Blogs</a>
+          <a href="/courses">Courses</a>
+          <a href="/mock-tests">Mock Tests</a>
+          <a href="/blogs">Educational Blogs</a>
         </nav>
 
         <a className="login" href="/student/login">Student Login</a>
@@ -128,8 +129,14 @@ export default function Home() {
         <h2>Latest Government Jobs</h2>
         <div className="notice">
           <b>Find the latest recruitment notifications</b>
-          <p>Explore Central and State Government vacancies, teaching jobs and other recruitment updates. Check eligibility and important dates, then apply through official websites.</p>
-          <a className="btn" href="/government-jobs">Explore Latest Government Jobs →</a>
+          <p>
+            Explore Central and State Government vacancies, teaching jobs and
+            other recruitment updates. Check eligibility and important dates,
+            then apply through official websites.
+          </p>
+          <a className="btn" href="/government-jobs">
+            Explore Latest Government Jobs →
+          </a>
         </div>
       </section>
 
@@ -137,18 +144,39 @@ export default function Home() {
         <div className="wrap section">
           <label>GROW YOUR KNOWLEDGE</label>
           <h2>Learning that moves you forward</h2>
-          <p className="sub">Explore courses and structured learning opportunities.</p>
-          <a className="btn" href="#resources">Explore Learning Resources →</a>
+          <p className="sub">
+            Explore free and premium courses and structured learning opportunities.
+          </p>
+          <a className="btn" href="/courses">
+            Explore Courses →
+          </a>
         </div>
       </section>
 
       <section className="wrap section" id="mock-tests">
         <label>TEST YOUR PREPARATION</label>
         <h2>Practice with Mock Tests</h2>
-        <p className="sub">Topic-wise and full-length practice tests will be available here.</p>
+        <p className="sub">
+          Access free practice tests and premium examination test series.
+        </p>
+        <a className="btn" href="/mock-tests">
+          Explore Mock Tests →
+        </a>
       </section>
 
-      <footer id="blogs">
+      <section className="wrap section" id="blogs">
+        <label>KNOWLEDGE AND INFORMATION</label>
+        <h2>Educational Blogs</h2>
+        <p className="sub">
+          Read educational articles, academic updates, career guidance and
+          important information for students and teachers.
+        </p>
+        <a className="btn" href="/blogs">
+          Read Educational Blogs →
+        </a>
+      </section>
+
+      <footer>
         <div className="wrap">
           <b>EduAxis India</b>
           <p>Empowering learners with knowledge, preparation and opportunity.</p>
