@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 type Material = {
@@ -18,6 +19,8 @@ type Material = {
 };
 
 export default function StudyMaterialsPage() {
+  const router = useRouter();
+
   const [freeMaterials, setFreeMaterials] = useState<Material[]>([]);
   const [premiumMaterials, setPremiumMaterials] = useState<Material[]>([]);
   const [search, setSearch] = useState('');
@@ -26,10 +29,27 @@ export default function StudyMaterialsPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    let active = true;
+
     async function loadMaterials() {
       if (!supabase) {
         setError('Website connection is not configured.');
         setLoading(false);
+        return;
+      }
+
+      // Check student authentication before loading any materials.
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (!active) return;
+
+      if (authError || !user) {
+        router.replace(
+          `/student/login?next=${encodeURIComponent('/study-materials')}`
+        );
         return;
       }
 
@@ -46,8 +66,10 @@ export default function StudyMaterialsPage() {
           .select('id, title, description, exam_category, subject, class_level, access_type, price')
           .eq('status', 'published')
           .eq('access_type', 'paid')
-          .order('created_at', { ascending: false })
+          .order('created_at', { ascending: false }),
       ]);
+
+      if (!active) return;
 
       if (freeResult.error || premiumResult.error) {
         setError('Unable to load study materials. Please try again later.');
@@ -60,7 +82,11 @@ export default function StudyMaterialsPage() {
     }
 
     loadMaterials();
-  }, []);
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   const allMaterials = [...freeMaterials, ...premiumMaterials];
 
@@ -73,7 +99,7 @@ export default function StudyMaterialsPage() {
             .map((item) => item.exam_category)
             .filter(Boolean) as string[]
         )
-      )
+      ),
     ],
     [freeMaterials, premiumMaterials]
   );
@@ -120,7 +146,7 @@ export default function StudyMaterialsPage() {
 
   function MaterialCard({
     item,
-    premium = false
+    premium = false,
   }: {
     item: Material;
     premium?: boolean;
@@ -207,7 +233,7 @@ export default function StudyMaterialsPage() {
         </div>
 
         {loading && (
-          <div className="empty-state">Loading study materials...</div>
+          <div className="empty-state">Checking login and loading study materials...</div>
         )}
 
         {error && (
