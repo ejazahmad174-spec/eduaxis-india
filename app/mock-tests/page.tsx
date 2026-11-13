@@ -15,10 +15,58 @@ type MockTest = {
   status: string;
 };
 
+declare global {
+  interface Window {
+    Razorpay: new (options: {
+      key: string;
+      amount: number;
+      currency: string;
+      name: string;
+      description: string;
+      order_id: string;
+      handler: (response: {
+        razorpay_order_id: string;
+        razorpay_payment_id: string;
+        razorpay_signature: string;
+      }) => void;
+      prefill?: {
+        email?: string;
+      };
+      theme?: {
+        color?: string;
+      };
+      modal?: {
+        ondismiss?: () => void;
+      };
+    }) => {
+      open: () => void;
+    };
+  }
+}
+
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (window.Razorpay) {
+      resolve(true);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
 export default function StudentMockTestsPage() {
   const [tests, setTests] = useState<MockTest[]>([]);
+  const [purchasedTests, setPurchasedTests] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [processingTest, setProcessingTest] = useState("");
+  const [loggedIn, setLoggedIn] = useState(false);
 
   useEffect(() => {
     async function loadTests() {
@@ -28,16 +76,42 @@ export default function StudentMockTestsPage() {
         return;
       }
 
-      const { data, error } = await supabase
+      const { data: authData } = await supabase.auth.getUser();
+      const user = authData.user;
+
+      setLoggedIn(!!user);
+
+      const { data, error: testError } = await supabase
         .from("mock_tests")
-        .select("id,title,exam_category,duration_minutes,total_marks,access_type,price,status")
+        .select(
+          "id,title,exam_category,duration_minutes,total_marks,access_type,price,status"
+        )
         .eq("status", "published")
         .order("created_at", { ascending: false });
 
-      if (error) {
-        setError(error.message);
-      } else {
-        setTests((data || []) as MockTest[]);
+      if (testError) {
+        setError(testError.message);
+        setLoading(false);
+        return;
+      }
+
+      setTests((data || []) as MockTest[]);
+
+      if (user) {
+        const { data: purchases, error: purchaseError } = await supabase
+          .from("mock_test_purchases")
+          .select("mock_test_id")
+          .eq("student_id", user.id);
+
+        if (purchaseError) {
+          setError(
+            "Unable to load your purchase history. Please refresh the page."
+          );
+        } else {
+          setPurchasedTests(
+            (purchases || []).map((item) => item.mock_test_id)
+          );
+        }
       }
 
       setLoading(false);
@@ -46,13 +120,144 @@ export default function StudentMockTestsPage() {
     loadTests();
   }, []);
 
+  async function purchaseTest(test: MockTest) {
+    if (!supabase || processingTest) return;
+
+    setMessage("");
+
+    const { data: authData, error: authError } =
+      await supabase.auth.getUser();
+
+    if (authError || !authData.user) {
+      window.location.href = "/student/login";
+      return;
+    }
+
+    if (purchasedTests.includes(test.id)) {
+      setMessage("You have already purchased this test.");
+      return;
+    }
+
+    if (!test.price || Number(test.price) <= 0) {
+      setMessage("This test does not have a valid purchase price.");
+      return;
+    }
+
+    setProcessingTest(test.id);
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error("Your login session has expired. Please log in again.");
+      }
+
+      const scriptLoaded = await loadRazorpayScript();
+
+      if (!scriptLoaded) {
+        throw new Error("Unable to load Razorpay Checkout. Please try again.");
+      }
+
+      const orderResponse = await fetch("/api/payments/create-order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          mockTestId: test.id,
+        }),
+      });
+
+      const orderData = await orderResponse.json();
+
+      if (!orderResponse.ok) {
+        throw new Error(orderData.error || "Unable to create payment order.");
+      }
+
+      const checkout = new window.Razorpay({
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: "EduAxis India",
+        description: test.title,
+        order_id: orderData.orderId,
+        prefill: {
+          email: authData.user.email || "",
+        },
+        theme: {
+          color: "#174ea6",
+        },
+        handler: async (response) => {
+          try {
+            setMessage("Payment received. Verifying your payment...");
+
+            const verifyResponse = await fetch("/api/payments/verify", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify(response),
+            });
+
+            const verifyData = await verifyResponse.json();
+
+            if (!verifyResponse.ok || !verifyData.success) {
+              throw new Error(
+                verifyData.error ||
+                  "Payment verification is pending. Please contact support if access is not activated."
+              );
+            }
+
+            setPurchasedTests((previous) =>
+              previous.includes(test.id)
+                ? previous
+                : [...previous, test.id]
+            );
+
+            setMessage(
+              "Payment successful! Your test is now unlocked."
+            );
+          } catch (verificationError) {
+            setMessage(
+              verificationError instanceof Error
+                ? verificationError.message
+                : "Payment verification failed. Please contact support."
+            );
+          } finally {
+            setProcessingTest("");
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setProcessingTest("");
+            setMessage("Payment window closed. No access was granted.");
+          },
+        },
+      });
+
+      checkout.open();
+    } catch (purchaseError) {
+      setMessage(
+        purchaseError instanceof Error
+          ? purchaseError.message
+          : "Unable to process your purchase."
+      );
+      setProcessingTest("");
+    }
+  }
+
   return (
-    <main style={{
-      maxWidth: 1100,
-      margin: "auto",
-      padding: "35px 20px 60px",
-      color: "#172033"
-    }}>
+    <main
+      style={{
+        maxWidth: 1100,
+        margin: "auto",
+        padding: "35px 20px 60px",
+        color: "#172033",
+      }}
+    >
       <style jsx>{`
         .test-grid {
           display: grid;
@@ -65,7 +270,7 @@ export default function StudentMockTestsPage() {
           border-radius: 13px;
           padding: 22px;
           background: white;
-          box-shadow: 0 3px 12px rgba(0,0,0,.04);
+          box-shadow: 0 3px 12px rgba(0, 0, 0, 0.04);
         }
         .test-card h2 {
           font-size: 19px;
@@ -82,9 +287,16 @@ export default function StudentMockTestsPage() {
           padding: 11px 17px;
           background: #174ea6;
           color: white;
+          border: none;
           border-radius: 7px;
           text-decoration: none;
           font-weight: 600;
+          cursor: pointer;
+          font-size: 14px;
+        }
+        .test-button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
         .free-tag {
           color: #15803d;
@@ -102,6 +314,14 @@ export default function StudentMockTestsPage() {
           font-size: 12px;
           font-weight: 700;
         }
+        .message {
+          margin-top: 20px;
+          padding: 13px;
+          background: #eff6ff;
+          color: #1e40af;
+          border-radius: 8px;
+          line-height: 1.6;
+        }
       `}</style>
 
       <a href="/student/dashboard">← Back to Student Dashboard</a>
@@ -115,6 +335,17 @@ export default function StudentMockTestsPage() {
         and improve your performance with EduAxis India.
       </p>
 
+      {message && <div className="message">{message}</div>}
+
+      {!loggedIn && !loading && (
+        <p style={{ color: "#64748b", marginTop: 15 }}>
+          Please log in to purchase premium tests and access your test
+          history.
+          {" "}
+          <a href="/student/login">Student Login</a>
+        </p>
+      )}
+
       {loading && <p>Loading available mock tests...</p>}
 
       {error && (
@@ -124,46 +355,83 @@ export default function StudentMockTestsPage() {
       )}
 
       {!loading && !error && tests.length === 0 && (
-        <div style={{
-          padding: 25,
-          marginTop: 25,
-          background: "#f8fafc",
-          borderRadius: 12
-        }}>
+        <div
+          style={{
+            padding: 25,
+            marginTop: 25,
+            background: "#f8fafc",
+            borderRadius: 12,
+          }}
+        >
           <h2>No mock tests available yet.</h2>
           <p>New tests will appear here after they are published.</p>
         </div>
       )}
 
       <div className="test-grid">
-        {tests.map(test => (
-          <article className="test-card" key={test.id}>
-            <span className={test.access_type === "free" ? "free-tag" : "paid-tag"}>
-              {test.access_type === "free" ? "FREE TEST" : "PAID TEST"}
-            </span>
+        {tests.map((test) => {
+          const isFree = test.access_type === "free";
+          const isPurchased = purchasedTests.includes(test.id);
+          const isProcessing = processingTest === test.id;
 
-            <h2>{test.title}</h2>
+          return (
+            <article className="test-card" key={test.id}>
+              <span className={isFree ? "free-tag" : "paid-tag"}>
+                {isFree ? "FREE TEST" : "PAID TEST"}
+              </span>
 
-            <div className="test-info">
-              <div><strong>Examination:</strong> {test.exam_category}</div>
-              <div><strong>Duration:</strong> {test.duration_minutes} minutes</div>
-              <div><strong>Total Marks:</strong> {test.total_marks}</div>
-              {test.access_type === "paid" && (
-                <div><strong>Price:</strong> ₹{test.price ?? 0}</div>
+              <h2>{test.title}</h2>
+
+              <div className="test-info">
+                <div>
+                  <strong>Examination:</strong> {test.exam_category}
+                </div>
+                <div>
+                  <strong>Duration:</strong> {test.duration_minutes} minutes
+                </div>
+                <div>
+                  <strong>Total Marks:</strong> {test.total_marks}
+                </div>
+
+                {!isFree && (
+                  <div>
+                    <strong>Price:</strong> ₹{test.price ?? 0}
+                  </div>
+                )}
+              </div>
+
+              {isFree || isPurchased ? (
+                <>
+                  {isPurchased && (
+                    <p style={{ color: "#15803d", marginTop: 12 }}>
+                      ✓ Purchased – Access available
+                    </p>
+                  )}
+                  <a
+                    className="test-button"
+                    href={`/mock-tests/${test.id}`}
+                  >
+                    View Test & Start
+                  </a>
+                </>
+              ) : (
+                <>
+                  <button
+                    className="test-button"
+                    onClick={() => purchaseTest(test)}
+                    disabled={!!processingTest}
+                  >
+                    {isProcessing
+                      ? "Processing..."
+                      : loggedIn
+                        ? "Purchase Now"
+                        : "Login to Purchase"}
+                  </button>
+                </>
               )}
-            </div>
-
-            {test.access_type === "free" ? (
-              <a className="test-button" href={`/mock-tests/${test.id}`}>
-                View Test & Start
-              </a>
-            ) : (
-              <p style={{ color: "#92400e", marginTop: 15 }}>
-                Online purchase will be available soon.
-              </p>
-            )}
-          </article>
-        ))}
+            </article>
+          );
+        })}
       </div>
     </main>
   );
