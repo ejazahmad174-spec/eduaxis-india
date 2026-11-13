@@ -1,6 +1,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import Razorpay from "razorpay";
 import { createHmac, timingSafeEqual } from "crypto";
 
 export const runtime = "nodejs";
@@ -10,21 +11,33 @@ export async function POST(request: Request) {
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
+    const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
 
-    if (!webhookSecret || !supabaseUrl || !serviceKey) {
+    if (
+      !webhookSecret ||
+      !supabaseUrl ||
+      !serviceKey ||
+      !razorpayKeyId ||
+      !razorpayKeySecret
+    ) {
       return NextResponse.json(
         { error: "Webhook configuration is incomplete." },
         { status: 500 }
       );
     }
 
-    // Read the original request body for signature verification.
+    // Verify the original Razorpay webhook request.
     const rawBody = await request.text();
-    const receivedSignature = request.headers.get("x-razorpay-signature");
+    const receivedSignature =
+      request.headers.get("x-razorpay-signature");
 
-    if (!receivedSignature) {
+    if (
+      !receivedSignature ||
+      !/^[a-f0-9]{64}$/i.test(receivedSignature)
+    ) {
       return NextResponse.json(
-        { error: "Missing webhook signature." },
+        { error: "Missing or invalid webhook signature." },
         { status: 400 }
       );
     }
@@ -47,24 +60,28 @@ export async function POST(request: Request) {
     }
 
     const event = JSON.parse(rawBody);
-    const adminClient = createClient(supabaseUrl, serviceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
 
-    const payment = event?.payload?.payment?.entity;
-
-    // Ignore unrelated events.
-    if (!["payment.captured", "order.paid", "payment.failed"].includes(event.event)) {
+    // This endpoint handles the two events configured in Razorpay.
+    if (
+      !["payment.captured", "payment.failed"].includes(event.event)
+    ) {
       return NextResponse.json({ received: true });
     }
 
-    if (!payment?.order_id || !payment?.id) {
+    const payment = event?.payload?.payment?.entity;
+
+    if (!payment?.id || !payment?.order_id) {
       return NextResponse.json(
-        { error: "Payment details are missing from the event." },
+        { error: "Payment details are missing." },
         { status: 400 }
       );
     }
 
+    const adminClient = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    // Find the corresponding EduAxis payment order.
     const { data: order, error: orderError } = await adminClient
       .from("payment_orders")
       .select("*")
@@ -79,23 +96,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // The order may not belong to EduAxis India.
+    // Ignore payments that do not belong to EduAxis India.
     if (!order) {
-      console.warn("Webhook received for an unknown order.");
       return NextResponse.json({ received: true });
     }
 
-    // A failed payment must never overwrite an already paid order.
+    // A failed payment must never overwrite a successful payment.
     if (event.event === "payment.failed") {
       if (order.status === "pending") {
-        const { error } = await adminClient
+        const { error: updateError } = await adminClient
           .from("payment_orders")
           .update({ status: "failed" })
           .eq("id", order.id)
           .eq("status", "pending");
 
-        if (error) {
-          console.error("Could not record failed payment:", error);
+        if (updateError) {
+          console.error("Could not record failed payment:", updateError);
           return NextResponse.json(
             { error: "Could not record payment failure." },
             { status: 500 }
@@ -111,79 +127,80 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true });
     }
 
+    if (order.status === "refunded") {
+      return NextResponse.json({ received: true });
+    }
+
+    // Prevent a different payment ID from replacing an existing one.
     if (
-      payment.amount !== Number(order.amount_paise) ||
-      payment.currency !== order.currency ||
-      payment.order_id !== order.razorpay_order_id
+      order.razorpay_payment_id &&
+      order.razorpay_payment_id !== payment.id
     ) {
-      console.error("Webhook payment amount or currency mismatch.");
+      console.error("Webhook payment ID mismatch.");
+      return NextResponse.json(
+        { error: "Payment ID does not match the order." },
+        { status: 409 }
+      );
+    }
+
+    // Independently confirm payment details with Razorpay.
+    const razorpay = new Razorpay({
+      key_id: razorpayKeyId,
+      key_secret: razorpayKeySecret,
+    });
+
+    const verifiedPayment = await razorpay.payments.fetch(payment.id);
+
+    if (
+      verifiedPayment.status !== "captured" ||
+      verifiedPayment.order_id !== order.razorpay_order_id ||
+      verifiedPayment.amount !== Number(order.amount_paise) ||
+      verifiedPayment.currency !== order.currency
+    ) {
+      console.error("Razorpay payment verification mismatch.");
       return NextResponse.json(
         { error: "Payment details do not match the order." },
         { status: 400 }
       );
     }
 
-    if (order.status === "refunded") {
-      return NextResponse.json({ received: true });
-    }
+    // Use the same central activation function as the verification API.
+    const { data: activation, error: activationError } =
+      await adminClient.rpc("activate_mock_test_purchase", {
+        p_payment_order_id: order.id,
+        p_razorpay_payment_id: payment.id,
+      });
 
-    // Record the successful payment. Repeated webhook events are safe.
-    const { error: updateError } = await adminClient
-      .from("payment_orders")
-      .update({
-        status: "paid",
-        razorpay_payment_id: payment.id,
-        paid_at: new Date().toISOString(),
-      })
-      .eq("id", order.id)
-      .neq("status", "refunded");
+    if (activationError) {
+      console.error("Webhook purchase activation failed:", activationError);
 
-    if (updateError) {
-      console.error("Could not update paid order:", updateError);
+      // A 500 response allows Razorpay to retry the webhook.
       return NextResponse.json(
-        { error: "Could not update payment status." },
+        { error: "Payment received, but purchase activation needs retry." },
         { status: 500 }
       );
     }
 
-    // Do not create a second purchase for the same student and test.
-    const { data: existingPurchase, error: purchaseLookupError } =
-      await adminClient
-        .from("mock_test_purchases")
-        .select("id")
-        .eq("student_id", order.student_id)
-        .eq("mock_test_id", order.mock_test_id)
-        .maybeSingle();
+    if (activation?.requires_review) {
+      console.error("Payment requires manual purchase review:", order.id);
 
-    if (purchaseLookupError) {
-      console.error("Purchase lookup failed:", purchaseLookupError);
       return NextResponse.json(
-        { error: "Could not check the purchase record." },
+        { error: "Payment recorded but purchase requires review." },
         { status: 500 }
       );
     }
 
-    if (!existingPurchase) {
-      const { error: insertError } = await adminClient
-        .from("mock_test_purchases")
-        .insert({
-          student_id: order.student_id,
-          mock_test_id: order.mock_test_id,
-          payment_order_id: order.id,
-        });
-
-      if (insertError && insertError.code !== "23505") {
-        console.error("Purchase activation failed:", insertError);
-        return NextResponse.json(
-          { error: "Payment received, but purchase activation needs retry." },
-          { status: 500 }
-        );
-      }
+    if (!activation?.success) {
+      return NextResponse.json(
+        { error: "Purchase activation could not be confirmed." },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
       received: true,
       success: true,
+      message: activation.message,
     });
   } catch (error) {
     console.error("Razorpay webhook error:", error);
