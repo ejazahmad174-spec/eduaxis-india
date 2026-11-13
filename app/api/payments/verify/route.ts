@@ -27,6 +27,7 @@ export async function POST(request: Request) {
       );
     }
 
+    // Authenticate the student.
     const authorization = request.headers.get("authorization");
     const token = authorization?.startsWith("Bearer ")
       ? authorization.slice(7)
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
       );
     }
 
+    // Validate the Razorpay response.
     const body = await request.json();
 
     const orderId = body.razorpay_order_id;
@@ -65,14 +67,15 @@ export async function POST(request: Request) {
       typeof signature !== "string" ||
       !orderId ||
       !paymentId ||
-      !signature
+      !/^[a-f0-9]{64}$/i.test(signature)
     ) {
       return NextResponse.json(
-        { error: "Payment details are incomplete." },
+        { error: "Payment details are incomplete or invalid." },
         { status: 400 }
       );
     }
 
+    // Verify Razorpay checkout signature.
     const expectedSignature = createHmac("sha256", razorpayKeySecret)
       .update(`${orderId}|${paymentId}`)
       .digest("hex");
@@ -94,6 +97,7 @@ export async function POST(request: Request) {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    // Find the order belonging to this student.
     const { data: paymentRecord, error: recordError } =
       await adminClient
         .from("payment_orders")
@@ -109,6 +113,24 @@ export async function POST(request: Request) {
       );
     }
 
+    if (paymentRecord.status === "refunded") {
+      return NextResponse.json(
+        { error: "This payment order has been refunded." },
+        { status: 409 }
+      );
+    }
+
+    if (
+      paymentRecord.razorpay_payment_id &&
+      paymentRecord.razorpay_payment_id !== paymentId
+    ) {
+      return NextResponse.json(
+        { error: "This order is already linked to another payment." },
+        { status: 409 }
+      );
+    }
+
+    // Independently verify the payment directly with Razorpay.
     const razorpay = new Razorpay({
       key_id: razorpayKeyId,
       key_secret: razorpayKeySecret,
@@ -118,7 +140,7 @@ export async function POST(request: Request) {
 
     if (
       payment.order_id !== orderId ||
-      payment.amount !== paymentRecord.amount_paise ||
+      payment.amount !== Number(paymentRecord.amount_paise) ||
       payment.currency !== paymentRecord.currency
     ) {
       return NextResponse.json(
@@ -130,80 +152,50 @@ export async function POST(request: Request) {
     if (payment.status !== "captured") {
       return NextResponse.json(
         {
-          error:
-            "Payment has not been captured yet. Please wait for confirmation.",
+          error: "Payment has not been captured yet.",
           paymentStatus: payment.status,
         },
         { status: 409 }
       );
     }
 
-    if (paymentRecord.status === "refunded") {
-      return NextResponse.json(
-        { error: "This payment order has been refunded." },
-        { status: 409 }
-      );
-    }
-
-    if (paymentRecord.status === "paid") {
-      const { data: existingPurchase } = await adminClient
-        .from("mock_test_purchases")
-        .select("id")
-        .eq("payment_order_id", paymentRecord.id)
-        .maybeSingle();
-
-      if (existingPurchase) {
-        return NextResponse.json({
-          success: true,
-          message: "Purchase already confirmed.",
-        });
-      }
-    }
-
-    const { data: otherPurchase } = await adminClient
-      .from("mock_test_purchases")
-      .select("id")
-      .eq("student_id", userData.user.id)
-      .eq("mock_test_id", paymentRecord.mock_test_id)
-      .maybeSingle();
-
-    if (otherPurchase) {
-      return NextResponse.json({
-        success: true,
-        message: "You already have access to this test.",
+    // Activate the purchase through the central database function.
+    const { data: activation, error: activationError } =
+      await adminClient.rpc("activate_mock_test_purchase", {
+        p_payment_order_id: paymentRecord.id,
+        p_razorpay_payment_id: paymentId,
       });
-    }
 
-    const { error: updateError } = await adminClient
-      .from("payment_orders")
-      .update({
-        status: "paid",
-        razorpay_payment_id: paymentId,
-        paid_at: new Date().toISOString(),
-      })
-      .eq("id", paymentRecord.id)
-      .eq("student_id", userData.user.id);
+    if (activationError) {
+      console.error("Purchase activation failed:", activationError);
 
-    if (updateError) {
       return NextResponse.json(
-        { error: "Could not update the payment record." },
+        {
+          error:
+            "Payment was captured, but access activation needs attention. Please contact support.",
+          paymentConfirmed: true,
+        },
         { status: 500 }
       );
     }
 
-    const { error: purchaseError } = await adminClient
-      .from("mock_test_purchases")
-      .insert({
-        student_id: userData.user.id,
-        mock_test_id: paymentRecord.mock_test_id,
-        payment_order_id: paymentRecord.id,
-      });
-
-    if (purchaseError) {
+    if (activation?.requires_review) {
       return NextResponse.json(
         {
+          success: false,
+          paymentConfirmed: true,
+          requiresReview: true,
           error:
-            "Payment is confirmed, but access activation needs attention. Please contact support.",
+            "Payment was received, but this test is already linked to another purchase. Please contact support.",
+        },
+        { status: 409 }
+      );
+    }
+
+    if (!activation?.success) {
+      return NextResponse.json(
+        {
+          error: "Purchase activation could not be confirmed.",
           paymentConfirmed: true,
         },
         { status: 500 }
@@ -212,7 +204,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: "Payment verified. Your test is now unlocked.",
+      message: activation.message,
+      alreadyActivated: activation.already_activated ?? false,
     });
   } catch (error) {
     console.error("Payment verification error:", error);
