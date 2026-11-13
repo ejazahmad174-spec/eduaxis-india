@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, FormEvent } from 'react';
@@ -12,6 +13,23 @@ export default function StudentLoginPage() {
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  function getReturnPath() {
+    const params = new URLSearchParams(window.location.search);
+    const next = params.get('next');
+
+    // Allow only safe internal website paths.
+    if (
+      next &&
+      next.startsWith('/') &&
+      !next.startsWith('//') &&
+      !next.startsWith('/\\')
+    ) {
+      return next;
+    }
+
+    return '/student/dashboard';
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage('');
@@ -22,6 +40,7 @@ export default function StudentLoginPage() {
     }
 
     setBusy(true);
+
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
@@ -30,7 +49,9 @@ export default function StudentLoginPage() {
 
       if (error) throw error;
 
-      router.push('/student/dashboard');
+      const returnPath = getReturnPath();
+
+      router.replace(returnPath);
       router.refresh();
     } catch (error) {
       setErrorMessage(
