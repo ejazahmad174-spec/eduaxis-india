@@ -352,6 +352,7 @@ export default function GovernmentJobsPage() {
         <div className="admin-side-label">CONTENT MANAGEMENT</div>
         <a className="admin-side-link" href="/admin/study-materials">▤ &nbsp; Study Materials</a>
         <a className="admin-side-link active" href="/admin/government-jobs">▤ &nbsp; Government Jobs</a>
+        <a className="admin-side-link" href="/admin/government-jobs/discoveries">↳ &nbsp; Discovered Jobs</a>
         <a className="admin-side-link" href="/admin/dashboard">▤ &nbsp; Online Courses</a>
         <a className="admin-side-link" href="/admin/dashboard">▤ &nbsp; Mock Tests</a>
         <a className="admin-side-link" href="/admin/dashboard">▤ &nbsp; Education News</a>
