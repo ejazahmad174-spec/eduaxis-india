@@ -6,11 +6,19 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import '../../admin.css';
 
+type NoticeCategory =
+  | 'recruitment'
+  | 'teacher_eligibility'
+  | 'examination'
+  | 'certificate'
+  | 'general';
+
 type Discovery = {
   id: string;
   source_id: string;
   discovered_title: string;
   discovered_url: string;
+  notice_category: NoticeCategory;
   status: 'new' | 'processing' | 'imported' | 'ignored' | 'error';
   discovered_at: string;
   processed_at: string | null;
@@ -22,7 +30,42 @@ type JobSource = {
   source_name: string;
 };
 
-const filters = ['all', 'new', 'processing', 'imported', 'ignored', 'error'];
+const statusFilters = [
+  'all',
+  'new',
+  'processing',
+  'imported',
+  'ignored',
+  'error',
+];
+
+const categoryFilters: { value: string; label: string }[] = [
+  { value: 'all', label: 'All Categories' },
+  { value: 'recruitment', label: 'Recruitment' },
+  { value: 'teacher_eligibility', label: 'Teacher Eligibility' },
+  { value: 'examination', label: 'Examination Updates' },
+  { value: 'certificate', label: 'Certificate Updates' },
+  { value: 'general', label: 'General' },
+];
+
+const categoryLabels: Record<NoticeCategory, string> = {
+  recruitment: 'Recruitment',
+  teacher_eligibility: 'Teacher Eligibility',
+  examination: 'Examination Updates',
+  certificate: 'Certificate Updates',
+  general: 'General',
+};
+
+const categoryColors: Record<
+  NoticeCategory,
+  { background: string; color: string }
+> = {
+  recruitment: { background: '#e5f8ef', color: '#087443' },
+  teacher_eligibility: { background: '#e8f1fb', color: '#174a7c' },
+  examination: { background: '#f0eaff', color: '#6336a5' },
+  certificate: { background: '#fff4df', color: '#98620a' },
+  general: { background: '#edf3f8', color: '#34536e' },
+};
 
 function formatDate(value: string | null) {
   if (!value) return 'Not recorded';
@@ -48,6 +91,7 @@ export default function DiscoveredGovernmentJobsPage() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [filter, setFilter] = useState('new');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -63,7 +107,9 @@ export default function DiscoveredGovernmentJobsPage() {
     const [discoveriesResult, sourcesResult] = await Promise.all([
       client
         .from('government_job_discoveries')
-        .select('id,source_id,discovered_title,discovered_url,status,discovered_at,processed_at,error_message')
+        .select(
+          'id,source_id,discovered_title,discovered_url,notice_category,status,discovered_at,processed_at,error_message'
+        )
         .order('discovered_at', { ascending: false }),
 
       client
@@ -160,9 +206,16 @@ export default function DiscoveredGovernmentJobsPage() {
     setBusyId(null);
   }
 
-  const visibleItems = items.filter(item =>
-    filter === 'all' ? true : item.status === filter
-  );
+  const visibleItems = items.filter(item => {
+    const matchesStatus =
+      filter === 'all' || item.status === filter;
+
+    const matchesCategory =
+      categoryFilter === 'all' ||
+      item.notice_category === categoryFilter;
+
+    return matchesStatus && matchesCategory;
+  });
 
   const counts = {
     all: items.length,
@@ -181,7 +234,11 @@ export default function DiscoveredGovernmentJobsPage() {
   }
 
   if (loading) {
-    return <main className="admin-loading">Checking administrator access…</main>;
+    return (
+      <main className="admin-loading">
+        Checking administrator access…
+      </main>
+    );
   }
 
   return (
@@ -229,7 +286,7 @@ export default function DiscoveredGovernmentJobsPage() {
         <header className="admin-topbar">
           <div>
             <div className="admin-kicker">EDUAXIS INDIA / ADMIN</div>
-            <h1>Discovered Government Jobs</h1>
+            <h1>Discovered Notices</h1>
           </div>
 
           <a className="admin-logout" href="/admin/government-jobs">
@@ -238,11 +295,12 @@ export default function DiscoveredGovernmentJobsPage() {
         </header>
 
         <div style={{ padding: '25px 0' }}>
-          <h2>Automatic Recruitment Discovery</h2>
+          <h2>Automatic Notice Discovery</h2>
 
           <p style={{ color: '#647b91', lineHeight: 1.7 }}>
-            Review recruitment notices collected from official websites.
-            Verify every notice before manually adding and publishing a vacancy.
+            Review recruitment, CTET eligibility, examination and
+            certificate notices collected from official websites.
+            Verify every notice before publishing information.
           </p>
 
           {message && (
@@ -269,13 +327,15 @@ export default function DiscoveredGovernmentJobsPage() {
             </div>
           )}
 
+          <h3 style={{ marginTop: 25 }}>Filter by Status</h3>
+
           <div style={{
             display: 'flex',
             flexWrap: 'wrap',
             gap: 10,
-            margin: '22px 0',
+            margin: '15px 0 25px',
           }}>
-            {filters.map(item => (
+            {statusFilters.map(item => (
               <button
                 key={item}
                 type="button"
@@ -298,13 +358,51 @@ export default function DiscoveredGovernmentJobsPage() {
 
           <div style={{
             display: 'flex',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 12,
+            marginBottom: 22,
+          }}>
+            <label
+              htmlFor="notice-category"
+              style={{ fontWeight: 700, color: '#17324d' }}
+            >
+              Notice Category:
+            </label>
+
+            <select
+              id="notice-category"
+              value={categoryFilter}
+              onChange={event => setCategoryFilter(event.target.value)}
+              style={{
+                padding: '11px 14px',
+                minWidth: 230,
+                border: '1px solid #dce5ec',
+                borderRadius: 8,
+                background: '#fff',
+                color: '#17324d',
+                fontSize: 14,
+              }}
+            >
+              {categoryFilters.map(category => (
+                <option key={category.value} value={category.value}>
+                  {category.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{
+            display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
             gap: 12,
             flexWrap: 'wrap',
             marginBottom: 18,
           }}>
-            <h2 style={{ margin: 0 }}>Recruitment Notices</h2>
+            <h2 style={{ margin: 0 }}>
+              Notices ({visibleItems.length})
+            </h2>
 
             <button
               type="button"
@@ -334,162 +432,186 @@ export default function DiscoveredGovernmentJobsPage() {
             }}>
               <h3>No notices found</h3>
               <p style={{ color: '#647b91' }}>
-                There are currently no notices in this category.
+                There are currently no notices matching these filters.
                 New discoveries will appear here after collection.
               </p>
             </div>
           ) : (
             <div style={{ display: 'grid', gap: 15 }}>
-              {visibleItems.map(item => (
-                <article
-                  key={item.id}
-                  style={{
-                    background: '#fff',
-                    border: '1px solid #dce5ec',
-                    borderRadius: 12,
-                    padding: 20,
-                  }}
-                >
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    gap: 12,
-                    flexWrap: 'wrap',
-                  }}>
-                    <div style={{ flex: '1 1 350px' }}>
-                      <h3 style={{
-                        margin: '0 0 10px',
-                        fontSize: 19,
-                        lineHeight: 1.4,
-                      }}>
-                        {item.discovered_title || 'Untitled recruitment notice'}
-                      </h3>
+              {visibleItems.map(item => {
+                const category = item.notice_category || 'general';
+                const categoryStyle =
+                  categoryColors[category] || categoryColors.general;
 
-                      <div style={{
-                        color: '#174a7c',
-                        fontSize: 14,
-                        fontWeight: 700,
-                        marginBottom: 8,
-                      }}>
-                        Organisation: {getSourceName(item.source_id)}
-                      </div>
+                return (
+                  <article
+                    key={item.id}
+                    style={{
+                      background: '#fff',
+                      border: '1px solid #dce5ec',
+                      borderRadius: 12,
+                      padding: 20,
+                    }}
+                  >
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      gap: 12,
+                      flexWrap: 'wrap',
+                    }}>
+                      <div style={{ flex: '1 1 350px' }}>
+                        <h3 style={{
+                          margin: '0 0 12px',
+                          fontSize: 19,
+                          lineHeight: 1.4,
+                        }}>
+                          {item.discovered_title ||
+                            'Untitled recruitment notice'}
+                        </h3>
 
-                      <div style={{
-                        color: '#647b91',
-                        fontSize: 13,
-                        marginBottom: 8,
-                      }}>
-                        Discovered: {formatDate(item.discovered_at)}
-                      </div>
-
-                      <a
-                        href={item.discovered_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          color: '#087d91',
+                        <div style={{
+                          color: '#174a7c',
+                          fontSize: 14,
                           fontWeight: 700,
+                          marginBottom: 8,
+                        }}>
+                          Organisation: {getSourceName(item.source_id)}
+                        </div>
+
+                        <span style={{
+                          display: 'inline-block',
+                          background: categoryStyle.background,
+                          color: categoryStyle.color,
+                          padding: '7px 11px',
+                          borderRadius: 20,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          marginBottom: 10,
+                        }}>
+                          {categoryLabels[category] || 'General'}
+                        </span>
+
+                        <div style={{
+                          color: '#647b91',
                           fontSize: 13,
-                          overflowWrap: 'anywhere',
-                        }}
-                      >
-                        Open original notice ↗
-                      </a>
+                          marginBottom: 8,
+                        }}>
+                          Discovered: {formatDate(item.discovered_at)}
+                        </div>
+
+                        <a
+                          href={item.discovered_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: '#087d91',
+                            fontWeight: 700,
+                            fontSize: 13,
+                            overflowWrap: 'anywhere',
+                          }}
+                        >
+                          Open original notice ↗
+                        </a>
+                      </div>
+
+                      <span style={{
+                        background: '#edf3f8',
+                        color: '#34536e',
+                        padding: '7px 12px',
+                        borderRadius: 20,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        textTransform: 'capitalize',
+                      }}>
+                        {item.status}
+                      </span>
                     </div>
 
-                    <span style={{
-                      background: '#edf3f8',
-                      color: '#34536e',
-                      padding: '7px 12px',
-                      borderRadius: 20,
-                      fontSize: 12,
-                      fontWeight: 700,
-                      textTransform: 'capitalize',
+                    {item.error_message && (
+                      <p style={{
+                        color: '#bd2525',
+                        background: '#fff0f0',
+                        padding: 10,
+                        borderRadius: 7,
+                        fontSize: 13,
+                      }}>
+                        {item.error_message}
+                      </p>
+                    )}
+
+                    <div style={{
+                      display: 'flex',
+                      gap: 9,
+                      flexWrap: 'wrap',
+                      marginTop: 18,
+                      paddingTop: 14,
+                      borderTop: '1px solid #edf1f5',
                     }}>
-                      {item.status}
-                    </span>
-                  </div>
+                      {item.status !== 'ignored' && (
+                        <button
+                          type="button"
+                          disabled={busyId !== null}
+                          onClick={() => updateStatus(item, 'ignored')}
+                          style={{
+                            padding: '9px 13px',
+                            border: 0,
+                            borderRadius: 7,
+                            background: '#fff0f0',
+                            color: '#a52626',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {busyId === item.id
+                            ? 'Please wait…'
+                            : 'Mark as Ignored'}
+                        </button>
+                      )}
 
-                  {item.error_message && (
-                    <p style={{
-                      color: '#bd2525',
-                      background: '#fff0f0',
-                      padding: 10,
-                      borderRadius: 7,
-                      fontSize: 13,
-                    }}>
-                      {item.error_message}
-                    </p>
-                  )}
+                      {item.status === 'ignored' && (
+                        <button
+                          type="button"
+                          disabled={busyId !== null}
+                          onClick={() => updateStatus(item, 'new')}
+                          style={{
+                            padding: '9px 13px',
+                            border: 0,
+                            borderRadius: 7,
+                            background: '#e5f8ef',
+                            color: '#087443',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {busyId === item.id
+                            ? 'Please wait…'
+                            : 'Restore to New'}
+                        </button>
+                      )}
 
-                  <div style={{
-                    display: 'flex',
-                    gap: 9,
-                    flexWrap: 'wrap',
-                    marginTop: 18,
-                    paddingTop: 14,
-                    borderTop: '1px solid #edf1f5',
-                  }}>
-                    {item.status !== 'ignored' && (
-                      <button
-                        type="button"
-                        disabled={busyId !== null}
-                        onClick={() => updateStatus(item, 'ignored')}
-                        style={{
-                          padding: '9px 13px',
-                          border: 0,
-                          borderRadius: 7,
-                          background: '#fff0f0',
-                          color: '#a52626',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {busyId === item.id ? 'Please wait…' : 'Mark as Ignored'}
-                      </button>
-                    )}
-
-                    {item.status === 'ignored' && (
-                      <button
-                        type="button"
-                        disabled={busyId !== null}
-                        onClick={() => updateStatus(item, 'new')}
-                        style={{
-                          padding: '9px 13px',
-                          border: 0,
-                          borderRadius: 7,
-                          background: '#e5f8ef',
-                          color: '#087443',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {busyId === item.id ? 'Please wait…' : 'Restore to New'}
-                      </button>
-                    )}
-
-                    {item.status === 'error' && (
-                      <button
-                        type="button"
-                        disabled={busyId !== null}
-                        onClick={() => updateStatus(item, 'new')}
-                        style={{
-                          padding: '9px 13px',
-                          border: 0,
-                          borderRadius: 7,
-                          background: '#e8f1fb',
-                          color: '#174a7c',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Retry Review
-                      </button>
-                    )}
-                  </div>
-                </article>
-              ))}
+                      {item.status === 'error' && (
+                        <button
+                          type="button"
+                          disabled={busyId !== null}
+                          onClick={() => updateStatus(item, 'new')}
+                          style={{
+                            padding: '9px 13px',
+                            border: 0,
+                            borderRadius: 7,
+                            background: '#e8f1fb',
+                            color: '#174a7c',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Retry Review
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
 
@@ -502,10 +624,10 @@ export default function DiscoveredGovernmentJobsPage() {
             fontSize: 13,
             lineHeight: 1.7,
           }}>
-            <strong>Administrator reminder:</strong> Discovered links are
-            candidates, not verified vacancies. Open the official notice,
-            check eligibility and dates, and add the verified details through
-            the Government Jobs management page before publishing.
+            <strong>Administrator reminder:</strong> Automatically
+            discovered links are candidates, not verified information.
+            Open the official notice, verify its details and dates,
+            and publish only after manual review.
           </div>
         </div>
       </section>
