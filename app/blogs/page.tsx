@@ -234,6 +234,23 @@ export default function BlogsPage() {
         </div>
       </section>
 
+      <section className="wrap authorInviteSection">
+        <div className="authorInviteCard">
+          <div className="authorInviteText">
+            <span className="authorInviteEyebrow">SHARE YOUR KNOWLEDGE</span>
+            <h2>Have something valuable to share?</h2>
+            <p>
+              Join EduAxis India as a contributing author. Share your ideas,
+              experience and knowledge with students and curious readers.
+            </p>
+            <small>Registered authors only · Every article is reviewed before publication</small>
+          </div>
+          <Link href="/author/register" className="authorInviteButton">
+            Write for EduAxis <span aria-hidden="true">→</span>
+          </Link>
+        </div>
+      </section>
+
       <section className="wrap blogContent">
         <label>EXPLORE IN YOUR LANGUAGE</label>
         <h2>Choose your language</h2>
@@ -475,6 +492,72 @@ export default function BlogsPage() {
           color: #456579;
           font-size: 12px;
           font-weight: 600;
+        }
+
+        .blogPage .authorInviteSection {
+          padding-top: 28px;
+        }
+
+        .blogPage .authorInviteCard {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 28px;
+          padding: 28px 32px;
+          border: 1px solid #cfe5e2;
+          border-radius: 15px;
+          background: linear-gradient(115deg, #edf8f6, #f4f8fb);
+        }
+
+        .blogPage .authorInviteText {
+          min-width: 0;
+        }
+
+        .blogPage .authorInviteEyebrow {
+          color: #15958f;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 1.7px;
+        }
+
+        .blogPage .authorInviteCard h2 {
+          margin: 8px 0;
+          color: #102b46;
+          font-size: 23px;
+        }
+
+        .blogPage .authorInviteCard p {
+          max-width: 690px;
+          margin: 0 0 8px;
+          color: #526b7c;
+          font-size: 13px;
+          line-height: 1.7;
+        }
+
+        .blogPage .authorInviteCard small {
+          color: #718492;
+          font-size: 10px;
+        }
+
+        .blogPage .authorInviteButton {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          flex: 0 0 auto;
+          padding: 14px 20px;
+          border-radius: 8px;
+          background: #102b46;
+          color: #fff;
+          font-size: 13px;
+          font-weight: 700;
+          text-decoration: none;
+          transition: background .2s, transform .2s;
+        }
+
+        .blogPage .authorInviteButton:hover {
+          background: #18a5a0;
+          transform: translateY(-2px);
         }
 
         .blogPage .blogContent {
@@ -866,6 +949,25 @@ export default function BlogsPage() {
           .blogPage .wrap {
             width: calc(100% - 28px);
             max-width: none;
+          }
+
+          .blogPage .authorInviteSection {
+            padding-top: 18px;
+          }
+
+          .blogPage .authorInviteCard {
+            align-items: stretch;
+            flex-direction: column;
+            gap: 18px;
+            padding: 22px 19px;
+          }
+
+          .blogPage .authorInviteCard h2 {
+            font-size: 20px;
+          }
+
+          .blogPage .authorInviteButton {
+            width: 100%;
           }
 
           .blogPage .blogHero {
