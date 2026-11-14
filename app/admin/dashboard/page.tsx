@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import '../admin.css';
 
@@ -12,6 +13,8 @@ type Counts = {
   courses: number;
   tests: number;
   news: number;
+  authors: number;
+  submissions: number;
 };
 
 export default function AdminDashboardPage() {
@@ -20,12 +23,15 @@ export default function AdminDashboardPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState('');
+
   const [counts, setCounts] = useState<Counts>({
     materials: 0,
     jobs: 0,
     courses: 0,
     tests: 0,
     news: 0,
+    authors: 0,
+    submissions: 0,
   });
 
   useEffect(() => {
@@ -59,18 +65,30 @@ export default function AdminDashboardPage() {
         return;
       }
 
-      const [m, j, c, t, n] = await Promise.all([
+      const [
+        m,
+        j,
+        c,
+        t,
+        n,
+        a,
+        s,
+      ] = await Promise.all([
         supabase.from('study_materials').select('*', { count: 'exact', head: true }),
         supabase.from('government_jobs').select('*', { count: 'exact', head: true }),
         supabase.from('courses').select('*', { count: 'exact', head: true }),
         supabase.from('mock_tests').select('*', { count: 'exact', head: true }),
         supabase.from('education_news').select('*', { count: 'exact', head: true }),
+        supabase.from('author_profiles').select('*', { count: 'exact', head: true }),
+        supabase.from('author_submissions').select('*', { count: 'exact', head: true }),
       ]);
 
       if (!active) return;
 
-      if ([m.error, j.error, c.error, t.error, n.error].some(Boolean)) {
-        setNotice('Some dashboard statistics could not be loaded. Please check Supabase permissions.');
+      if ([m.error, j.error, c.error, t.error, n.error, a.error, s.error].some(Boolean)) {
+        setNotice(
+          'Some dashboard statistics could not be loaded. Please check Supabase permissions.'
+        );
       }
 
       setEmail(user.email || 'Administrator');
@@ -81,6 +99,8 @@ export default function AdminDashboardPage() {
         courses: c.count || 0,
         tests: t.count || 0,
         news: n.count || 0,
+        authors: a.count || 0,
+        submissions: s.count || 0,
       });
 
       setLoading(false);
@@ -116,6 +136,8 @@ export default function AdminDashboardPage() {
     ['🎓', 'Online courses', counts.courses, 'Courses and lessons'],
     ['📝', 'Mock tests', counts.tests, 'Practice tests'],
     ['📰', 'Education news', counts.news, 'News and announcements'],
+    ['✍️', 'Author applications', counts.authors, 'Registered contributors'],
+    ['📖', 'Article submissions', counts.submissions, 'Articles awaiting review'],
   ];
 
   return (
@@ -161,26 +183,47 @@ export default function AdminDashboardPage() {
           <small>Coming next</small>
         </div>
 
-<a
-  className="admin-side-link"
-  href="/admin/mock-tests"
-  style={{
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: '5px',
-  }}
->
-  <span>▤ &nbsp; Mock Tests</span>
-  <small style={{ marginLeft: '24px' }}>
-    Manage tests →
-  </small>
-</a>
+        <a
+          className="admin-side-link"
+          href="/admin/mock-tests"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            gap: '5px',
+          }}
+        >
+          <span>▤ &nbsp; Mock Tests</span>
+          <small style={{ marginLeft: '24px' }}>
+            Manage tests →
+          </small>
+        </a>
 
         <div className="admin-side-link muted">
           ▤ &nbsp; Education News
           <small>Coming next</small>
         </div>
+
+        <div className="admin-side-label">
+          BLOG MANAGEMENT
+        </div>
+
+        <Link
+          className="admin-side-link"
+          href="/admin/author-management"
+        >
+          ✍️ &nbsp; Author Management
+          <small style={{ marginLeft: '24px' }}>
+            Approvals & articles →
+          </small>
+        </Link>
+
+        <Link
+          className="admin-side-link"
+          href="/admin/blogs"
+        >
+          ▤ &nbsp; Blog Management
+        </Link>
 
         <div className="admin-sidebar-bottom">
           <a href="/">← View public website</a>
@@ -269,15 +312,16 @@ export default function AdminDashboardPage() {
 
             <p>
               You can manage Study Materials and Mock Tests
-              from your administrator account. More content
-              management tools will be connected as they become ready.
+              from your administrator account. Author Management
+              is now available for contributor approvals and
+              article reviews.
             </p>
           </div>
 
           <div className="admin-next-badge">
             AVAILABLE TOOLS
             <br />
-            <b>STUDY MATERIALS & MOCK TESTS</b>
+            <b>STUDY MATERIALS, MOCK TESTS & BLOGS</b>
           </div>
 
         </section>
