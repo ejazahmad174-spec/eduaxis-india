@@ -21,39 +21,76 @@ type Article = {
 };
 
 export default function BlogArticlePage() {
-  const params = useParams();
-  const slug = params.id as string;
+  const params = useParams<{ id: string }>();
+  const slug = params?.id;
 
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
+    let isActive = true;
+
     async function loadArticle() {
-      if (!slug) return;
-
-      setLoading(true);
-
-      const { data, error } = await supabase
-        .from('blog_articles')
-        .select('*')
-        .eq('slug', slug)
-        .eq('status', 'published')
-        .maybeSingle();
-
-      if (error) {
-        console.error('Article loading error:', error);
-        setNotFound(true);
-      } else if (!data) {
-        setNotFound(true);
-      } else {
-        setArticle(data as Article);
+      if (!slug) {
+        if (isActive) {
+          setLoading(false);
+        }
+        return;
       }
 
-      setLoading(false);
+      setLoading(true);
+      setNotFound(false);
+
+      // Check that the Supabase client is available.
+      const client = supabase;
+
+      if (!client) {
+        console.error('Supabase client is not available.');
+
+        if (isActive) {
+          setNotFound(true);
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const { data, error } = await client
+          .from('blog_articles')
+          .select('*')
+          .eq('slug', slug)
+          .eq('status', 'published')
+          .maybeSingle();
+
+        if (!isActive) return;
+
+        if (error) {
+          console.error('Article loading error:', error);
+          setNotFound(true);
+        } else if (!data) {
+          setNotFound(true);
+        } else {
+          setArticle(data as Article);
+        }
+      } catch (error) {
+        console.error('Unexpected article error:', error);
+
+        if (isActive) {
+          setNotFound(true);
+        }
+      } finally {
+        if (isActive) {
+          setLoading(false);
+        }
+      }
     }
 
     loadArticle();
+
+    return () => {
+      isActive = false;
+    };
   }, [slug]);
 
   if (loading) {
@@ -68,39 +105,78 @@ export default function BlogArticlePage() {
     return (
       <main className="articleMessage">
         <h1>Article Not Found</h1>
-        <p>This article may not exist, may be unpublished, or may have been moved.</p>
+        <p>
+          This article may not exist, may be unpublished,
+          or may have been moved.
+        </p>
         <Link href="/blogs">← Back to Blog</Link>
+
+        <style jsx>{`
+          .articleMessage {
+            min-height: 55vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 30px 20px;
+            color: #102b46;
+          }
+
+          .articleMessage h1 {
+            font-size: 38px;
+            margin-bottom: 12px;
+          }
+
+          .articleMessage p {
+            color: #657789;
+          }
+
+          .articleMessage a {
+            color: #168f8c;
+            margin-top: 15px;
+            text-decoration: none;
+          }
+        `}</style>
       </main>
     );
   }
 
   const isUrdu = article.language === 'Urdu';
 
+  const formattedDate = new Date(
+    article.published_at || article.created_at
+  ).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
   return (
     <main className="articlePage">
       <div className="articleContainer">
+
         <Link href="/blogs" className="backLink">
           ← Back to Blog
         </Link>
 
         <div className="articleMeta">
-          {article.category && <span>{article.category}</span>}
+          {article.category && (
+            <span>{article.category}</span>
+          )}
           <span>{article.language}</span>
-          <span>
-            {new Date(
-              article.published_at || article.created_at
-            ).toLocaleDateString('en-IN', {
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric',
-            })}
-          </span>
+          <span>{formattedDate}</span>
         </div>
 
-        <h1 dir={isUrdu ? 'rtl' : 'ltr'}>{article.title}</h1>
+        <h1 dir={isUrdu ? 'rtl' : 'ltr'}>
+          {article.title}
+        </h1>
 
         {article.excerpt && (
-          <p className="articleExcerpt" dir={isUrdu ? 'rtl' : 'ltr'}>
+          <p
+            className="articleExcerpt"
+            dir={isUrdu ? 'rtl' : 'ltr'}
+          >
             {article.excerpt}
           </p>
         )}
@@ -121,14 +197,19 @@ export default function BlogArticlePage() {
           className="articleContent"
           dir={isUrdu ? 'rtl' : 'ltr'}
         >
-          {article.content.split(/\n\s*\n/).map((paragraph, index) => (
-            <p key={index}>{paragraph}</p>
-          ))}
+          {article.content
+            .split(/\n\s*\n/)
+            .map((paragraph, index) => (
+              <p key={index}>{paragraph}</p>
+            ))}
         </div>
 
-        <Link href="/blogs" className="backLink">
-          ← Explore More Articles
-        </Link>
+        <div className="articleFooter">
+          <Link href="/blogs" className="backLink">
+            ← Explore More Articles
+          </Link>
+        </div>
+
       </div>
 
       <style jsx>{`
@@ -141,7 +222,7 @@ export default function BlogArticlePage() {
         .articleContainer {
           max-width: 850px;
           margin: 0 auto;
-          background: #fff;
+          background: #ffffff;
           padding: 40px;
           border-radius: 16px;
           box-shadow: 0 5px 25px rgba(16, 43, 70, 0.06);
@@ -153,6 +234,10 @@ export default function BlogArticlePage() {
           text-decoration: none;
           font-weight: 600;
           margin-bottom: 25px;
+        }
+
+        .backLink:hover {
+          text-decoration: underline;
         }
 
         .articleMeta {
@@ -185,6 +270,7 @@ export default function BlogArticlePage() {
         }
 
         .articleImage {
+          display: block;
           width: 100%;
           max-height: 430px;
           object-fit: cover;
@@ -204,7 +290,6 @@ export default function BlogArticlePage() {
           color: #263b4d;
           font-size: 17px;
           line-height: 1.9;
-          white-space: normal;
           overflow-wrap: anywhere;
         }
 
@@ -212,23 +297,21 @@ export default function BlogArticlePage() {
           margin: 0 0 20px;
         }
 
-        .articleMessage {
-          min-height: 55vh;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          text-align: center;
-          padding: 30px 20px;
-          color: #102b46;
+        .articleFooter {
+          margin-top: 35px;
+          border-top: 1px solid #e2eaed;
+          padding-top: 20px;
         }
 
-        .articleMessage a {
-          color: #168f8c;
-          margin-top: 15px;
+        .articleFooter .backLink {
+          margin-bottom: 0;
         }
 
         @media (max-width: 600px) {
+          .articlePage {
+            padding: 25px 12px 45px;
+          }
+
           .articleContainer {
             padding: 24px 18px;
           }
