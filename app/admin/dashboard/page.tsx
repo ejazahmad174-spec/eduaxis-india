@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -178,10 +177,21 @@ export default function AdminDashboardPage() {
           <small>Coming next</small>
         </div>
 
-        <div className="admin-side-link muted">
-          ▤ &nbsp; Online Courses
-          <small>Coming next</small>
-        </div>
+        <Link
+          className="admin-side-link"
+          href="/admin/courses"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            gap: '5px',
+          }}
+        >
+          <span>🎓 &nbsp; Online Courses</span>
+          <small style={{ marginLeft: '24px' }}>
+            Manage courses →
+          </small>
+        </Link>
 
         <a
           className="admin-side-link"
@@ -311,17 +321,17 @@ export default function AdminDashboardPage() {
             <h2>Manage your educational content</h2>
 
             <p>
-              You can manage Study Materials and Mock Tests
-              from your administrator account. Author Management
-              is now available for contributor approvals and
-              article reviews.
+              Manage Study Materials, Online Courses, Mock Tests,
+              Government Jobs and educational content from your
+              administrator account. You can also manage author
+              applications and article submissions.
             </p>
           </div>
 
           <div className="admin-next-badge">
             AVAILABLE TOOLS
             <br />
-            <b>STUDY MATERIALS, MOCK TESTS & BLOGS</b>
+            <b>COURSES, STUDY MATERIALS, MOCK TESTS & BLOGS</b>
           </div>
 
         </section>
