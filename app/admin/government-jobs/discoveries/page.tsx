@@ -200,6 +200,96 @@ export default function DiscoveredGovernmentJobsPage() {
     setBusyId(null);
   }
 
+  async function createDraftJob(item: Discovery) {
+    const client = supabase;
+    if (!client) return;
+
+    setBusyId(item.id);
+    setMessage('');
+    setErrorMessage('');
+
+    const sourceName = getSourceName(item.source_id);
+
+    // Check the source reference first so the same notice is not imported twice.
+    const { data: existingJob, error: lookupError } = await client
+      .from('government_jobs')
+      .select('id')
+      .eq('source_id', item.source_id)
+      .eq('source_reference', item.discovered_url)
+      .maybeSingle();
+
+    if (lookupError) {
+      setErrorMessage('Could not check for an existing job: ' + lookupError.message);
+      setBusyId(null);
+      return;
+    }
+
+    if (existingJob) {
+      const { error: discoveryError } = await client
+        .from('government_job_discoveries')
+        .update({
+          status: 'imported',
+          processed_at: new Date().toISOString(),
+          error_message: null,
+        })
+        .eq('id', item.id);
+
+      if (discoveryError) {
+        setErrorMessage(
+          'This notice is already in Government Jobs, but its discovery status could not be updated: ' +
+          discoveryError.message
+        );
+      } else {
+        setMessage('This notice was already imported. No duplicate draft was created.');
+        await loadDiscoveries();
+      }
+
+      setBusyId(null);
+      return;
+    }
+
+    const { error: insertError } = await client
+      .from('government_jobs')
+      .insert({
+        title: item.discovered_title || 'Untitled government job notice',
+        organization: sourceName,
+        notification_url: item.discovered_url,
+        status: 'draft',
+        source_id: item.source_id,
+        source_reference: item.discovered_url,
+        auto_collected: true,
+      });
+
+    if (insertError) {
+      setErrorMessage('Could not create draft job: ' + insertError.message);
+      setBusyId(null);
+      return;
+    }
+
+    const { error: discoveryError } = await client
+      .from('government_job_discoveries')
+      .update({
+        status: 'imported',
+        processed_at: new Date().toISOString(),
+        error_message: null,
+      })
+      .eq('id', item.id);
+
+    if (discoveryError) {
+      setMessage(
+        'Draft job created successfully. However, the discovery status could not be updated. Refresh the page before trying again.'
+      );
+      setErrorMessage(discoveryError.message);
+    } else {
+      setMessage(
+        'Draft job created successfully. Complete and verify its details in Government Jobs before publishing.'
+      );
+    }
+
+    await loadDiscoveries();
+    setBusyId(null);
+  }
+
   async function updateCategory(
     item: Discovery,
     nextCategory: NoticeCategory
@@ -667,6 +757,25 @@ export default function DiscoveredGovernmentJobsPage() {
                           {busyId === item.id
                             ? 'Please wait…'
                             : 'Restore to New'}
+                        </button>
+                      )}
+
+                      {item.status !== 'imported' && item.status !== 'ignored' && (
+                        <button
+                          type="button"
+                          disabled={busyId !== null}
+                          onClick={() => createDraftJob(item)}
+                          style={{
+                            padding: '9px 13px',
+                            border: 0,
+                            borderRadius: 7,
+                            background: '#e8f1fb',
+                            color: '#174a7c',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {busyId === item.id ? 'Please wait…' : 'Create Draft Job'}
                         </button>
                       )}
 
