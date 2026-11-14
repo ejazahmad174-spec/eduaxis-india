@@ -1287,17 +1287,19 @@ export default function AdminCoursesPage() {
                           <input style={inputStyle} type="url" value={resourceExternalUrl} onChange={(e) => setResourceExternalUrl(e.target.value)} placeholder="https://..." required />
                         </label>
                       ) : (
-                        <label style={labelStyle}>Upload PDF to private storage
-                          <input style={inputStyle} type="file" accept="application/pdf,.pdf" onChange={uploadCourseResource} disabled={resourceUploading} />
-                          <span style={{ display: 'block', marginTop: 5, color: '#657789', fontSize: 11 }}>PDF only · Maximum 20 MB. Files are stored privately under this course.</span>
-                        </label>
-                        {resourceFilePath && (
-                          <div style={{ padding: 10, borderRadius: 8, background: '#f3f7f8', color: '#36546b', fontSize: 11, overflowWrap: 'anywhere' }}>
-                            <strong>Uploaded file:</strong> {resourceFilePath}
-                            <button type="button" onClick={() => setResourceFilePath('')} style={{ ...smallDeleteStyle, marginLeft: 8 }}>Clear path</button>
-                          </div>
-                        )}
-                        {!resourceFilePath && <p style={{ margin: 0, color: '#946200', fontSize: 11 }}>Upload a PDF before saving this resource.</p>}
+                        <>
+                          <label style={labelStyle}>Upload PDF to private storage
+                            <input style={inputStyle} type="file" accept="application/pdf,.pdf" onChange={uploadCourseResource} disabled={resourceUploading} />
+                            <span style={{ display: 'block', marginTop: 5, color: '#657789', fontSize: 11 }}>PDF only · Maximum 20 MB. Files are stored privately under this course.</span>
+                          </label>
+                          {resourceFilePath && (
+                            <div style={{ padding: 10, borderRadius: 8, background: '#f3f7f8', color: '#36546b', fontSize: 11, overflowWrap: 'anywhere' }}>
+                              <strong>Uploaded file:</strong> {resourceFilePath}
+                              <button type="button" onClick={() => setResourceFilePath('')} style={{ ...smallDeleteStyle, marginLeft: 8 }}>Clear path</button>
+                            </div>
+                          )}
+                          {!resourceFilePath && <p style={{ margin: 0, color: '#946200', fontSize: 11 }}>Upload a PDF before saving this resource.</p>}
+                        </>
                       )}
                       <label style={labelStyle}>Access level
                         <select style={inputStyle} value={resourceAccess} onChange={(e) => setResourceAccess(e.target.value as 'free' | 'paid')} disabled={!!resourceFilePath}>
