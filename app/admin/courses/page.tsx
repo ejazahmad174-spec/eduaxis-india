@@ -29,6 +29,22 @@ type BoardMapping = {
   is_active: boolean;
 };
 
+type CourseUnit = {
+  id: string;
+  board_mapping_id: string;
+  title: string;
+  description: string | null;
+  sort_order: number;
+};
+
+type CourseChapter = {
+  id: string;
+  unit_id: string;
+  title: string;
+  description: string | null;
+  sort_order: number;
+};
+
 type FormState = {
   title: string;
   classLevel: string;
@@ -64,6 +80,16 @@ export default function AdminCoursesPage() {
   const [notice, setNotice] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [filter, setFilter] = useState('all');
+
+  // Syllabus manager state
+  const [selectedMappingId, setSelectedMappingId] = useState('');
+  const [units, setUnits] = useState<CourseUnit[]>([]);
+  const [selectedUnitId, setSelectedUnitId] = useState('');
+  const [chapters, setChapters] = useState<CourseChapter[]>([]);
+  const [unitTitle, setUnitTitle] = useState('');
+  const [chapterTitle, setChapterTitle] = useState('');
+  const [syllabusLoading, setSyllabusLoading] = useState(false);
+  const [syllabusSaving, setSyllabusSaving] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -122,6 +148,194 @@ export default function AdminCoursesPage() {
     initialise();
     return () => { active = false; };
   }, [router]);
+
+  useEffect(() => {
+    if (!selectedMappingId && mappings.length > 0) {
+      const firstActive = mappings.find((item) => item.is_active);
+      if (firstActive) setSelectedMappingId(firstActive.id);
+    }
+  }, [mappings, selectedMappingId]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadUnits() {
+      if (!supabase || !selectedMappingId) {
+        setUnits([]);
+        setSelectedUnitId('');
+        setChapters([]);
+        return;
+      }
+
+      setSyllabusLoading(true);
+      const { data, error } = await supabase
+        .from('course_units')
+        .select('*')
+        .eq('board_mapping_id', selectedMappingId)
+        .order('sort_order', { ascending: true });
+
+      if (!active) return;
+
+      if (error) {
+        setErrorMessage(`Could not load syllabus units: ${error.message}`);
+        setUnits([]);
+      } else {
+        const rows = (data || []) as CourseUnit[];
+        setUnits(rows);
+        setSelectedUnitId((current) =>
+          rows.some((unit) => unit.id === current) ? current : (rows[0]?.id || '')
+        );
+      }
+      setSyllabusLoading(false);
+    }
+
+    loadUnits();
+    return () => { active = false; };
+  }, [selectedMappingId]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadChapters() {
+      if (!supabase || !selectedUnitId) {
+        setChapters([]);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('course_chapters')
+        .select('*')
+        .eq('unit_id', selectedUnitId)
+        .order('sort_order', { ascending: true });
+
+      if (!active) return;
+
+      if (error) {
+        setErrorMessage(`Could not load chapters: ${error.message}`);
+        setChapters([]);
+      } else {
+        setChapters((data || []) as CourseChapter[]);
+      }
+    }
+
+    loadChapters();
+    return () => { active = false; };
+  }, [selectedUnitId]);
+
+  async function addUnit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !selectedMappingId || !unitTitle.trim()) return;
+
+    setSyllabusSaving(true);
+    setErrorMessage('');
+    const { data, error } = await supabase
+      .from('course_units')
+      .insert({
+        board_mapping_id: selectedMappingId,
+        title: unitTitle.trim(),
+        sort_order: units.length + 1,
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      setErrorMessage(`Could not add unit: ${error.message}`);
+    } else if (data) {
+      setUnits((current) => [...current, data as CourseUnit]);
+      setSelectedUnitId(data.id);
+      setUnitTitle('');
+      setNotice('Syllabus unit added successfully.');
+    }
+    setSyllabusSaving(false);
+  }
+
+  async function addChapter(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !selectedUnitId || !chapterTitle.trim()) return;
+
+    setSyllabusSaving(true);
+    setErrorMessage('');
+    const { data, error } = await supabase
+      .from('course_chapters')
+      .insert({
+        unit_id: selectedUnitId,
+        title: chapterTitle.trim(),
+        sort_order: chapters.length + 1,
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      setErrorMessage(`Could not add chapter: ${error.message}`);
+    } else if (data) {
+      setChapters((current) => [...current, data as CourseChapter]);
+      setChapterTitle('');
+      setNotice('Chapter added successfully.');
+    }
+    setSyllabusSaving(false);
+  }
+
+  async function renameUnit(unit: CourseUnit) {
+    if (!supabase) return;
+    const nextTitle = window.prompt('Enter the new unit title:', unit.title);
+    if (!nextTitle?.trim() || nextTitle.trim() === unit.title) return;
+
+    const { error } = await supabase
+      .from('course_units')
+      .update({ title: nextTitle.trim() })
+      .eq('id', unit.id);
+
+    if (error) setErrorMessage(`Could not update unit: ${error.message}`);
+    else setUnits((current) => current.map((item) =>
+      item.id === unit.id ? { ...item, title: nextTitle.trim() } : item
+    ));
+  }
+
+  async function removeUnit(unit: CourseUnit) {
+    if (!supabase) return;
+    if (!window.confirm(`Delete "${unit.title}" and all its chapters and lessons?`)) return;
+
+    const { error } = await supabase.from('course_units').delete().eq('id', unit.id);
+    if (error) {
+      setErrorMessage(`Could not delete unit: ${error.message}`);
+      return;
+    }
+    setUnits((current) => current.filter((item) => item.id !== unit.id));
+    if (selectedUnitId === unit.id) {
+      setSelectedUnitId('');
+      setChapters([]);
+    }
+    setNotice('Unit deleted.');
+  }
+
+  async function renameChapter(chapter: CourseChapter) {
+    if (!supabase) return;
+    const nextTitle = window.prompt('Enter the new chapter title:', chapter.title);
+    if (!nextTitle?.trim() || nextTitle.trim() === chapter.title) return;
+
+    const { error } = await supabase
+      .from('course_chapters')
+      .update({ title: nextTitle.trim() })
+      .eq('id', chapter.id);
+
+    if (error) setErrorMessage(`Could not update chapter: ${error.message}`);
+    else setChapters((current) => current.map((item) =>
+      item.id === chapter.id ? { ...item, title: nextTitle.trim() } : item
+    ));
+  }
+
+  async function removeChapter(chapter: CourseChapter) {
+    if (!supabase) return;
+    if (!window.confirm(`Delete "${chapter.title}" and its lessons?`)) return;
+
+    const { error } = await supabase.from('course_chapters').delete().eq('id', chapter.id);
+    if (error) {
+      setErrorMessage(`Could not delete chapter: ${error.message}`);
+      return;
+    }
+    setChapters((current) => current.filter((item) => item.id !== chapter.id));
+    setNotice('Chapter deleted.');
+  }
 
   function updateForm<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -464,6 +678,125 @@ export default function AdminCoursesPage() {
           )}
         </section>
 
+        <section style={{ ...panelStyle, marginTop: 24 }}>
+          <div style={sectionHeadingStyle}>
+            <div>
+              <div className="admin-kicker">SYLLABUS BUILDER</div>
+              <h2 style={{ margin: '5px 0 0', color: '#102b46' }}>Manage units and chapters</h2>
+              <p style={{ margin: '7px 0 0', color: '#657789', fontSize: 13 }}>
+                Build a separate syllabus structure for each board and academic session.
+              </p>
+            </div>
+          </div>
+
+          <label style={labelStyle}>
+            Select course and board syllabus
+            <select
+              style={inputStyle}
+              value={selectedMappingId}
+              onChange={(e) => {
+                setSelectedMappingId(e.target.value);
+                setSelectedUnitId('');
+                setChapters([]);
+              }}
+            >
+              <option value="">Choose a course and board...</option>
+              {mappings.filter((mapping) => mapping.is_active).map((mapping) => {
+                const course = courses.find((item) => item.id === mapping.course_id);
+                if (!course) return null;
+                return (
+                  <option key={mapping.id} value={mapping.id}>
+                    {course.title} — {mapping.board} ({mapping.academic_session})
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+
+          {!selectedMappingId ? (
+            <div style={{ ...emptyStyle, marginTop: 16 }}>
+              Create a course and activate at least one board mapping before adding syllabus units.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, marginTop: 20 }}>
+              <div style={{ border: '1px solid #e2eaed', borderRadius: 11, padding: 16 }}>
+                <h3 style={{ margin: '0 0 14px', color: '#102b46' }}>1. Syllabus units</h3>
+                <form onSubmit={addUnit} style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                  <input
+                    style={{ ...inputStyle, flex: 1, minWidth: 0 }}
+                    value={unitTitle}
+                    onChange={(e) => setUnitTitle(e.target.value)}
+                    placeholder="e.g. Introduction to Accounting"
+                    required
+                  />
+                  <button type="submit" disabled={syllabusSaving} style={primaryButtonStyle}>Add</button>
+                </form>
+
+                {syllabusLoading ? (
+                  <p style={{ color: '#657789' }}>Loading units...</p>
+                ) : units.length === 0 ? (
+                  <div style={emptyStyle}>No units added yet.</div>
+                ) : (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {units.map((unit, index) => (
+                      <div key={unit.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 7, padding: 10,
+                        border: selectedUnitId === unit.id ? '1px solid #18a5a0' : '1px solid #e2eaed',
+                        borderRadius: 8, background: selectedUnitId === unit.id ? '#f0fbfa' : '#fff',
+                      }}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedUnitId(unit.id)}
+                          style={{ flex: 1, minWidth: 0, textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer', color: '#102b46', fontWeight: 700 }}
+                        >
+                          <span style={{ color: '#657789', marginRight: 6 }}>{index + 1}.</span>{unit.title}
+                        </button>
+                        <button type="button" onClick={() => renameUnit(unit)} style={smallActionStyle}>Edit</button>
+                        <button type="button" onClick={() => removeUnit(unit)} style={smallDeleteStyle}>Delete</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ border: '1px solid #e2eaed', borderRadius: 11, padding: 16 }}>
+                <h3 style={{ margin: '0 0 14px', color: '#102b46' }}>2. Chapters</h3>
+                {!selectedUnitId ? (
+                  <div style={emptyStyle}>Select a unit to manage its chapters.</div>
+                ) : (
+                  <>
+                    <form onSubmit={addChapter} style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                      <input
+                        style={{ ...inputStyle, flex: 1, minWidth: 0 }}
+                        value={chapterTitle}
+                        onChange={(e) => setChapterTitle(e.target.value)}
+                        placeholder="Enter chapter title"
+                        required
+                      />
+                      <button type="submit" disabled={syllabusSaving} style={primaryButtonStyle}>Add</button>
+                    </form>
+
+                    {chapters.length === 0 ? (
+                      <div style={emptyStyle}>No chapters in this unit yet.</div>
+                    ) : (
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        {chapters.map((chapter, index) => (
+                          <div key={chapter.id} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: 10, border: '1px solid #e2eaed', borderRadius: 8 }}>
+                            <span style={{ color: '#657789', fontSize: 12 }}>{index + 1}.</span>
+                            <span style={{ flex: 1, minWidth: 0, color: '#263b4d', fontSize: 13, fontWeight: 600 }}>{chapter.title}</span>
+                            <button type="button" onClick={() => renameChapter(chapter)} style={smallActionStyle}>Edit</button>
+                            <button type="button" onClick={() => removeChapter(chapter)} style={smallDeleteStyle}>Delete</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+
         <footer className="admin-footer">EduAxis India · Learn. Prepare. Progress.</footer>
       </section>
     </main>
@@ -512,6 +845,14 @@ const emptyStyle: React.CSSProperties = {
 const courseCardStyle: React.CSSProperties = {
   display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 18,
   flexWrap: 'wrap', border: '1px solid #e2eaed', borderRadius: 11, padding: 16,
+};
+const smallActionStyle: React.CSSProperties = {
+  border: '1px solid #d7e1e6', borderRadius: 6, padding: '6px 8px',
+  background: '#fff', color: '#102b46', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+};
+const smallDeleteStyle: React.CSSProperties = {
+  border: '1px solid #f0caca', borderRadius: 6, padding: '6px 8px',
+  background: '#fff7f7', color: '#a93232', fontSize: 11, fontWeight: 700, cursor: 'pointer',
 };
 const neutralPillStyle: React.CSSProperties = {
   display: 'inline-block', background: '#eef3f6', color: '#42586a',
