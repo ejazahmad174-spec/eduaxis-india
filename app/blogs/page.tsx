@@ -35,6 +35,79 @@ const descriptions: Record<Language, string> = {
   Urdu: 'ہر طالب علم کے لیے علم، فکر اور رہنمائی۔',
 };
 
+function ArticleCard({
+  article,
+  featured = false,
+}: {
+  article: Article;
+  featured?: boolean;
+}) {
+  const rtl = article.language === 'Urdu';
+
+  const date = new Date(
+    article.published_at || article.created_at
+  ).toLocaleDateString(
+    article.language === 'Hindi'
+      ? 'hi-IN'
+      : article.language === 'Urdu'
+      ? 'ur-PK'
+      : 'en-IN'
+  );
+
+  return (
+    <article
+      className={featured ? 'blogCard featuredCard' : 'blogCard'}
+      dir={rtl ? 'rtl' : 'ltr'}
+    >
+      <Link
+        href={`/blogs/${article.slug}`}
+        className="blogImageLink"
+        aria-label={`Read ${article.title}`}
+      >
+        {article.featured_image_url ? (
+          <div className="blogImage">
+            <img src={article.featured_image_url} alt={article.title} />
+          </div>
+        ) : (
+          <div className="blogImage blogImageFallback">
+            <span>📚</span>
+            <small>EDUAXIS INDIA</small>
+          </div>
+        )}
+      </Link>
+
+      <div className="blogCardBody">
+        <div className="blogMeta">
+          <span>{article.category || 'Knowledge'}</span>
+          <small>{labels[article.language]}</small>
+        </div>
+
+        <h3>
+          <Link href={`/blogs/${article.slug}`}>
+            {article.title}
+          </Link>
+        </h3>
+
+        <p>
+          {article.excerpt || 'Explore this article on EduAxis India.'}
+        </p>
+
+        <div className="blogCardFooter">
+          <small>{date}</small>
+
+          <Link className="readMore" href={`/blogs/${article.slug}`}>
+            {rtl
+              ? 'مکمل مضمون ←'
+              : article.language === 'Hindi'
+              ? 'पूरा लेख पढ़ें →'
+              : 'Read Article →'}
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export default function BlogsPage() {
   const [language, setLanguage] = useState<Language>('English');
   const [search, setSearch] = useState('');
@@ -106,77 +179,6 @@ export default function BlogsPage() {
 
   const isUrdu = language === 'Urdu';
 
-  function renderArticleCard(article: Article, horizontal = false) {
-    const rtl = article.language === 'Urdu';
-
-    const date = new Date(
-      article.published_at || article.created_at
-    ).toLocaleDateString(
-      article.language === 'Hindi'
-        ? 'hi-IN'
-        : article.language === 'Urdu'
-        ? 'ur-PK'
-        : 'en-IN'
-    );
-
-    return (
-      <article
-        key={article.id}
-        className={horizontal ? 'blogCard featuredCard' : 'blogCard'}
-        dir={rtl ? 'rtl' : 'ltr'}
-      >
-        <Link
-          href={`/blogs/${article.slug}`}
-          className="blogImageLink"
-          aria-label={`Read ${article.title}`}
-        >
-          {article.featured_image_url ? (
-            <div className="blogImage">
-              <img
-                src={article.featured_image_url}
-                alt={article.title}
-              />
-            </div>
-          ) : (
-            <div className="blogImage blogImageFallback">
-              <span>📚</span>
-              <small>EDUAXIS INDIA</small>
-            </div>
-          )}
-        </Link>
-
-        <div className="blogCardBody">
-          <div className="blogMeta">
-            <span>{article.category || 'Knowledge'}</span>
-            <small>{labels[article.language]}</small>
-          </div>
-
-          <h3>
-            <Link href={`/blogs/${article.slug}`}>
-              {article.title}
-            </Link>
-          </h3>
-
-          <p>
-            {article.excerpt || 'Explore this article on EduAxis India.'}
-          </p>
-
-          <div className="blogCardFooter">
-            <small>{date}</small>
-
-            <Link className="readMore" href={`/blogs/${article.slug}`}>
-              {rtl
-                ? 'مکمل مضمون ←'
-                : article.language === 'Hindi'
-                ? 'पूरा लेख पढ़ें →'
-                : 'Read Article →'}
-            </Link>
-          </div>
-        </div>
-      </article>
-    );
-  }
-
   return (
     <main className="blogPage">
       <div className="top">
@@ -210,11 +212,13 @@ export default function BlogsPage() {
       <section className="blogHero">
         <div className="wrap blogHeroInner">
           <div className="blogEyebrow">THE EDUAXIS KNOWLEDGE HUB</div>
+
           <h1>
             Knowledge Beyond
             <br />
             <em>Textbooks.</em>
           </h1>
+
           <p>
             Explore ideas, discover knowledge and find inspiration.
             A space for students and curious minds to learn, think
@@ -233,6 +237,7 @@ export default function BlogsPage() {
       <section className="wrap blogContent">
         <label>EXPLORE IN YOUR LANGUAGE</label>
         <h2>Choose your language</h2>
+
         <p className="sub">
           Read and explore articles in the language you prefer.
         </p>
@@ -283,7 +288,9 @@ export default function BlogsPage() {
         </div>
 
         {loading ? (
-          <div className="blogMessage">Loading published articles...</div>
+          <div className="blogMessage">
+            Loading published articles...
+          </div>
         ) : error ? (
           <div className="blogMessage blogError">{error}</div>
         ) : (
@@ -299,9 +306,13 @@ export default function BlogsPage() {
                 </div>
 
                 <div className="featuredList">
-                  {featured.map((article) =>
-                    renderArticleCard(article, true)
-                  )}
+                  {featured.map((article) => (
+                    <ArticleCard
+                      key={article.id}
+                      article={article}
+                      featured
+                    />
+                  ))}
                 </div>
               </section>
             )}
@@ -317,9 +328,9 @@ export default function BlogsPage() {
 
               {latest.length > 0 ? (
                 <div className="blogGrid">
-                  {latest.map((article) =>
-                    renderArticleCard(article)
-                  )}
+                  {latest.map((article) => (
+                    <ArticleCard key={article.id} article={article} />
+                  ))}
                 </div>
               ) : featured.length === 0 ? (
                 <div className="blogEmpty">
@@ -366,25 +377,44 @@ export default function BlogsPage() {
           <p>
             Empowering learners with knowledge, preparation and opportunity.
           </p>
+
           <div className="blogFooterLinks">
             <Link href="/">Home</Link>
             <Link href="/study-materials">Study Materials</Link>
             <Link href="/government-jobs">Government Jobs</Link>
             <Link href="/mock-tests">Mock Tests</Link>
           </div>
+
           <small>
             © {new Date().getFullYear()} EduAxis India. All rights reserved.
           </small>
         </div>
       </footer>
 
-      <style jsx>{`
+      <style jsx global>{`
         .blogPage {
-          background: #fff;
+          width: 100%;
           min-height: 100vh;
+          overflow-x: hidden;
+          background: #fff;
+          color: #172b3d;
         }
 
-        .blogNav {
+        .blogPage *,
+        .blogPage *::before,
+        .blogPage *::after {
+          box-sizing: border-box;
+        }
+
+        /* Explicit container sizing for desktop and mobile */
+        .blogPage .wrap {
+          width: min(1180px, calc(100% - 40px));
+          max-width: 1180px;
+          margin-left: auto;
+          margin-right: auto;
+        }
+
+        .blogPage .blogNav {
           min-height: 78px;
           display: flex;
           align-items: center;
@@ -392,51 +422,51 @@ export default function BlogsPage() {
           gap: 20px;
         }
 
-        .blogNav nav {
+        .blogPage .blogNav nav {
           display: flex;
           gap: 20px;
           font-size: 13px;
           color: #506477;
         }
 
-        .blogHero {
+        .blogPage .blogHero {
           background: linear-gradient(115deg, #f1f7f8, #e9f5f3);
           padding: 82px 0 88px;
           text-align: center;
         }
 
-        .blogHeroInner {
+        .blogPage .blogHeroInner {
           max-width: 850px;
         }
 
-        .blogEyebrow {
+        .blogPage .blogEyebrow {
           font-size: 11px;
           font-weight: 700;
           letter-spacing: 2px;
-          color: var(--teal);
+          color: #18a5a0;
         }
 
-        .blogHero h1 {
+        .blogPage .blogHero h1 {
           margin: 18px 0;
           font-size: clamp(42px, 6vw, 68px);
           line-height: 1.08;
           letter-spacing: -2px;
         }
 
-        .blogHero h1 em {
-          color: var(--teal);
+        .blogPage .blogHero h1 em {
+          color: #18a5a0;
           font-style: normal;
         }
 
-        .blogHero p {
+        .blogPage .blogHero p {
           max-width: 650px;
           margin: 0 auto;
-          color: var(--muted);
+          color: #657789;
           font-size: 16px;
           line-height: 1.8;
         }
 
-        .blogHighlights {
+        .blogPage .blogHighlights {
           display: flex;
           justify-content: center;
           flex-wrap: wrap;
@@ -447,33 +477,34 @@ export default function BlogsPage() {
           font-weight: 600;
         }
 
-        .blogContent {
+        .blogPage .blogContent {
           padding-top: 65px;
           padding-bottom: 70px;
         }
 
-        .blogContent > h2 {
+        .blogPage .blogContent > h2 {
           margin: 9px 0;
           font-size: 29px;
-          color: var(--navy);
+          color: #102b46;
         }
 
-        .blogContent > .sub {
+        .blogPage .blogContent > .sub {
           margin-top: 5px;
           font-size: 14px;
+          color: #657789;
         }
 
-        .languageTabs {
+        .blogPage .languageTabs {
           display: flex;
           gap: 10px;
           margin: 25px 0 18px;
           flex-wrap: wrap;
         }
 
-        .languageTab {
-          border: 1px solid var(--line);
+        .blogPage .languageTab {
+          border: 1px solid #e2eaed;
           background: white;
-          color: var(--navy);
+          color: #102b46;
           padding: 12px 25px;
           border-radius: 8px;
           font: 700 14px 'DM Sans', sans-serif;
@@ -481,66 +512,70 @@ export default function BlogsPage() {
           min-width: 110px;
         }
 
-        .languageTab.active {
-          background: var(--navy);
+        .blogPage .languageTab.active {
+          background: #102b46;
           color: white;
-          border-color: var(--navy);
+          border-color: #102b46;
         }
 
-        .languageInfo {
+        .blogPage .languageInfo {
           background: #f4f8f8;
-          border: 1px solid var(--line);
+          border: 1px solid #e2eaed;
           border-radius: 10px;
           padding: 16px 20px;
         }
 
-        .languageInfo h3 {
+        .blogPage .languageInfo h3 {
           margin: 0 0 5px;
           font-size: 17px;
         }
 
-        .languageInfo p {
+        .blogPage .languageInfo p {
           margin: 0;
-          color: var(--muted);
+          color: #657789;
           font-size: 13px;
         }
 
-        .urdu {
+        .blogPage .urdu {
           text-align: right;
           font-family: Arial, sans-serif;
         }
 
-        .blogSearch {
+        .blogPage .blogSearch {
           margin-top: 20px;
           display: flex;
           align-items: center;
           gap: 12px;
-          border: 1px solid var(--line);
+          border: 1px solid #e2eaed;
           border-radius: 9px;
           padding: 0 15px;
+          width: 100%;
           max-width: 600px;
           height: 48px;
         }
 
-        .blogSearch span {
-          color: var(--teal);
+        .blogPage .blogSearch span {
+          color: #18a5a0;
           font-size: 25px;
         }
 
-        .blogSearch input {
+        .blogPage .blogSearch input {
           width: 100%;
+          min-width: 0;
           border: 0;
           outline: 0;
-          color: var(--ink);
+          color: #172b3d;
           font: 14px 'DM Sans', sans-serif;
           background: transparent;
         }
 
-        .blogSection {
+        .blogPage .blogSection {
           margin-top: 55px;
+          width: 100%;
+          min-width: 0;
         }
 
-        .blogSectionTitle {
+        .blogPage .blogSectionTitle {
           display: flex;
           justify-content: space-between;
           align-items: end;
@@ -548,82 +583,86 @@ export default function BlogsPage() {
           margin-bottom: 22px;
         }
 
-        .blogSectionTitle h2 {
+        .blogPage .blogSectionTitle h2 {
           font-size: 29px;
           margin: 9px 0;
+          color: #102b46;
         }
 
-        .blogSectionTitle > span {
+        .blogPage .blogSectionTitle > span {
           font-size: 11px;
-          color: var(--muted);
-          border: 1px solid var(--line);
+          color: #657789;
+          border: 1px solid #e2eaed;
           padding: 7px 11px;
           border-radius: 20px;
         }
 
-        /* Featured articles: horizontal editorial layout */
-        .featuredList {
+        /* Featured article: image 35%, text 65% */
+        .blogPage .featuredList {
           display: grid;
-          grid-template-columns: 1fr;
+          grid-template-columns: minmax(0, 1fr);
           gap: 18px;
+          width: 100%;
         }
 
-        .blogCard {
-          border: 1px solid var(--line);
+        .blogPage .blogCard {
+          display: flex;
+          flex-direction: column;
+          min-width: 0;
+          width: 100%;
+          border: 1px solid #e2eaed;
           border-radius: 13px;
           overflow: hidden;
           background: white;
           transition: transform .2s, box-shadow .2s;
-          min-width: 0;
         }
 
-        .blogCard:hover {
+        .blogPage .blogCard:hover {
           transform: translateY(-3px);
           box-shadow: 0 14px 35px #183f5510;
         }
 
-        .featuredCard {
-          display: grid;
-          grid-template-columns: minmax(240px, 38%) minmax(0, 1fr);
+        .blogPage .featuredCard {
+          display: grid !important;
+          grid-template-columns: minmax(0, 35%) minmax(0, 65%) !important;
+          align-items: stretch;
           min-height: 220px;
         }
 
-        .blogImageLink {
+        .blogPage .blogImageLink {
           display: block;
+          width: 100%;
           min-width: 0;
+          height: 100%;
           overflow: hidden;
           text-decoration: none;
         }
 
-        .blogImage {
+        .blogPage .blogImage {
           width: 100%;
-          height: 100%;
-          min-height: 190px;
-          max-height: 260px;
+          height: 180px;
+          min-height: 180px;
+          max-height: 180px;
           overflow: hidden;
           background: #edf5f5;
         }
 
-        .blogImage img {
+        .blogPage .featuredCard .blogImage {
+          height: 100%;
+          min-height: 220px;
+          max-height: 260px;
+        }
+
+        .blogPage .blogImage img {
           display: block;
           width: 100%;
           height: 100%;
+          max-width: 100%;
           object-fit: cover;
           object-position: center;
-          transition: transform .3s;
         }
 
-        .blogCard:hover .blogImage img {
-          transform: scale(1.035);
-        }
-
-        .featuredCard .blogImage {
-          height: 100%;
-          min-height: 220px;
-          max-height: 280px;
-        }
-
-        .blogImageFallback {
+        .blogPage .blogImageFallback {
           display: flex;
           align-items: center;
           justify-content: center;
@@ -631,11 +670,11 @@ export default function BlogsPage() {
           background: linear-gradient(135deg, #eaf5f3, #edf3f7);
         }
 
-        .blogImageFallback span {
+        .blogPage .blogImageFallback span {
           font-size: 48px;
         }
 
-        .blogImageFallback small {
+        .blogPage .blogImageFallback small {
           position: absolute;
           bottom: 12px;
           right: 14px;
@@ -644,144 +683,138 @@ export default function BlogsPage() {
           letter-spacing: 1.5px;
         }
 
-        .blogCardBody {
+        .blogPage .blogCardBody {
           padding: 22px;
           display: flex;
           flex-direction: column;
           justify-content: center;
           min-width: 0;
+          overflow-wrap: anywhere;
         }
 
-        .blogCard[dir="rtl"] .blogCardBody {
+        .blogPage .blogCard[dir="rtl"] .blogCardBody {
           text-align: right;
           font-family: Arial, sans-serif;
         }
 
-        .blogMeta {
+        .blogPage .blogMeta {
           display: flex;
           justify-content: space-between;
           align-items: center;
           gap: 8px;
         }
 
-        .blogMeta span {
-          color: var(--teal);
+        .blogPage .blogMeta span {
+          color: #18a5a0;
           font-size: 11px;
           font-weight: 700;
         }
 
-        .blogMeta small,
-        .blogCardFooter small {
+        .blogPage .blogMeta small,
+        .blogPage .blogCardFooter small {
           color: #81909c;
           font-size: 10px;
         }
 
-        .blogCard h3 {
+        .blogPage .blogCard h3 {
           font-size: 19px;
           line-height: 1.5;
           margin: 14px 0 9px;
         }
 
-        .blogCard h3 a {
-          color: var(--navy);
+        .blogPage .blogCard h3 a {
+          color: #102b46;
           text-decoration: none;
         }
 
-        .blogCard h3 a:hover {
-          color: var(--teal);
-        }
-
-        .blogCard p {
-          color: var(--muted);
+        .blogPage .blogCard p {
+          color: #657789;
           font-size: 13px;
           line-height: 1.8;
           margin: 0;
         }
 
-        .featuredCard .blogCard p {
-          max-width: 620px;
-        }
-
-        .blogCardFooter {
+        .blogPage .blogCardFooter {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 8px;
-          border-top: 1px solid var(--line);
+          border-top: 1px solid #e2eaed;
           padding-top: 14px;
           margin-top: 17px;
         }
 
-        .readMore {
+        .blogPage .readMore {
           font-size: 11px;
-          color: var(--teal);
+          color: #18a5a0;
           font-weight: 700;
           text-decoration: none;
         }
 
-        /* Latest articles: compact three-column grid */
-        .blogGrid {
+        /* Latest article cards */
+        .blogPage .blogGrid {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 18px;
+          width: 100%;
         }
 
-        .blogGrid .blogImage {
+        .blogPage .blogGrid .blogImage {
           height: 160px;
           min-height: 160px;
           max-height: 160px;
         }
 
-        .blogGrid .blogCardBody {
+        .blogPage .blogGrid .blogCardBody {
           padding: 19px;
         }
 
-        .blogGrid .blogCard h3 {
+        .blogPage .blogGrid .blogCard h3 {
           font-size: 17px;
         }
 
-        .blogGrid .blogCard p {
+        .blogPage .blogGrid .blogCard p {
           min-height: 65px;
           font-size: 12px;
         }
 
-        .blogEmpty,
-        .blogMessage {
+        .blogPage .blogEmpty,
+        .blogPage .blogMessage {
           text-align: center;
           border: 1px dashed #cbd9df;
           border-radius: 12px;
           padding: 45px 20px;
-          color: var(--muted);
+          color: #657789;
         }
 
-        .blogEmpty > span {
+        .blogPage .blogEmpty > span {
           font-size: 35px;
         }
 
-        .blogEmpty h3 {
-          color: var(--navy);
+        .blogPage .blogEmpty h3 {
+          color: #102b46;
           margin-bottom: 6px;
         }
 
-        .blogEmpty p {
+        .blogPage .blogEmpty p {
           font-size: 13px;
           margin-bottom: 15px;
         }
 
-        .clearButton {
+        .blogPage .clearButton {
           border: 0;
-          background: var(--navy);
+          background: #102b46;
           color: white;
           border-radius: 7px;
           padding: 10px 15px;
           cursor: pointer;
         }
 
-        .blogError {
+        .blogPage .blogError {
           color: #a52c25;
         }
 
-        .blogQuote {
+        .blogPage .blogQuote {
           text-align: center;
           background: #f3f8f7;
           padding: 38px 20px;
@@ -789,28 +822,28 @@ export default function BlogsPage() {
           margin-top: 65px;
         }
 
-        .blogQuote > span {
-          color: var(--teal);
+        .blogPage .blogQuote > span {
+          color: #18a5a0;
           font: 800 60px Georgia, serif;
           line-height: 1;
         }
 
-        .blogQuote h2 {
+        .blogPage .blogQuote h2 {
           font-size: 25px;
           margin: 0 0 8px;
         }
 
-        .blogQuote p {
-          color: var(--muted);
+        .blogPage .blogQuote p {
+          color: #657789;
           font-size: 13px;
         }
 
-        .blogQuote b {
-          color: var(--teal);
+        .blogPage .blogQuote b {
+          color: #18a5a0;
           font-size: 12px;
         }
 
-        .blogFooterLinks {
+        .blogPage .blogFooterLinks {
           display: flex;
           gap: 18px;
           flex-wrap: wrap;
@@ -820,55 +853,73 @@ export default function BlogsPage() {
         }
 
         @media (max-width: 900px) {
-          .blogNav nav {
+          .blogPage .blogNav nav {
             display: none;
           }
 
-          .blogGrid {
+          .blogPage .blogGrid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
         }
 
         @media (max-width: 620px) {
-          .blogHero {
+          .blogPage .wrap {
+            width: calc(100% - 28px);
+            max-width: none;
+          }
+
+          .blogPage .blogHero {
             padding: 55px 0;
           }
 
-          .blogContent {
+          .blogPage .blogContent {
             padding-top: 45px;
             padding-bottom: 50px;
           }
 
-          .featuredCard {
-            grid-template-columns: 1fr;
+          .blogPage .featuredCard {
+            display: flex !important;
+            flex-direction: column !important;
           }
 
-          .featuredCard .blogImage {
-            height: 210px;
-            min-height: 210px;
-            max-height: 210px;
+          .blogPage .featuredCard .blogImage {
+            width: 100%;
+            height: 190px;
+            min-height: 190px;
+            max-height: 190px;
           }
 
-          .blogGrid {
-            grid-template-columns: 1fr;
+          .blogPage .featuredCard .blogCardBody {
+            width: 100%;
+            padding: 18px;
           }
 
-          .blogSectionTitle h2,
-          .blogContent > h2 {
+          .blogPage .blogGrid {
+            grid-template-columns: minmax(0, 1fr);
+          }
+
+          .blogPage .blogGrid .blogImage {
+            height: 190px;
+            min-height: 190px;
+            max-height: 190px;
+          }
+
+          .blogPage .blogSectionTitle h2,
+          .blogPage .blogContent > h2 {
             font-size: 25px;
           }
 
-          .blogHighlights {
+          .blogPage .blogHighlights {
             gap: 12px;
           }
 
-          .languageTab {
+          .blogPage .languageTab {
             flex: 1;
             min-width: 0;
             padding: 11px 14px;
           }
 
-          .blogGrid .blogCard p {
+          .blogPage .blogGrid .blogCard p {
             min-height: 0;
           }
         }
