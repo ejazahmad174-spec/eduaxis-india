@@ -10,6 +10,13 @@ type JobLink = {
   url: string;
 };
 
+type NoticeCategory =
+  | "recruitment"
+  | "teacher_eligibility"
+  | "examination"
+  | "certificate"
+  | "general";
+
 function cleanText(value: string): string {
   return value
     .replace(/<[^>]*>/g, " ")
@@ -42,6 +49,45 @@ function getTargetPages(sourceUrl: string): string[] {
   return [sourceUrl];
 }
 
+function classifyNotice(
+  title: string,
+  url: string,
+  sourceUrl: string
+): NoticeCategory {
+  const text = `${title} ${url}`.toLowerCase();
+  const hostname = new URL(sourceUrl).hostname.toLowerCase();
+
+  if (
+    /certificate|marksheet|mark sheet|digilocker|credential|प्रमाणपत्र/i.test(text)
+  ) {
+    return "certificate";
+  }
+
+  if (
+    /admit card|answer key|answer-key|result|exam date|examination schedule|exam schedule|exam city|hall ticket|प्रवेश पत्र|उत्तर कुंजी|परिणाम/i.test(text)
+  ) {
+    return "examination";
+  }
+
+  if (
+    /ctet|teacher eligibility|eligibility test|eligibility certificate|application form|apply online|online application|registration|पात्रता परीक्षा/i.test(text)
+  ) {
+    return "teacher_eligibility";
+  }
+
+  if (
+    /recruitment|vacancy|vacancies|advertisement|appointment|selection|career|job opening|भर्ती|नियुक्ति|रिक्ति/i.test(text)
+  ) {
+    return "recruitment";
+  }
+
+  if (hostname === "ctet.nic.in") {
+    return "teacher_eligibility";
+  }
+
+  return "general";
+}
+
 function findRecruitmentLinks(
   html: string,
   pageUrl: string
@@ -51,7 +97,7 @@ function findRecruitmentLinks(
   const baseUrl = new URL(pageUrl);
 
   const keywords =
-    /recruitment|advertisement|vacanc|career|apply|application|employment|job opening|job notice|public notice|examination notice|selection|appointment|post of|invitation of applications|भर्ती|नियुक्ति|विज्ञापन|रिक्ति|आवेदन/i;
+    /recruitment|notification|advertisement|vacanc|career|apply online|application|employment|job opening|job notice|public notice|latest notice|examination notice|selection|invitation of applications|admit card|answer key|result|certificate|eligibility|marksheet|भर्ती|नियुक्ति|विज्ञापन|रिक्ति|आवेदन|परीक्षा|परिणाम|प्रमाणपत्र/i;
 
   const excludeKeywords =
     /tender|quotation|procurement|purchase|supply of|auction/i;
@@ -107,10 +153,7 @@ function findRecruitmentLinks(
 
       url.hash = "";
 
-      if (
-        url.href === pageUrl ||
-        seen.has(url.href)
-      ) {
+      if (url.href === pageUrl || seen.has(url.href)) {
         continue;
       }
 
@@ -136,7 +179,7 @@ async function fetchPage(url: string): Promise<string> {
   const response = await fetch(url, {
     method: "GET",
     headers: {
-      "User-Agent": "EduAxisIndiaJobCollector/2.0",
+      "User-Agent": "EduAxisIndiaJobCollector/2.1",
       Accept: "text/html,application/xhtml+xml",
     },
     signal: AbortSignal.timeout(15000),
@@ -155,9 +198,7 @@ async function fetchPage(url: string): Promise<string> {
     throw new Error("Source did not return an HTML webpage.");
   }
 
-  const html = (await response.text()).slice(0, 2_000_000);
-
-  return html;
+  return (await response.text()).slice(0, 2_000_000);
 }
 
 export async function GET(request: Request) {
@@ -234,11 +275,7 @@ export async function GET(request: Request) {
             }
           }
         } catch (pageError) {
-          console.error(
-            "Page scan failed:",
-            pageUrl,
-            pageError
-          );
+          console.error("Page scan failed:", pageUrl, pageError);
         }
       }
 
@@ -253,6 +290,11 @@ export async function GET(request: Request) {
           source_id: source.id,
           discovered_title: link.title,
           discovered_url: link.url,
+          notice_category: classifyNotice(
+            link.title,
+            link.url,
+            source.source_url
+          ),
           status: "new",
         }));
 
@@ -319,7 +361,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     success: true,
-    message: "Government job collection completed.",
+    message: "Government job and examination notice collection completed.",
     sources_checked: checked,
     candidate_links_found: discovered,
     results,
