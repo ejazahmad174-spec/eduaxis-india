@@ -31,15 +31,10 @@ type JobSource = {
 };
 
 const statusFilters = [
-  'all',
-  'new',
-  'processing',
-  'imported',
-  'ignored',
-  'error',
+  'all', 'new', 'processing', 'imported', 'ignored', 'error',
 ];
 
-const categoryFilters: { value: string; label: string }[] = [
+const categoryFilters = [
   { value: 'all', label: 'All Categories' },
   { value: 'recruitment', label: 'Recruitment' },
   { value: 'teacher_eligibility', label: 'Teacher Eligibility' },
@@ -71,7 +66,6 @@ function formatDate(value: string | null) {
   if (!value) return 'Not recorded';
 
   const date = new Date(value);
-
   if (Number.isNaN(date.getTime())) return 'Not recorded';
 
   return date.toLocaleString('en-IN', {
@@ -200,6 +194,32 @@ export default function DiscoveredGovernmentJobsPage() {
       setErrorMessage('Could not update notice: ' + error.message);
     } else {
       setMessage('Notice status updated successfully.');
+      await loadDiscoveries();
+    }
+
+    setBusyId(null);
+  }
+
+  async function updateCategory(
+    item: Discovery,
+    nextCategory: NoticeCategory
+  ) {
+    const client = supabase;
+    if (!client) return;
+
+    setBusyId(item.id);
+    setMessage('');
+    setErrorMessage('');
+
+    const { error } = await client
+      .from('government_job_discoveries')
+      .update({ notice_category: nextCategory })
+      .eq('id', item.id);
+
+    if (error) {
+      setErrorMessage('Could not update category: ' + error.message);
+    } else {
+      setMessage('Notice category updated successfully.');
       await loadDiscoveries();
     }
 
@@ -363,11 +383,11 @@ export default function DiscoveredGovernmentJobsPage() {
             gap: 12,
             marginBottom: 22,
           }}>
-            <label
-              htmlFor="notice-category"
-              style={{ fontWeight: 700, color: '#17324d' }}
-            >
-              Notice Category:
+            <label htmlFor="notice-category" style={{
+              fontWeight: 700,
+              color: '#17324d',
+            }}>
+              Filter by Category:
             </label>
 
             <select
@@ -526,6 +546,66 @@ export default function DiscoveredGovernmentJobsPage() {
                       }}>
                         {item.status}
                       </span>
+                    </div>
+
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 10,
+                      marginTop: 16,
+                    }}>
+                      <label
+                        htmlFor={`category-${item.id}`}
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: '#34536e',
+                        }}
+                      >
+                        Change Category:
+                      </label>
+
+                      <select
+                        id={`category-${item.id}`}
+                        value={category}
+                        disabled={busyId !== null}
+                        onChange={event =>
+                          updateCategory(
+                            item,
+                            event.target.value as NoticeCategory
+                          )
+                        }
+                        style={{
+                          padding: '9px 12px',
+                          border: '1px solid #dce5ec',
+                          borderRadius: 7,
+                          background: '#fff',
+                          color: '#17324d',
+                          fontSize: 13,
+                          minWidth: 210,
+                        }}
+                      >
+                        {categoryFilters
+                          .filter(option => option.value !== 'all')
+                          .map(option => (
+                            <option
+                              key={option.value}
+                              value={option.value}
+                            >
+                              {option.label}
+                            </option>
+                          ))}
+                      </select>
+
+                      {busyId === item.id && (
+                        <span style={{
+                          fontSize: 12,
+                          color: '#647b91',
+                        }}>
+                          Saving…
+                        </span>
+                      )}
                     </div>
 
                     {item.error_message && (
