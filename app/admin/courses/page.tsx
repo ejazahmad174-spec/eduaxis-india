@@ -59,6 +59,19 @@ type CourseLesson = {
   sort_order: number;
 };
 
+type CourseResource = {
+  id: string;
+  lesson_id: string;
+  title: string;
+  description: string | null;
+  resource_type: 'pdf' | 'document' | 'worksheet' | 'assignment' | 'external_link';
+  access_level: 'free' | 'paid';
+  file_path: string | null;
+  external_url: string | null;
+  status: 'draft' | 'published';
+  sort_order: number;
+};
+
 type FormState = {
   title: string;
   classLevel: string;
@@ -112,6 +125,19 @@ export default function AdminCoursesPage() {
   const [lessonFreePreview, setLessonFreePreview] = useState(true);
   const [lessonStatus, setLessonStatus] = useState<'draft' | 'published'>('draft');
   const [lessonSaving, setLessonSaving] = useState(false);
+
+  // Learning resources state
+  const [selectedLessonId, setSelectedLessonId] = useState('');
+  const [resources, setResources] = useState<CourseResource[]>([]);
+  const [resourceEditingId, setResourceEditingId] = useState<string | null>(null);
+  const [resourceTitle, setResourceTitle] = useState('');
+  const [resourceDescription, setResourceDescription] = useState('');
+  const [resourceType, setResourceType] = useState<CourseResource['resource_type']>('pdf');
+  const [resourceAccess, setResourceAccess] = useState<'free' | 'paid'>('free');
+  const [resourceFilePath, setResourceFilePath] = useState('');
+  const [resourceExternalUrl, setResourceExternalUrl] = useState('');
+  const [resourceStatus, setResourceStatus] = useState<'draft' | 'published'>('draft');
+  const [resourceSaving, setResourceSaving] = useState(false);
   const [unitTitle, setUnitTitle] = useState('');
   const [chapterTitle, setChapterTitle] = useState('');
   const [syllabusLoading, setSyllabusLoading] = useState(false);
@@ -280,6 +306,122 @@ export default function AdminCoursesPage() {
     loadLessons();
     return () => { active = false; };
   }, [selectedChapterId]);
+
+  useEffect(() => {
+    if (!selectedLessonId && lessons.length > 0) {
+      setSelectedLessonId(lessons[0].id);
+    } else if (selectedLessonId && !lessons.some((lesson) => lesson.id === selectedLessonId)) {
+      setSelectedLessonId(lessons[0]?.id || '');
+    }
+  }, [lessons, selectedLessonId]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadResources() {
+      if (!supabase || !selectedLessonId) {
+        setResources([]);
+        return;
+      }
+      const { data, error } = await supabase
+        .from('course_resources')
+        .select('*')
+        .eq('lesson_id', selectedLessonId)
+        .order('sort_order', { ascending: true });
+      if (!active) return;
+      if (error) {
+        setErrorMessage(`Could not load learning resources: ${error.message}`);
+        setResources([]);
+      } else {
+        setResources((data || []) as CourseResource[]);
+      }
+    }
+    loadResources();
+    return () => { active = false; };
+  }, [selectedLessonId]);
+
+  function resetResourceForm() {
+    setResourceEditingId(null);
+    setResourceTitle('');
+    setResourceDescription('');
+    setResourceType('pdf');
+    setResourceAccess('free');
+    setResourceFilePath('');
+    setResourceExternalUrl('');
+    setResourceStatus('draft');
+  }
+
+  function editResource(resource: CourseResource) {
+    setResourceEditingId(resource.id);
+    setResourceTitle(resource.title);
+    setResourceDescription(resource.description || '');
+    setResourceType(resource.resource_type);
+    setResourceAccess(resource.access_level);
+    setResourceFilePath(resource.file_path || '');
+    setResourceExternalUrl(resource.external_url || '');
+    setResourceStatus(resource.status);
+    setNotice('Editing learning resource. Save your changes when ready.');
+  }
+
+  async function saveResource(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !selectedLessonId || !resourceTitle.trim()) return;
+    if (resourceType === 'external_link' && !resourceExternalUrl.trim()) {
+      setErrorMessage('Please enter the external resource URL.');
+      return;
+    }
+    if (resourceType !== 'external_link' && !resourceFilePath.trim()) {
+      setErrorMessage('Please enter the private storage file path for this resource.');
+      return;
+    }
+    if (resourceExternalUrl.trim() && !/^https?:\/\//i.test(resourceExternalUrl.trim())) {
+      setErrorMessage('External URL must begin with https:// or http://.');
+      return;
+    }
+    setResourceSaving(true);
+    setErrorMessage('');
+    setNotice('');
+    const payload = {
+      lesson_id: selectedLessonId,
+      title: resourceTitle.trim(),
+      description: resourceDescription.trim() || null,
+      resource_type: resourceType,
+      access_level: resourceAccess,
+      file_path: resourceType === 'external_link' ? null : (resourceFilePath.trim() || null),
+      external_url: resourceType === 'external_link' ? resourceExternalUrl.trim() : (resourceExternalUrl.trim() || null),
+      status: resourceStatus,
+      sort_order: resourceEditingId
+        ? (resources.find((item) => item.id === resourceEditingId)?.sort_order ?? resources.length + 1)
+        : resources.length + 1,
+    };
+    const result = resourceEditingId
+      ? await supabase.from('course_resources').update(payload).eq('id', resourceEditingId).select('*').single()
+      : await supabase.from('course_resources').insert(payload).select('*').single();
+    if (result.error) {
+      setErrorMessage(`Could not save resource: ${result.error.message}`);
+    } else if (result.data) {
+      if (resourceEditingId) {
+        setResources((current) => current.map((item) => item.id === resourceEditingId ? result.data as CourseResource : item));
+        setNotice('Learning resource updated successfully.');
+      } else {
+        setResources((current) => [...current, result.data as CourseResource]);
+        setNotice('Learning resource added successfully.');
+      }
+      resetResourceForm();
+    }
+    setResourceSaving(false);
+  }
+
+  async function deleteResource(resource: CourseResource) {
+    if (!supabase || !window.confirm(`Delete resource "${resource.title}"?`)) return;
+    const { error } = await supabase.from('course_resources').delete().eq('id', resource.id);
+    if (error) {
+      setErrorMessage(`Could not delete resource: ${error.message}`);
+      return;
+    }
+    setResources((current) => current.filter((item) => item.id !== resource.id));
+    if (resourceEditingId === resource.id) resetResourceForm();
+    setNotice('Learning resource deleted.');
+  }
 
   function resetLessonForm() {
     setLessonEditingId(null);
@@ -960,7 +1102,7 @@ export default function AdminCoursesPage() {
                 <select
                   style={inputStyle}
                   value={selectedChapterId}
-                  onChange={(e) => { setSelectedChapterId(e.target.value); resetLessonForm(); }}
+                  onChange={(e) => { setSelectedChapterId(e.target.value); setSelectedLessonId(''); resetLessonForm(); resetResourceForm(); }}
                 >
                   <option value="">Choose a chapter...</option>
                   {chapters.map((chapter) => <option key={chapter.id} value={chapter.id}>{chapter.title}</option>)}
@@ -1045,6 +1187,93 @@ export default function AdminCoursesPage() {
                   </div>
                 </div>
               )}
+
+              <div style={{ marginTop: 24, paddingTop: 22, borderTop: '1px solid #e2eaed' }}>
+                <div style={{ marginBottom: 14 }}>
+                  <div className="admin-kicker">LEARNING RESOURCES</div>
+                  <h3 style={{ margin: '5px 0', color: '#102b46' }}>Manage notes, worksheets and assignments</h3>
+                  <p style={{ margin: 0, color: '#657789', fontSize: 12, lineHeight: 1.6 }}>
+                    Add resources to a lesson. Free resources can be shown to everyone; paid resources must remain in private storage until secure student access is enabled.
+                  </p>
+                </div>
+                <label style={{ ...labelStyle, maxWidth: 560, marginBottom: 18 }}>
+                  Select lesson
+                  <select style={inputStyle} value={selectedLessonId} onChange={(e) => { setSelectedLessonId(e.target.value); resetResourceForm(); }}>
+                    <option value="">Choose a lesson...</option>
+                    {lessons.map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}
+                  </select>
+                </label>
+                {!selectedLessonId ? (
+                  <div style={emptyStyle}>Create a lesson first, then select it to add its learning resources.</div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
+                    <form onSubmit={saveResource} style={{ display: 'grid', gap: 12, border: '1px solid #e2eaed', borderRadius: 11, padding: 16 }}>
+                      <h4 style={{ margin: 0, color: '#102b46' }}>{resourceEditingId ? 'Edit resource' : 'Add a learning resource'}</h4>
+                      <label style={labelStyle}>Resource title
+                        <input style={inputStyle} value={resourceTitle} onChange={(e) => setResourceTitle(e.target.value)} placeholder="e.g. Chapter 1 PDF Notes" required />
+                      </label>
+                      <label style={labelStyle}>Resource type
+                        <select style={inputStyle} value={resourceType} onChange={(e) => setResourceType(e.target.value as CourseResource['resource_type'])}>
+                          <option value="pdf">PDF notes</option>
+                          <option value="document">Document</option>
+                          <option value="worksheet">Worksheet</option>
+                          <option value="assignment">Assignment</option>
+                          <option value="external_link">External link</option>
+                        </select>
+                      </label>
+                      <label style={labelStyle}>Short description
+                        <textarea style={{ ...inputStyle, minHeight: 70, resize: 'vertical' }} value={resourceDescription} onChange={(e) => setResourceDescription(e.target.value)} placeholder="Briefly describe this resource..." />
+                      </label>
+                      {resourceType === 'external_link' ? (
+                        <label style={labelStyle}>External URL
+                          <input style={inputStyle} type="url" value={resourceExternalUrl} onChange={(e) => setResourceExternalUrl(e.target.value)} placeholder="https://..." required />
+                        </label>
+                      ) : (
+                        <label style={labelStyle}>Private storage file path
+                          <input style={inputStyle} value={resourceFilePath} onChange={(e) => setResourceFilePath(e.target.value)} placeholder="e.g. course-files/class-11/chapter-1.pdf" required />
+                        </label>
+                      )}
+                      <label style={labelStyle}>Access level
+                        <select style={inputStyle} value={resourceAccess} onChange={(e) => setResourceAccess(e.target.value as 'free' | 'paid')}>
+                          <option value="free">Free</option>
+                          <option value="paid">Paid (course purchase required)</option>
+                        </select>
+                      </label>
+                      <label style={labelStyle}>Publication status
+                        <select style={inputStyle} value={resourceStatus} onChange={(e) => setResourceStatus(e.target.value as 'draft' | 'published')}>
+                          <option value="draft">Draft</option>
+                          <option value="published">Published</option>
+                        </select>
+                      </label>
+                      <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+                        <button type="submit" disabled={resourceSaving} style={primaryButtonStyle}>{resourceSaving ? 'Saving...' : resourceEditingId ? 'Update resource' : 'Save resource'}</button>
+                        {resourceEditingId && <button type="button" onClick={resetResourceForm} style={secondaryButtonStyle}>Cancel edit</button>}
+                      </div>
+                      <p style={{ margin: 0, color: '#946200', fontSize: 11, lineHeight: 1.5 }}>
+                        File upload and secure download links are not enabled yet. Enter a private storage path only after the course file storage is configured. Do not use a public URL for paid files.
+                      </p>
+                    </form>
+                    <div style={{ display: 'grid', alignContent: 'start', gap: 10 }}>
+                      <h4 style={{ margin: 0, color: '#102b46' }}>Resources for this lesson ({resources.length})</h4>
+                      {resources.length === 0 ? <div style={emptyStyle}>No resources added to this lesson yet.</div> : resources.map((resource) => (
+                        <article key={resource.id} style={{ border: '1px solid #e2eaed', borderRadius: 9, padding: 13, display: 'grid', gap: 8 }}>
+                          <div style={{ color: '#102b46', fontWeight: 800, fontSize: 13 }}>{resource.title}</div>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            <span style={neutralPillStyle}>{resource.resource_type.replace('_', ' ').toUpperCase()}</span>
+                            <span style={statusPill(resource.status)}>{resource.status}</span>
+                            <span style={neutralPillStyle}>{resource.access_level.toUpperCase()}</span>
+                          </div>
+                          {resource.description && <p style={{ margin: 0, color: '#657789', fontSize: 12 }}>{resource.description}</p>}
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button type="button" onClick={() => editResource(resource)} style={smallActionStyle}>Edit</button>
+                            <button type="button" onClick={() => deleteResource(resource)} style={smallDeleteStyle}>Delete</button>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </section>
