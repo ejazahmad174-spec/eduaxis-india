@@ -272,7 +272,9 @@ export default function BlogsPage() {
 
                     <div className="blogCardFooter">
                       <small>{article.date}</small>
-                      <span className="readMore">Coming soon →</span>
+                      <a className="readMore" href={`/blogs/${article.id}`}>
+  Read Article →
+</a>
                     </div>
                   </div>
                 </article>
@@ -314,7 +316,9 @@ export default function BlogsPage() {
 
                     <div className="blogCardFooter">
                       <small>{article.date}</small>
-                      <span className="readMore">Coming soon →</span>
+                      <a className="readMore" href={`/blogs/${article.id}`}>
+  Read Article →
+</a>
                     </div>
                   </div>
                 </article>
