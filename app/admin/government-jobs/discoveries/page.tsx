@@ -17,6 +17,11 @@ type Discovery = {
   error_message: string | null;
 };
 
+type JobSource = {
+  id: string;
+  source_name: string;
+};
+
 const filters = ['all', 'new', 'processing', 'imported', 'ignored', 'error'];
 
 function formatDate(value: string | null) {
@@ -39,6 +44,7 @@ export default function DiscoveredGovernmentJobsPage() {
   const router = useRouter();
 
   const [items, setItems] = useState<Discovery[]>([]);
+  const [sources, setSources] = useState<JobSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [filter, setFilter] = useState('new');
@@ -54,16 +60,29 @@ export default function DiscoveredGovernmentJobsPage() {
       return;
     }
 
-    const { data, error } = await client
-      .from('government_job_discoveries')
-      .select('id,source_id,discovered_title,discovered_url,status,discovered_at,processed_at,error_message')
-      .order('discovered_at', { ascending: false });
+    const [discoveriesResult, sourcesResult] = await Promise.all([
+      client
+        .from('government_job_discoveries')
+        .select('id,source_id,discovered_title,discovered_url,status,discovered_at,processed_at,error_message')
+        .order('discovered_at', { ascending: false }),
 
-    if (error) {
-      setErrorMessage('Could not load discovered notices: ' + error.message);
+      client
+        .from('government_job_sources')
+        .select('id,source_name'),
+    ]);
+
+    if (discoveriesResult.error) {
+      setErrorMessage(
+        'Could not load discovered notices: ' +
+        discoveriesResult.error.message
+      );
     } else {
-      setItems((data || []) as Discovery[]);
+      setItems((discoveriesResult.data || []) as Discovery[]);
       setErrorMessage('');
+    }
+
+    if (!sourcesResult.error) {
+      setSources((sourcesResult.data || []) as JobSource[]);
     }
 
     setLoading(false);
@@ -154,6 +173,13 @@ export default function DiscoveredGovernmentJobsPage() {
     error: items.filter(item => item.status === 'error').length,
   };
 
+  function getSourceName(sourceId: string) {
+    return (
+      sources.find(source => source.id === sourceId)?.source_name ||
+      'Unknown source'
+    );
+  }
+
   if (loading) {
     return <main className="admin-loading">Checking administrator access…</main>;
   }
@@ -178,9 +204,18 @@ export default function DiscoveredGovernmentJobsPage() {
         <a className="admin-side-link" href="/admin/study-materials">
           ▤ &nbsp; Study Materials
         </a>
-        <a className="admin-side-link active" href="/admin/government-jobs">
+
+        <a className="admin-side-link" href="/admin/government-jobs">
           ▤ &nbsp; Government Jobs
         </a>
+
+        <a
+          className="admin-side-link active"
+          href="/admin/government-jobs/discoveries"
+        >
+          ↳ &nbsp; Discovered Jobs
+        </a>
+
         <a className="admin-side-link" href="/admin/dashboard">
           ▤ &nbsp; Mock Tests
         </a>
@@ -196,6 +231,7 @@ export default function DiscoveredGovernmentJobsPage() {
             <div className="admin-kicker">EDUAXIS INDIA / ADMIN</div>
             <h1>Discovered Government Jobs</h1>
           </div>
+
           <a className="admin-logout" href="/admin/government-jobs">
             Back to Government Jobs
           </a>
@@ -203,6 +239,7 @@ export default function DiscoveredGovernmentJobsPage() {
 
         <div style={{ padding: '25px 0' }}>
           <h2>Automatic Recruitment Discovery</h2>
+
           <p style={{ color: '#647b91', lineHeight: 1.7 }}>
             Review recruitment notices collected from official websites.
             Verify every notice before manually adding and publishing a vacancy.
@@ -330,11 +367,12 @@ export default function DiscoveredGovernmentJobsPage() {
                       </h3>
 
                       <div style={{
-                        color: '#647b91',
-                        fontSize: 13,
+                        color: '#174a7c',
+                        fontSize: 14,
+                        fontWeight: 700,
                         marginBottom: 8,
                       }}>
-                        Source ID: {item.source_id}
+                        Organisation: {getSourceName(item.source_id)}
                       </div>
 
                       <div style={{
