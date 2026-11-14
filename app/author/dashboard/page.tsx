@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useState, FormEvent, ChangeEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -39,6 +39,8 @@ export default function AuthorDashboard() {
   const [excerpt, setExcerpt] = useState('');
   const [content, setContent] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [imagePath, setImagePath] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   async function loadDashboard() {
     if (!supabase) {
@@ -96,6 +98,84 @@ export default function AuthorDashboard() {
     loadDashboard();
   }, []);
 
+  async function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file || !supabase) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image size must be 5 MB or less.');
+      return;
+    }
+
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) {
+      setError('Please sign in again before uploading an image.');
+      return;
+    }
+
+    setUploadingImage(true);
+    setError('');
+    setMessage('');
+
+    try {
+      const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const path = `author-uploads/${authData.user.id}/${crypto.randomUUID()}.${extension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('blog-images')
+        .upload(path, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicData } = supabase.storage
+        .from('blog-images')
+        .getPublicUrl(path);
+
+      setImageUrl(publicData.publicUrl);
+      setImagePath(path);
+      setMessage('Featured image uploaded successfully.');
+    } catch (err: any) {
+      setError(err.message || 'Image upload failed. Please try again.');
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
+  async function removeUploadedImage() {
+    if (supabase && imagePath) {
+      const { error: removeError } = await supabase.storage
+        .from('blog-images')
+        .remove([imagePath]);
+
+      if (removeError) {
+        setError(removeError.message);
+        return;
+      }
+    }
+
+    setImageUrl('');
+    setImagePath('');
+    setMessage('Featured image removed.');
+  }
+
+  function insertWritingPrompt(prompt: string) {
+    setContent((current) => {
+      const separator = current.trim() ? '\\n\\n' : '';
+      return `${current}${separator}${prompt}`;
+    });
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -140,6 +220,7 @@ export default function AuthorDashboard() {
       setExcerpt('');
       setContent('');
       setImageUrl('');
+      setImagePath('');
       setShowEditor(false);
       setMessage('Your article has been submitted successfully for admin review.');
 
@@ -294,19 +375,37 @@ export default function AuthorDashboard() {
                 rows={3}
               />
 
-              <label>Featured Image URL (Optional)</label>
-              <input
-                type="url"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://example.com/image.jpg"
-              />
+              <label>Featured Image (Optional)</label>
+              <div className="imageUploadBox">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  disabled={uploadingImage}
+                />
+                <small>Choose an image from your device. Maximum size: 5 MB.</small>
+                {uploadingImage && <p className="uploadStatus">Uploading image...</p>}
+                {imageUrl && (
+                  <div className="imagePreview">
+                    <img src={imageUrl} alt="Featured image preview" />
+                    <button type="button" className="removeImageButton" onClick={removeUploadedImage}>
+                      Remove image
+                    </button>
+                  </div>
+                )}
+              </div>
 
               <label>Full Article *</label>
+              <div className="writingToolbar">
+                <button type="button" onClick={() => insertWritingPrompt('\\nHEADING: ')}>+ Heading</button>
+                <button type="button" onClick={() => insertWritingPrompt('\\n• ')}>• Bullet</button>
+                <button type="button" onClick={() => insertWritingPrompt('\\n1. ')}>1. Numbered point</button>
+                <button type="button" onClick={() => insertWritingPrompt('\\n\\n---\\n\\n')}>Section divider</button>
+              </div>
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="Write your complete article here..."
+                placeholder="Write your complete article here. Use the writing helpers to structure headings and lists..."
                 rows={14}
                 required
               />
@@ -585,6 +684,67 @@ export default function AuthorDashboard() {
         .editor textarea {
           resize: vertical;
           line-height: 1.7;
+        }
+
+        .imageUploadBox {
+          border: 1px dashed #cbd9df;
+          border-radius: 8px;
+          padding: 14px;
+          background: white;
+        }
+
+        .imageUploadBox input {
+          border: 0;
+          padding: 5px 0;
+        }
+
+        .imageUploadBox small,
+        .uploadStatus {
+          display: block;
+          color: #657789;
+          font-size: 12px;
+          margin-top: 8px;
+        }
+
+        .imagePreview {
+          margin-top: 14px;
+          display: flex;
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .imagePreview img {
+          width: 100%;
+          max-width: 360px;
+          max-height: 220px;
+          object-fit: cover;
+          border-radius: 8px;
+        }
+
+        .removeImageButton {
+          border: 0;
+          background: #fff0ef;
+          color: #a52c25;
+          border-radius: 6px;
+          padding: 8px 12px;
+          cursor: pointer;
+        }
+
+        .writingToolbar {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .writingToolbar button {
+          border: 1px solid #dce5e9;
+          background: #fff;
+          color: #294357;
+          border-radius: 6px;
+          padding: 8px 11px;
+          font-size: 12px;
+          cursor: pointer;
         }
 
         .editorNote {
