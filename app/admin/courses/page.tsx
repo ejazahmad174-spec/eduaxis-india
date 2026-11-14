@@ -45,6 +45,20 @@ type CourseChapter = {
   sort_order: number;
 };
 
+type CourseLesson = {
+  id: string;
+  chapter_id: string;
+  title: string;
+  lesson_type: 'video' | 'text' | 'live';
+  description: string | null;
+  video_url: string | null;
+  content: string | null;
+  duration_minutes: number | null;
+  is_free_preview: boolean;
+  status: 'draft' | 'published';
+  sort_order: number;
+};
+
 type FormState = {
   title: string;
   classLevel: string;
@@ -86,6 +100,18 @@ export default function AdminCoursesPage() {
   const [units, setUnits] = useState<CourseUnit[]>([]);
   const [selectedUnitId, setSelectedUnitId] = useState('');
   const [chapters, setChapters] = useState<CourseChapter[]>([]);
+  const [selectedChapterId, setSelectedChapterId] = useState('');
+  const [lessons, setLessons] = useState<CourseLesson[]>([]);
+  const [lessonEditingId, setLessonEditingId] = useState<string | null>(null);
+  const [lessonTitle, setLessonTitle] = useState('');
+  const [lessonType, setLessonType] = useState<'video' | 'text' | 'live'>('video');
+  const [lessonDescription, setLessonDescription] = useState('');
+  const [lessonVideoUrl, setLessonVideoUrl] = useState('');
+  const [lessonContent, setLessonContent] = useState('');
+  const [lessonDuration, setLessonDuration] = useState('');
+  const [lessonFreePreview, setLessonFreePreview] = useState(true);
+  const [lessonStatus, setLessonStatus] = useState<'draft' | 'published'>('draft');
+  const [lessonSaving, setLessonSaving] = useState(false);
   const [unitTitle, setUnitTitle] = useState('');
   const [chapterTitle, setChapterTitle] = useState('');
   const [syllabusLoading, setSyllabusLoading] = useState(false);
@@ -199,6 +225,7 @@ export default function AdminCoursesPage() {
     async function loadChapters() {
       if (!supabase || !selectedUnitId) {
         setChapters([]);
+        setSelectedChapterId('');
         return;
       }
 
@@ -221,6 +248,126 @@ export default function AdminCoursesPage() {
     loadChapters();
     return () => { active = false; };
   }, [selectedUnitId]);
+
+  useEffect(() => {
+    if (!selectedChapterId && chapters.length > 0) {
+      setSelectedChapterId(chapters[0].id);
+    } else if (selectedChapterId && !chapters.some((chapter) => chapter.id === selectedChapterId)) {
+      setSelectedChapterId(chapters[0]?.id || '');
+    }
+  }, [chapters, selectedChapterId]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadLessons() {
+      if (!supabase || !selectedChapterId) {
+        setLessons([]);
+        return;
+      }
+      const { data, error } = await supabase
+        .from('course_lessons')
+        .select('*')
+        .eq('chapter_id', selectedChapterId)
+        .order('sort_order', { ascending: true });
+      if (!active) return;
+      if (error) {
+        setErrorMessage(`Could not load lessons: ${error.message}`);
+        setLessons([]);
+      } else {
+        setLessons((data || []) as CourseLesson[]);
+      }
+    }
+    loadLessons();
+    return () => { active = false; };
+  }, [selectedChapterId]);
+
+  function resetLessonForm() {
+    setLessonEditingId(null);
+    setLessonTitle('');
+    setLessonType('video');
+    setLessonDescription('');
+    setLessonVideoUrl('');
+    setLessonContent('');
+    setLessonDuration('');
+    setLessonFreePreview(true);
+    setLessonStatus('draft');
+  }
+
+  function editLesson(lesson: CourseLesson) {
+    setLessonEditingId(lesson.id);
+    setLessonTitle(lesson.title);
+    setLessonType(lesson.lesson_type);
+    setLessonDescription(lesson.description || '');
+    setLessonVideoUrl(lesson.video_url || '');
+    setLessonContent(lesson.content || '');
+    setLessonDuration(lesson.duration_minutes == null ? '' : String(lesson.duration_minutes));
+    setLessonFreePreview(lesson.is_free_preview);
+    setLessonStatus(lesson.status);
+    setNotice('Editing lesson. Save your changes when ready.');
+  }
+
+  async function saveLesson(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !selectedChapterId || !lessonTitle.trim()) return;
+    if (lessonType === 'video' && !lessonVideoUrl.trim()) {
+      setErrorMessage('Please enter the video URL for this video lesson.');
+      return;
+    }
+    if (lessonType === 'text' && !lessonContent.trim()) {
+      setErrorMessage('Please enter the lesson content for this text lesson.');
+      return;
+    }
+    const duration = lessonDuration.trim() ? Number(lessonDuration) : null;
+    if (duration !== null && (!Number.isInteger(duration) || duration < 1)) {
+      setErrorMessage('Duration must be a whole number of minutes greater than zero.');
+      return;
+    }
+    setLessonSaving(true);
+    setErrorMessage('');
+    setNotice('');
+    const payload = {
+      chapter_id: selectedChapterId,
+      title: lessonTitle.trim(),
+      lesson_type: lessonType,
+      description: lessonDescription.trim() || null,
+      video_url: lessonType === 'video' || lessonType === 'live' ? (lessonVideoUrl.trim() || null) : null,
+      content: lessonType === 'text' ? (lessonContent.trim() || null) : null,
+      duration_minutes: duration,
+      is_free_preview: lessonFreePreview,
+      status: lessonStatus,
+      sort_order: lessonEditingId
+        ? (lessons.find((item) => item.id === lessonEditingId)?.sort_order ?? lessons.length + 1)
+        : lessons.length + 1,
+    };
+    const result = lessonEditingId
+      ? await supabase.from('course_lessons').update(payload).eq('id', lessonEditingId).select('*').single()
+      : await supabase.from('course_lessons').insert(payload).select('*').single();
+    if (result.error) {
+      setErrorMessage(`Could not save lesson: ${result.error.message}`);
+    } else if (result.data) {
+      if (lessonEditingId) {
+        setLessons((current) => current.map((item) => item.id === lessonEditingId ? result.data as CourseLesson : item));
+        setNotice('Lesson updated successfully.');
+      } else {
+        setLessons((current) => [...current, result.data as CourseLesson]);
+        setNotice('Lesson added successfully.');
+      }
+      resetLessonForm();
+    }
+    setLessonSaving(false);
+  }
+
+  async function deleteLesson(lesson: CourseLesson) {
+    if (!supabase || !window.confirm(`Delete lesson "${lesson.title}"?`)) return;
+    const { error } = await supabase.from('course_lessons').delete().eq('id', lesson.id);
+    if (error) {
+      setErrorMessage(`Could not delete lesson: ${error.message}`);
+      return;
+    }
+    setLessons((current) => current.filter((item) => item.id !== lesson.id));
+    if (lessonEditingId === lesson.id) resetLessonForm();
+    setNotice('Lesson deleted.');
+  }
 
   async function addUnit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -793,6 +940,111 @@ export default function AdminCoursesPage() {
                   </>
                 )}
               </div>
+            </div>
+          )}
+
+          {selectedMappingId && (
+            <div style={{ ...panelStyle, marginTop: 20, padding: 18 }}>
+              <div style={sectionHeadingStyle}>
+                <div>
+                  <div className="admin-kicker">LESSON MANAGER</div>
+                  <h3 style={{ margin: '5px 0 0', color: '#102b46' }}>Add lessons to a chapter</h3>
+                  <p style={{ margin: '7px 0 0', color: '#657789', fontSize: 13 }}>
+                    Create video, text or live lessons. Mark selected lessons as free previews to let students sample the course.
+                  </p>
+                </div>
+              </div>
+
+              <label style={{ ...labelStyle, maxWidth: 560, marginBottom: 18 }}>
+                Select chapter
+                <select
+                  style={inputStyle}
+                  value={selectedChapterId}
+                  onChange={(e) => { setSelectedChapterId(e.target.value); resetLessonForm(); }}
+                >
+                  <option value="">Choose a chapter...</option>
+                  {chapters.map((chapter) => <option key={chapter.id} value={chapter.id}>{chapter.title}</option>)}
+                </select>
+              </label>
+
+              {!selectedChapterId ? (
+                <div style={emptyStyle}>Add a syllabus unit and chapter first. Then select the chapter here to manage its lessons.</div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
+                  <form onSubmit={saveLesson} style={{ display: 'grid', gap: 13, border: '1px solid #e2eaed', borderRadius: 11, padding: 16 }}>
+                    <h4 style={{ margin: 0, color: '#102b46' }}>{lessonEditingId ? 'Edit lesson' : 'Create a lesson'}</h4>
+                    <label style={labelStyle}>Lesson title
+                      <input style={inputStyle} value={lessonTitle} onChange={(e) => setLessonTitle(e.target.value)} placeholder="e.g. Introduction to Accounting" required />
+                    </label>
+                    <label style={labelStyle}>Lesson type
+                      <select style={inputStyle} value={lessonType} onChange={(e) => setLessonType(e.target.value as 'video' | 'text' | 'live')}>
+                        <option value="video">Video lesson</option>
+                        <option value="text">Text lesson</option>
+                        <option value="live">Live class</option>
+                      </select>
+                    </label>
+                    <label style={labelStyle}>Short description
+                      <textarea style={{ ...inputStyle, minHeight: 72, resize: 'vertical' }} value={lessonDescription} onChange={(e) => setLessonDescription(e.target.value)} placeholder="What will students learn?" />
+                    </label>
+                    {(lessonType === 'video' || lessonType === 'live') && (
+                      <label style={labelStyle}>{lessonType === 'live' ? 'Live class / meeting URL' : 'Video URL'}
+                        <input style={inputStyle} type="url" value={lessonVideoUrl} onChange={(e) => setLessonVideoUrl(e.target.value)} placeholder="https://..." required={lessonType === 'video'} />
+                      </label>
+                    )}
+                    {lessonType === 'text' && (
+                      <label style={labelStyle}>Lesson content
+                        <textarea style={{ ...inputStyle, minHeight: 180, resize: 'vertical' }} value={lessonContent} onChange={(e) => setLessonContent(e.target.value)} placeholder="Write the lesson content here..." required />
+                      </label>
+                    )}
+                    <label style={labelStyle}>Duration (minutes)
+                      <input style={inputStyle} type="number" min="1" step="1" value={lessonDuration} onChange={(e) => setLessonDuration(e.target.value)} placeholder="Optional" />
+                    </label>
+                    <label style={{ ...labelStyle, flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+                      <input type="checkbox" checked={lessonFreePreview} onChange={(e) => setLessonFreePreview(e.target.checked)} />
+                      Free preview (available without course purchase)
+                    </label>
+                    <label style={labelStyle}>Publication status
+                      <select style={inputStyle} value={lessonStatus} onChange={(e) => setLessonStatus(e.target.value as 'draft' | 'published')}>
+                        <option value="draft">Draft</option>
+                        <option value="published">Published</option>
+                      </select>
+                    </label>
+                    <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+                      <button type="submit" disabled={lessonSaving} style={primaryButtonStyle}>{lessonSaving ? 'Saving...' : lessonEditingId ? 'Update lesson' : 'Save lesson'}</button>
+                      {lessonEditingId && <button type="button" onClick={resetLessonForm} style={secondaryButtonStyle}>Cancel edit</button>}
+                    </div>
+                    <p style={{ margin: 0, color: '#657789', fontSize: 11, lineHeight: 1.5 }}>
+                      Note: this form stores the lesson URL and text. Paid lesson access must be protected by student purchase verification before paid courses are launched.
+                    </p>
+                  </form>
+
+                  <div style={{ display: 'grid', alignContent: 'start', gap: 10 }}>
+                    <h4 style={{ margin: 0, color: '#102b46' }}>Lessons in this chapter ({lessons.length})</h4>
+                    {lessons.length === 0 ? (
+                      <div style={emptyStyle}>No lessons added to this chapter yet.</div>
+                    ) : lessons.map((lesson, index) => (
+                      <article key={lesson.id} style={{ border: '1px solid #e2eaed', borderRadius: 9, padding: 13, display: 'grid', gap: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ color: '#102b46', fontWeight: 800, fontSize: 13 }}>{index + 1}. {lesson.title}</div>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 7 }}>
+                              <span style={neutralPillStyle}>{lesson.lesson_type.toUpperCase()}</span>
+                              <span style={statusPill(lesson.status)}>{lesson.status}</span>
+                              <span style={neutralPillStyle}>{lesson.is_free_preview ? 'FREE PREVIEW' : 'PAID'}</span>
+                              {lesson.duration_minutes ? <span style={neutralPillStyle}>{lesson.duration_minutes} min</span> : null}
+                            </div>
+                          </div>
+                        </div>
+                        {lesson.description && <p style={{ margin: 0, color: '#657789', fontSize: 12 }}>{lesson.description}</p>}
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button type="button" onClick={() => editLesson(lesson)} style={smallActionStyle}>Edit</button>
+                          <button type="button" onClick={() => deleteLesson(lesson)} style={smallDeleteStyle}>Delete</button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </section>
