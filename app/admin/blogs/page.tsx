@@ -1,7 +1,8 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import '../admin.css';
@@ -45,9 +46,11 @@ function createSlug(title: string) {
 
 export default function AdminBlogsPage() {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [email, setEmail] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -55,7 +58,6 @@ export default function AdminBlogsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [filter, setFilter] = useState('all');
-
   const [form, setForm] = useState(emptyForm);
 
   async function loadArticles() {
@@ -136,6 +138,7 @@ export default function AdminBlogsPage() {
     setError('');
     setNotice('');
     setShowEditor(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function openEditArticle(article: BlogArticle) {
@@ -159,12 +162,92 @@ export default function AdminBlogsPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  async function saveArticle(
-    event: React.FormEvent<HTMLFormElement>
+  // Upload selected image to Supabase Storage.
+  async function uploadFeaturedImage(
+    event: ChangeEvent<HTMLInputElement>
   ) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    if (!supabase) {
+      setError('Supabase is not available. Please refresh the page.');
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      setError('Please select a valid image file.');
+      event.target.value = '';
+      return;
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      setError('Image size must not exceed 5 MB.');
+      event.target.value = '';
+      return;
+    }
+
+    setUploadingImage(true);
+    setError('');
+    setNotice('');
+
+    try {
+      const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `${crypto.randomUUID()}.${extension}`;
+      const filePath = `articles/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('blog-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data } = supabase.storage
+        .from('blog-images')
+        .getPublicUrl(filePath);
+
+      if (!data.publicUrl) {
+        throw new Error('Could not generate the image URL.');
+      }
+
+      updateForm('featured_image_url', data.publicUrl);
+      setNotice('Image uploaded successfully. Save the article to keep the image URL.');
+
+    } catch (uploadError) {
+      console.error('Image upload error:', uploadError);
+
+      const message =
+        uploadError instanceof Error
+          ? uploadError.message
+          : 'Image upload failed. Please try again.';
+
+      setError(message);
+    } finally {
+      setUploadingImage(false);
+
+      // Allows selecting the same image again if needed.
+      event.target.value = '';
+    }
+  }
+
+  function removeFeaturedImage() {
+    updateForm('featured_image_url', '');
+    setNotice('Image removed from the article form. Save the article to apply this change.');
+    setError('');
+  }
+
+  async function saveArticle(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!supabase || saving) return;
+    if (!supabase || saving || uploadingImage) return;
 
     setSaving(true);
     setError('');
@@ -396,9 +479,7 @@ export default function AdminBlogsPage() {
           <section className="blogEditor">
             <div className="blogEditorHeading">
               <div>
-                <div className="admin-kicker">
-                  ARTICLE EDITOR
-                </div>
+                <div className="admin-kicker">ARTICLE EDITOR</div>
                 <h2>{editingId ? 'Edit Article' : 'Write New Article'}</h2>
               </div>
 
@@ -410,6 +491,7 @@ export default function AdminBlogsPage() {
                   setEditingId(null);
                   setForm(emptyForm);
                   setError('');
+                  setNotice('');
                 }}
               >
                 Close
@@ -492,17 +574,70 @@ export default function AdminBlogsPage() {
                   />
                 </label>
 
-                <label className="blogFullWidth">
-                  Featured Image URL
+                <div className="blogFullWidth imageUploadSection">
+                  <label>Featured Image</label>
+
                   <input
-                    type="url"
-                    value={form.featured_image_url}
-                    onChange={(event) =>
-                      updateForm('featured_image_url', event.target.value)
-                    }
-                    placeholder="https://example.com/image.jpg"
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={uploadFeaturedImage}
+                    hidden
                   />
-                </label>
+
+                  <div className="imageUploadControls">
+                    <button
+                      type="button"
+                      className="uploadImageButton"
+                      disabled={uploadingImage}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      {uploadingImage
+                        ? 'Uploading Image...'
+                        : '↑ Upload Image from Computer'}
+                    </button>
+
+                    <span className="imageUploadHint">
+                      JPG, PNG, WEBP or other image formats · Maximum 5 MB
+                    </span>
+                  </div>
+
+                  {form.featured_image_url && (
+                    <div className="imagePreviewBox">
+                      <img
+                        src={form.featured_image_url}
+                        alt="Featured image preview"
+                      />
+
+                      <div className="imagePreviewDetails">
+                        <strong>Image ready</strong>
+                        <span>
+                          This image will be used as the article's featured image.
+                        </span>
+
+                        <button
+                          type="button"
+                          className="removeImageButton"
+                          onClick={removeFeaturedImage}
+                        >
+                          Remove Image
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <label className="imageUrlLabel">
+                    Or enter an image URL manually
+                    <input
+                      type="url"
+                      value={form.featured_image_url}
+                      onChange={(event) =>
+                        updateForm('featured_image_url', event.target.value)
+                      }
+                      placeholder="https://example.com/image.jpg"
+                    />
+                  </label>
+                </div>
 
                 <label>
                   Publication Status
@@ -533,10 +668,12 @@ export default function AdminBlogsPage() {
                 <button
                   type="submit"
                   className="blogPrimaryButton"
-                  disabled={saving}
+                  disabled={saving || uploadingImage}
                 >
                   {saving
                     ? 'Saving...'
+                    : uploadingImage
+                    ? 'Uploading Image...'
                     : form.status === 'published'
                     ? 'Publish Article'
                     : 'Save Draft'}
@@ -583,9 +720,7 @@ export default function AdminBlogsPage() {
             <div className="blogNoArticles">
               <span>📝</span>
               <h3>No articles found</h3>
-              <p>
-                Start writing your first educational article.
-              </p>
+              <p>Start writing your first educational article.</p>
               <button
                 className="blogPrimaryButton"
                 onClick={openNewArticle}
@@ -611,9 +746,7 @@ export default function AdminBlogsPage() {
                     <tr key={article.id}>
                       <td>
                         <b>{article.title}</b>
-                        <small>
-                          {article.category || 'General'}
-                        </small>
+                        <small>{article.category || 'General'}</small>
                       </td>
 
                       <td>{article.language}</td>
@@ -785,7 +918,6 @@ export default function AdminBlogsPage() {
           color: #405568;
           font-size: 12px;
           font-weight: 700;
-          letter-spacing: 0;
         }
 
         .blogFormGrid input,
@@ -818,6 +950,88 @@ export default function AdminBlogsPage() {
 
         .blogCheckLabel input {
           width: auto;
+        }
+
+        .imageUploadSection {
+          padding: 18px;
+          background: #f7fafb;
+          border: 1px solid #e2eaed;
+          border-radius: 10px;
+        }
+
+        .imageUploadControls {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 14px;
+          margin-top: 10px;
+        }
+
+        .uploadImageButton {
+          background: #168f8c;
+          color: white;
+          border: none;
+          border-radius: 7px;
+          padding: 12px 16px;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .uploadImageButton:disabled {
+          opacity: .6;
+          cursor: not-allowed;
+        }
+
+        .imageUploadHint {
+          color: #657789;
+          font-size: 11px;
+        }
+
+        .imagePreviewBox {
+          display: flex;
+          align-items: center;
+          gap: 18px;
+          margin-top: 18px;
+          padding: 12px;
+          background: white;
+          border: 1px solid #e2eaed;
+          border-radius: 9px;
+        }
+
+        .imagePreviewBox img {
+          width: 130px;
+          height: 95px;
+          object-fit: cover;
+          border-radius: 7px;
+        }
+
+        .imagePreviewDetails {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 7px;
+          color: #405568;
+          font-size: 12px;
+        }
+
+        .imagePreviewDetails strong {
+          color: #17683b;
+          font-size: 13px;
+        }
+
+        .removeImageButton {
+          color: #bd4545;
+          border: 0;
+          background: none;
+          padding: 3px 0;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .imageUrlLabel {
+          margin-top: 18px;
         }
 
         .blogFormActions {
@@ -931,6 +1145,7 @@ export default function AdminBlogsPage() {
           font-size: 11px;
           font-weight: 700;
           cursor: pointer;
+          text-decoration: none;
         }
 
         .blogActions .blogDeleteButton {
@@ -965,6 +1180,16 @@ export default function AdminBlogsPage() {
 
           .blogFilter {
             width: 100%;
+          }
+
+          .imagePreviewBox {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+
+          .imagePreviewBox img {
+            width: 100%;
+            height: 180px;
           }
         }
       `}</style>
