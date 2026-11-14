@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useState, FormEvent, ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -138,6 +138,7 @@ export default function AdminCoursesPage() {
   const [resourceExternalUrl, setResourceExternalUrl] = useState('');
   const [resourceStatus, setResourceStatus] = useState<'draft' | 'published'>('draft');
   const [resourceSaving, setResourceSaving] = useState(false);
+  const [resourceUploading, setResourceUploading] = useState(false);
   const [unitTitle, setUnitTitle] = useState('');
   const [chapterTitle, setChapterTitle] = useState('');
   const [syllabusLoading, setSyllabusLoading] = useState(false);
@@ -362,6 +363,55 @@ export default function AdminCoursesPage() {
     setNotice('Editing learning resource. Save your changes when ready.');
   }
 
+  async function uploadCourseResource(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !supabase || !selectedLessonId) return;
+
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setErrorMessage('Please choose a PDF file.');
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      setErrorMessage('The PDF must be 20 MB or smaller.');
+      return;
+    }
+
+    const activeMapping = mappings.find((item) => item.id === selectedMappingId);
+    if (!activeMapping) {
+      setErrorMessage('Select a course and board mapping before uploading a file.');
+      return;
+    }
+
+    setResourceUploading(true);
+    setErrorMessage('');
+    setNotice('');
+    const safeName = file.name
+      .normalize('NFKD')
+      .replace(/[^a-zA-Z0-9._-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '') || 'course-resource.pdf';
+    const filePath = `${activeMapping.course_id}/${crypto.randomUUID()}-${safeName}`;
+
+    const { error } = await supabase.storage
+      .from('course-resources')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: 'application/pdf',
+      });
+
+    if (error) {
+      setErrorMessage(`Could not upload PDF: ${error.message}`);
+    } else {
+      setResourceFilePath(filePath);
+      setResourceAccess('paid');
+      if (resourceType === 'external_link') setResourceType('pdf');
+      setNotice('PDF uploaded to private course storage. Access level has been set to Paid.');
+    }
+    setResourceUploading(false);
+  }
+
   async function saveResource(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!supabase || !selectedLessonId || !resourceTitle.trim()) return;
@@ -400,6 +450,10 @@ export default function AdminCoursesPage() {
       setErrorMessage(`Could not save resource: ${result.error.message}`);
     } else if (result.data) {
       if (resourceEditingId) {
+        const previousResource = resources.find((item) => item.id === resourceEditingId);
+        if (previousResource?.file_path && previousResource.file_path !== payload.file_path) {
+          await supabase.storage.from('course-resources').remove([previousResource.file_path]);
+        }
         setResources((current) => current.map((item) => item.id === resourceEditingId ? result.data as CourseResource : item));
         setNotice('Learning resource updated successfully.');
       } else {
@@ -417,6 +471,10 @@ export default function AdminCoursesPage() {
     if (error) {
       setErrorMessage(`Could not delete resource: ${error.message}`);
       return;
+    }
+    if (resource.file_path) {
+      const { error: storageError } = await supabase.storage.from('course-resources').remove([resource.file_path]);
+      if (storageError) setErrorMessage(`Resource record deleted, but its stored file could not be removed: ${storageError.message}`);
     }
     setResources((current) => current.filter((item) => item.id !== resource.id));
     if (resourceEditingId === resource.id) resetResourceForm();
@@ -1229,15 +1287,24 @@ export default function AdminCoursesPage() {
                           <input style={inputStyle} type="url" value={resourceExternalUrl} onChange={(e) => setResourceExternalUrl(e.target.value)} placeholder="https://..." required />
                         </label>
                       ) : (
-                        <label style={labelStyle}>Private storage file path
-                          <input style={inputStyle} value={resourceFilePath} onChange={(e) => setResourceFilePath(e.target.value)} placeholder="e.g. course-files/class-11/chapter-1.pdf" required />
+                        <label style={labelStyle}>Upload PDF to private storage
+                          <input style={inputStyle} type="file" accept="application/pdf,.pdf" onChange={uploadCourseResource} disabled={resourceUploading} />
+                          <span style={{ display: 'block', marginTop: 5, color: '#657789', fontSize: 11 }}>PDF only · Maximum 20 MB. Files are stored privately under this course.</span>
                         </label>
+                        {resourceFilePath && (
+                          <div style={{ padding: 10, borderRadius: 8, background: '#f3f7f8', color: '#36546b', fontSize: 11, overflowWrap: 'anywhere' }}>
+                            <strong>Uploaded file:</strong> {resourceFilePath}
+                            <button type="button" onClick={() => setResourceFilePath('')} style={{ ...smallDeleteStyle, marginLeft: 8 }}>Clear path</button>
+                          </div>
+                        )}
+                        {!resourceFilePath && <p style={{ margin: 0, color: '#946200', fontSize: 11 }}>Upload a PDF before saving this resource.</p>}
                       )}
                       <label style={labelStyle}>Access level
-                        <select style={inputStyle} value={resourceAccess} onChange={(e) => setResourceAccess(e.target.value as 'free' | 'paid')}>
-                          <option value="free">Free</option>
+                        <select style={inputStyle} value={resourceAccess} onChange={(e) => setResourceAccess(e.target.value as 'free' | 'paid')} disabled={!!resourceFilePath}>
+                          <option value="free">Free (external link only)</option>
                           <option value="paid">Paid (course purchase required)</option>
                         </select>
+                        {resourceFilePath && <span style={{ display: 'block', marginTop: 5, color: '#657789', fontSize: 11 }}>Private uploaded files are automatically restricted to paid course access.</span>}
                       </label>
                       <label style={labelStyle}>Publication status
                         <select style={inputStyle} value={resourceStatus} onChange={(e) => setResourceStatus(e.target.value as 'draft' | 'published')}>
@@ -1246,11 +1313,11 @@ export default function AdminCoursesPage() {
                         </select>
                       </label>
                       <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
-                        <button type="submit" disabled={resourceSaving} style={primaryButtonStyle}>{resourceSaving ? 'Saving...' : resourceEditingId ? 'Update resource' : 'Save resource'}</button>
+                        <button type="submit" disabled={resourceSaving || resourceUploading} style={primaryButtonStyle}>{resourceSaving ? 'Saving...' : resourceUploading ? 'Uploading...' : resourceEditingId ? 'Update resource' : 'Save resource'}</button>
                         {resourceEditingId && <button type="button" onClick={resetResourceForm} style={secondaryButtonStyle}>Cancel edit</button>}
                       </div>
-                      <p style={{ margin: 0, color: '#946200', fontSize: 11, lineHeight: 1.5 }}>
-                        File upload and secure download links are not enabled yet. Enter a private storage path only after the course file storage is configured. Do not use a public URL for paid files.
+                      <p style={{ margin: 0, color: '#657789', fontSize: 11, lineHeight: 1.5 }}>
+                        Uploaded PDFs are stored in the private course-resources bucket. Students will receive secure downloads only after the server-side download feature is added.
                       </p>
                     </form>
                     <div style={{ display: 'grid', alignContent: 'start', gap: 10 }}>
