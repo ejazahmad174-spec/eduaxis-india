@@ -20,6 +20,9 @@ type Submission = {
   category: string | null;
   status: string;
   created_at: string;
+  excerpt?: string | null;
+  content?: string;
+  featured_image_url?: string | null;
 };
 
 export default function AuthorDashboard() {
@@ -32,6 +35,7 @@ export default function AuthorDashboard() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [showEditor, setShowEditor] = useState(false);
+  const [editingSubmissionId, setEditingSubmissionId] = useState<string | null>(null);
 
   const [title, setTitle] = useState('');
   const [language, setLanguage] = useState('English');
@@ -80,7 +84,7 @@ export default function AuthorDashboard() {
     if (author.status === 'approved') {
       const { data: articles, error: articlesError } = await supabase
         .from('author_submissions')
-        .select('id, title, language, category, status, created_at')
+        .select('id, title, language, category, status, created_at, excerpt, content, featured_image_url')
         .eq('author_id', author.id)
         .order('created_at', { ascending: false });
 
@@ -171,65 +175,116 @@ export default function AuthorDashboard() {
 
   function insertWritingPrompt(prompt: string) {
     setContent((current) => {
-      const separator = current.trim() ? '\\n\\n' : '';
+      const separator = current.trim() ? '\n\n' : '';
       return `${current}${separator}${prompt}`;
     });
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function resetEditor() {
+    setEditingSubmissionId(null);
+    setTitle('');
+    setLanguage('English');
+    setCategory('');
+    setExcerpt('');
+    setContent('');
+    setImageUrl('');
+    setImagePath('');
+  }
+
+  function editDraft(article: Submission) {
+    setEditingSubmissionId(article.id);
+    setTitle(article.title || '');
+    setLanguage(article.language || 'English');
+    setCategory(article.category || '');
+    setExcerpt(article.excerpt || '');
+    setContent(article.content || '');
+    setImageUrl(article.featured_image_url || '');
+    setImagePath('');
+    setShowEditor(true);
+    setError('');
+    setMessage('You are editing a saved draft.');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function saveSubmission(mode: 'draft' | 'pending') {
     setError('');
     setMessage('');
 
     if (!supabase || !profile) {
-      setError('Unable to submit your article right now.');
+      setError('Unable to save your article right now.');
       return;
     }
 
     if (profile.status !== 'approved') {
-      setError('Your author account must be approved before submitting articles.');
+      setError('Your author account must be approved before saving articles.');
       return;
     }
 
-    if (content.trim().length < 100) {
-      setError('Please write an article containing at least 100 characters.');
+    if (!title.trim()) {
+      setError('Please enter an article title before saving.');
+      return;
+    }
+
+    if (mode === 'pending' && content.trim().length < 100) {
+      setError('Please write an article containing at least 100 characters before submitting.');
       return;
     }
 
     setSaving(true);
 
+    const articleData = {
+      author_id: profile.id,
+      title: title.trim(),
+      language,
+      category: category.trim() || null,
+      excerpt: excerpt.trim() || null,
+      content: content.trim(),
+      featured_image_url: imageUrl.trim() || null,
+      status: mode,
+      updated_at: new Date().toISOString(),
+    };
+
     try {
-      const { error: submitError } = await supabase
-        .from('author_submissions')
-        .insert({
-          author_id: profile.id,
-          title: title.trim(),
-          language,
-          category: category.trim() || null,
-          excerpt: excerpt.trim() || null,
-          content: content.trim(),
-          featured_image_url: imageUrl.trim() || null,
-          status: 'pending',
-        });
+      let saveError;
 
-      if (submitError) throw submitError;
+      if (editingSubmissionId) {
+        const result = await supabase
+          .from('author_submissions')
+          .update(articleData)
+          .eq('id', editingSubmissionId)
+          .eq('author_id', profile.id);
+        saveError = result.error;
+      } else {
+        const result = await supabase
+          .from('author_submissions')
+          .insert(articleData);
+        saveError = result.error;
+      }
 
-      setTitle('');
-      setLanguage('English');
-      setCategory('');
-      setExcerpt('');
-      setContent('');
-      setImageUrl('');
-      setImagePath('');
+      if (saveError) throw saveError;
+
+      resetEditor();
       setShowEditor(false);
-      setMessage('Your article has been submitted successfully for admin review.');
-
+      setMessage(
+        mode === 'draft'
+          ? 'Your article draft has been saved. You can edit it anytime from My Articles.'
+          : 'Your article has been submitted successfully for admin review.'
+      );
       await loadDashboard();
     } catch (err: any) {
-      setError(err.message || 'Article submission failed. Please try again.');
+      setError(err.message || 'Your article could not be saved. Please try again.');
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await saveSubmission('pending');
+  }
+
+  async function handleSaveDraft() {
+    await saveSubmission('draft');
   }
 
   async function handleLogout() {
@@ -268,6 +323,10 @@ export default function AuthorDashboard() {
 
   const rejectedCount = submissions.filter(
     (item) => item.status === 'rejected'
+  ).length;
+
+  const draftCount = submissions.filter(
+    (item) => item.status === 'draft'
   ).length;
 
   return (
@@ -317,6 +376,10 @@ export default function AuthorDashboard() {
             <small>Rejected</small>
             <strong>{rejectedCount}</strong>
           </div>
+          <div className="statCard">
+            <small>Saved Drafts</small>
+            <strong>{draftCount}</strong>
+          </div>
         </section>
 
         <section className="articleSection">
@@ -329,7 +392,13 @@ export default function AuthorDashboard() {
             <button
               className="primaryButton"
               onClick={() => {
-                setShowEditor(!showEditor);
+                if (showEditor) {
+                  resetEditor();
+                  setShowEditor(false);
+                } else {
+                  resetEditor();
+                  setShowEditor(true);
+                }
                 setError('');
                 setMessage('');
               }}
@@ -340,7 +409,7 @@ export default function AuthorDashboard() {
 
           {showEditor && (
             <form className="editor" onSubmit={handleSubmit}>
-              <h3>Submit a New Article</h3>
+              <h3>{editingSubmissionId ? 'Edit Saved Draft' : 'Write an Article'}</h3>
 
               <label>Article Title *</label>
               <input
@@ -397,10 +466,10 @@ export default function AuthorDashboard() {
 
               <label>Full Article *</label>
               <div className="writingToolbar">
-                <button type="button" onClick={() => insertWritingPrompt('\\nHEADING: ')}>+ Heading</button>
-                <button type="button" onClick={() => insertWritingPrompt('\\n• ')}>• Bullet</button>
-                <button type="button" onClick={() => insertWritingPrompt('\\n1. ')}>1. Numbered point</button>
-                <button type="button" onClick={() => insertWritingPrompt('\\n\\n---\\n\\n')}>Section divider</button>
+                <button type="button" onClick={() => insertWritingPrompt('\nHEADING: ')}>+ Heading</button>
+                <button type="button" onClick={() => insertWritingPrompt('\n• ')}>• Bullet</button>
+                <button type="button" onClick={() => insertWritingPrompt('\n1. ')}>1. Numbered point</button>
+                <button type="button" onClick={() => insertWritingPrompt('\n\n---\n\n')}>Section divider</button>
               </div>
               <textarea
                 value={content}
@@ -411,17 +480,27 @@ export default function AuthorDashboard() {
               />
 
               <p className="editorNote">
-                Your article will be saved as a pending submission.
-                It will not appear publicly until the administration approves it.
+                Save your work as a draft and return later, or submit it for admin review.
+                Submitted articles will not appear publicly until the administration approves them.
               </p>
 
-              <button
-                type="submit"
-                className="primaryButton submitButton"
-                disabled={saving}
-              >
-                {saving ? 'Submitting...' : 'Submit Article for Review →'}
-              </button>
+              <div className="editorActions">
+                <button
+                  type="button"
+                  className="secondaryButton"
+                  onClick={handleSaveDraft}
+                  disabled={saving || uploadingImage}
+                >
+                  {saving ? 'Saving...' : 'Save Draft'}
+                </button>
+                <button
+                  type="submit"
+                  className="primaryButton submitButton"
+                  disabled={saving || uploadingImage}
+                >
+                  {saving ? 'Saving...' : 'Submit Article for Review →'}
+                </button>
+              </div>
             </form>
           )}
 
@@ -446,9 +525,16 @@ export default function AuthorDashboard() {
                     </small>
                   </div>
 
-                  <span className={`status ${article.status}`}>
-                    {article.status}
-                  </span>
+                  <div className="submissionActions">
+                    {article.status === 'draft' && (
+                      <button type="button" className="editDraftButton" onClick={() => editDraft(article)}>
+                        Edit Draft
+                      </button>
+                    )}
+                    <span className={`status ${article.status}`}>
+                      {article.status}
+                    </span>
+                  </div>
                 </article>
               ))}
             </div>
@@ -569,7 +655,7 @@ export default function AuthorDashboard() {
 
         .stats {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
+          grid-template-columns: repeat(5, 1fr);
           gap: 15px;
           margin-bottom: 35px;
         }
@@ -747,6 +833,30 @@ export default function AuthorDashboard() {
           cursor: pointer;
         }
 
+        .editorActions {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 10px;
+          margin-top: 5px;
+        }
+
+        .secondaryButton {
+          border: 1px solid #18a5a0;
+          border-radius: 8px;
+          background: white;
+          color: #147f7b;
+          padding: 12px 17px;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .secondaryButton:disabled {
+          opacity: .6;
+          cursor: not-allowed;
+        }
+
         .editorNote {
           background: #edf6f5;
           color: #456579;
@@ -820,6 +930,29 @@ export default function AuthorDashboard() {
           white-space: nowrap;
         }
 
+        .submissionActions {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          flex-wrap: wrap;
+        }
+
+        .editDraftButton {
+          border: 1px solid #18a5a0;
+          background: white;
+          color: #147f7b;
+          border-radius: 7px;
+          padding: 7px 10px;
+          font-size: 11px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .status.draft {
+          background: #eef2f6;
+          color: #526577;
+        }
+
         .status.pending {
           background: #fff5df;
           color: #9a6800;
@@ -876,6 +1009,15 @@ export default function AuthorDashboard() {
 
           .stats {
             grid-template-columns: repeat(2, 1fr);
+          }
+
+          .editorActions {
+            align-items: stretch;
+            flex-direction: column;
+          }
+
+          .editorActions button {
+            width: 100%;
           }
 
           .welcome {
