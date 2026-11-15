@@ -91,7 +91,7 @@ type RazorpayCheckoutOptions = {
 
 declare global {
   interface Window {
-    Razorpay?: new (options: RazorpayCheckoutOptions) => {
+    Razorpay: new (options: RazorpayCheckoutOptions) => {
       open: () => void;
       on: (event: string, callback: (response: any) => void) => void;
     };
