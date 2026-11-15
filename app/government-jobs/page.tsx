@@ -258,7 +258,18 @@ export default function GovernmentJobsPublicPage() {
                   <div style={{ color: '#0b918d', fontSize: 12, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase' }}>
                     {job.job_category || 'Government Jobs'} {job.state ? ` · ${job.state}` : ''}
                   </div>
-                  <h3 style={{ fontSize: 22, lineHeight: 1.3, margin: '8px 0 5px' }}>{job.title}</h3>
+                  <Link
+  href={`/government-jobs/${job.id}`}
+  style={{
+    color: '#102d49',
+    textDecoration: 'none',
+    fontSize: 22,
+    fontWeight: 800,
+    lineHeight: 1.3,
+  }}
+>
+  {job.title}
+</Link>
                   <div style={{ color: '#647b91', fontSize: 14 }}>
                     {job.organization || 'Recruiting organisation not specified'}
                     {job.post_name ? ` · ${job.post_name}` : ''}
