@@ -252,6 +252,119 @@ export default function Home() {
         .ea-footer a { display: block; color: #c8d5dc; font-size: 12px; margin: 10px 0; text-decoration: none; }
         .ea-footer a:hover { color: #fff; }
         .ea-footer-bottom { border-top: 1px solid #ffffff20; margin-top: 28px; padding-top: 18px; color: #9fb0bb; font-size: 11px; }
+        .ea-contact-section {
+          background: #f4f8fa;
+          padding: 76px 0;
+        }
+        .ea-contact-grid {
+          display: grid;
+          grid-template-columns: .9fr 1.1fr;
+          gap: 42px;
+          align-items: center;
+        }
+        .ea-contact-copy h2 {
+          color: var(--ea-navy);
+          font: 800 clamp(28px, 3vw, 36px)/1.2 Manrope, sans-serif;
+          letter-spacing: -1px;
+          margin: 12px 0;
+        }
+        .ea-contact-copy > p {
+          color: var(--ea-muted);
+          font-size: 14px;
+          line-height: 1.8;
+          max-width: 470px;
+        }
+        .ea-contact-email {
+          margin-top: 26px;
+          padding: 19px;
+          background: #fff;
+          border: 1px solid var(--ea-line);
+          border-radius: 13px;
+        }
+        .ea-contact-email span {
+          display: block;
+          color: var(--ea-muted);
+          font-size: 11px;
+          margin-bottom: 7px;
+        }
+        .ea-contact-email a {
+          color: var(--ea-teal);
+          font-size: 15px;
+          font-weight: 800;
+          text-decoration: none;
+          overflow-wrap: anywhere;
+        }
+        .ea-feedback-form {
+          background: #fff;
+          border: 1px solid var(--ea-line);
+          border-radius: 18px;
+          padding: 28px;
+          box-shadow: 0 15px 38px #183f550b;
+        }
+        .ea-feedback-form h3 {
+          color: var(--ea-navy);
+          font: 800 20px Manrope, sans-serif;
+          margin: 0 0 20px;
+        }
+        .ea-feedback-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 14px;
+        }
+        .ea-feedback-field {
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+          margin-bottom: 15px;
+        }
+        .ea-feedback-field label {
+          color: #344b60;
+          font-size: 12px;
+          font-weight: 700;
+        }
+        .ea-feedback-field input,
+        .ea-feedback-field select,
+        .ea-feedback-field textarea {
+          width: 100%;
+          box-sizing: border-box;
+          padding: 12px 13px;
+          border: 1px solid #d8e2e8;
+          border-radius: 8px;
+          background: #fbfdfe;
+          color: var(--ea-ink);
+          font: 13px "DM Sans", sans-serif;
+          outline: none;
+        }
+        .ea-feedback-field input:focus,
+        .ea-feedback-field select:focus,
+        .ea-feedback-field textarea:focus {
+          border-color: var(--ea-teal);
+          box-shadow: 0 0 0 3px #129b9818;
+        }
+        .ea-feedback-field textarea {
+          resize: vertical;
+          min-height: 125px;
+        }
+        .ea-feedback-submit {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          background: var(--ea-teal);
+          color: #fff;
+          border: 0;
+          border-radius: 8px;
+          padding: 13px 20px;
+          font-size: 13px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+        .ea-feedback-submit:hover { background: #087d7a; }
+        .ea-feedback-note {
+          color: var(--ea-muted);
+          font-size: 11px;
+          line-height: 1.6;
+          margin: 12px 0 0;
+        }
         @media(max-width:950px) {
           .ea-nav-links { gap: 10px; }
           .ea-nav-links a { font-size: 11px; }
@@ -285,6 +398,8 @@ export default function Home() {
           .ea-jobs-banner { flex-direction: column; align-items: flex-start; }
           .ea-pyq-panel { grid-template-columns: 1fr; padding: 20px; }
           .ea-pyq-list { grid-template-columns: 1fr 1fr; }
+          .ea-contact-grid { grid-template-columns: 1fr; gap: 28px; }
+          .ea-feedback-form { padding: 22px; }
           .ea-footer-grid { grid-template-columns: 1fr 1fr; gap: 20px; }
         }
         @media(max-width:390px) {
@@ -560,6 +675,105 @@ export default function Home() {
               </a>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="ea-contact-section" id="contact">
+        <div className="ea-wrap ea-contact-grid">
+          <div className="ea-contact-copy">
+            <div className="ea-eyebrow">We are here to help</div>
+            <h2>We'd Love to Hear From You</h2>
+            <p>
+              Have a question, suggestion or feedback? Contact the EduAxis India
+              team. Your thoughts help us make learning better.
+            </p>
+            <div className="ea-contact-email">
+              <span>Official Contact Email</span>
+              <a href="mailto:eduaxisindiateam@gmail.com">
+                eduaxisindiateam@gmail.com
+              </a>
+            </div>
+          </div>
+
+          <form
+            className="ea-feedback-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const form = event.currentTarget;
+              const data = new FormData(form);
+              const name = String(data.get("name") || "");
+              const email = String(data.get("email") || "");
+              const subject = String(data.get("subject") || "General Enquiry");
+              const message = String(data.get("message") || "");
+
+              const emailSubject = encodeURIComponent(`EduAxis India: ${subject}`);
+              const emailBody = encodeURIComponent(
+                `Name: ${name}\\nEmail: ${email}\\nSubject: ${subject}\\n\\nMessage:\\n${message}`
+              );
+
+              window.location.href =
+                `mailto:eduaxisindiateam@gmail.com?subject=${emailSubject}&body=${emailBody}`;
+            }}
+          >
+            <h3>Send Us a Message</h3>
+
+            <div className="ea-feedback-row">
+              <div className="ea-feedback-field">
+                <label htmlFor="ea-feedback-name">Your Name</label>
+                <input
+                  id="ea-feedback-name"
+                  name="name"
+                  type="text"
+                  placeholder="Enter your name"
+                  required
+                />
+              </div>
+              <div className="ea-feedback-field">
+                <label htmlFor="ea-feedback-email">Email Address</label>
+                <input
+                  id="ea-feedback-email"
+                  name="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="ea-feedback-field">
+              <label htmlFor="ea-feedback-subject">Subject</label>
+              <select id="ea-feedback-subject" name="subject" required defaultValue="">
+                <option value="" disabled>Select a subject</option>
+                <option value="General Enquiry">General Enquiry</option>
+                <option value="Online Courses">Online Courses</option>
+                <option value="Mock Tests">Mock Tests</option>
+                <option value="Study Materials">Study Materials</option>
+                <option value="Government Jobs">Government Jobs</option>
+                <option value="Website Feedback">Website Feedback</option>
+                <option value="Technical Support">Technical Support</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div className="ea-feedback-field">
+              <label htmlFor="ea-feedback-message">Message</label>
+              <textarea
+                id="ea-feedback-message"
+                name="message"
+                rows={5}
+                placeholder="Write your message or feedback..."
+                required
+              />
+            </div>
+
+            <button type="submit" className="ea-feedback-submit">
+              Submit Feedback →
+            </button>
+            <p className="ea-feedback-note">
+              Submitting opens your email application with the message addressed
+              to EduAxis India.
+            </p>
+          </form>
         </div>
       </section>
 
