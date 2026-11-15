@@ -89,13 +89,22 @@ type RazorpayCheckoutOptions = {
   };
 };
 
-declare global {
-  interface Window {
-    Razorpay: new (options: RazorpayCheckoutOptions) => {
-      open: () => void;
-      on: (event: string, callback: (response: any) => void) => void;
-    };
-  }
+type RazorpayInstance = {
+  open: () => void;
+  on: (event: string, callback: (response: any) => void) => void;
+};
+
+type RazorpayConstructor = new (
+  options: RazorpayCheckoutOptions
+) => RazorpayInstance;
+
+// Local type only. No global Window declaration.
+function getRazorpayConstructor(): RazorpayConstructor | undefined {
+  return (
+    window as unknown as {
+      Razorpay?: RazorpayConstructor;
+    }
+  ).Razorpay;
 }
 
 export default function CourseDetailPage() {
@@ -139,7 +148,7 @@ export default function CourseDetailPage() {
       setUserId(authData.user?.id || null);
 
       if (authData.user?.id) {
-        const { data: enrollmentData, error: enrollmentCheckError } =
+        const { data: enrollmentData, error: enrollmentError } =
           await supabase
             .from('course_enrollments')
             .select('id, status')
@@ -148,8 +157,7 @@ export default function CourseDetailPage() {
             .eq('status', 'active')
             .maybeSingle();
 
-        if (enrollmentCheckError) throw enrollmentCheckError;
-
+        if (enrollmentError) throw enrollmentError;
         setIsEnrolled(Boolean(enrollmentData));
       } else {
         setIsEnrolled(false);
@@ -180,10 +188,10 @@ export default function CourseDetailPage() {
 
       if (mappingError) throw mappingError;
 
-      const activeMappings = (mappingData || []) as Mapping[];
-      setMappings(activeMappings);
+      const mappingList = (mappingData || []) as Mapping[];
+      setMappings(mappingList);
 
-      if (activeMappings.length === 0) {
+      if (mappingList.length === 0) {
         setUnits([]);
         setChapters([]);
         setLessons([]);
@@ -192,12 +200,10 @@ export default function CourseDetailPage() {
         return;
       }
 
-      const mappingIds = activeMappings.map((mapping) => mapping.id);
-
       const { data: unitData, error: unitError } = await supabase
         .from('course_units')
         .select('id, board_mapping_id, title, description, sort_order')
-        .in('board_mapping_id', mappingIds)
+        .in('board_mapping_id', mappingList.map((item) => item.id))
         .order('sort_order', { ascending: true });
 
       if (unitError) throw unitError;
@@ -213,12 +219,10 @@ export default function CourseDetailPage() {
         return;
       }
 
-      const unitIds = unitList.map((unit) => unit.id);
-
       const { data: chapterData, error: chapterError } = await supabase
         .from('course_chapters')
         .select('id, unit_id, title, description, sort_order')
-        .in('unit_id', unitIds)
+        .in('unit_id', unitList.map((item) => item.id))
         .order('sort_order', { ascending: true });
 
       if (chapterError) throw chapterError;
@@ -233,14 +237,12 @@ export default function CourseDetailPage() {
         return;
       }
 
-      const chapterIds = chapterList.map((chapter) => chapter.id);
-
       const { data: lessonData, error: lessonError } = await supabase
         .from('course_lessons')
         .select(
           'id, chapter_id, title, description, lesson_type, video_url, content, duration_minutes, is_free_preview, status, sort_order'
         )
-        .in('chapter_id', chapterIds)
+        .in('chapter_id', chapterList.map((item) => item.id))
         .eq('status', 'published')
         .order('sort_order', { ascending: true });
 
@@ -255,14 +257,12 @@ export default function CourseDetailPage() {
         return;
       }
 
-      const lessonIds = lessonList.map((lesson) => lesson.id);
-
       const { data: resourceData, error: resourceError } = await supabase
         .from('course_resources')
         .select(
           'id, lesson_id, title, description, resource_type, access_level, file_path, external_url, status'
         )
-        .in('lesson_id', lessonIds)
+        .in('lesson_id', lessonList.map((item) => item.id))
         .eq('status', 'published');
 
       if (resourceError) throw resourceError;
@@ -273,6 +273,50 @@ export default function CourseDetailPage() {
       console.error('Course detail loading error:', err);
       setError('Unable to load course content. Please try again.');
       setLoading(false);
+    }
+  }
+
+  async function loadRazorpayScript() {
+    if (getRazorpayConstructor()) return;
+
+    const scriptUrl = 'https://checkout.razorpay.com/v1/checkout.js';
+
+    const existingScript =
+      document.querySelector<HTMLScriptElement>(
+        `script[src="${scriptUrl}"]`
+      );
+
+    if (existingScript) {
+      await new Promise<void>((resolve, reject) => {
+        if (getRazorpayConstructor()) {
+          resolve();
+          return;
+        }
+
+        existingScript.addEventListener('load', () => resolve(), {
+          once: true,
+        });
+
+        existingScript.addEventListener(
+          'error',
+          () => reject(new Error('Unable to load Razorpay Checkout.')),
+          { once: true }
+        );
+      });
+    } else {
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = scriptUrl;
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () =>
+          reject(new Error('Unable to load Razorpay Checkout.'));
+        document.body.appendChild(script);
+      });
+    }
+
+    if (!getRazorpayConstructor()) {
+      throw new Error('Razorpay Checkout could not be initialized.');
     }
   }
 
@@ -305,38 +349,11 @@ export default function CourseDetailPage() {
         return;
       }
 
-      // Load Razorpay Checkout.
-      if (!window.Razorpay) {
-        const existingScript = document.querySelector<HTMLScriptElement>(
-          'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
-        );
+      await loadRazorpayScript();
 
-        if (!existingScript) {
-          const script = document.createElement('script');
-          script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-          script.async = true;
-          document.body.appendChild(script);
+      const RazorpayCheckout = getRazorpayConstructor();
 
-          await new Promise<void>((resolve, reject) => {
-            script.onload = () => resolve();
-            script.onerror = () =>
-              reject(new Error('Unable to load Razorpay Checkout.'));
-          });
-        } else {
-          await new Promise<void>((resolve, reject) => {
-            existingScript.addEventListener('load', () => resolve(), {
-              once: true,
-            });
-            existingScript.addEventListener(
-              'error',
-              () => reject(new Error('Unable to load Razorpay Checkout.')),
-              { once: true }
-            );
-          });
-        }
-      }
-
-      if (!window.Razorpay) {
+      if (!RazorpayCheckout) {
         throw new Error('Razorpay Checkout could not be initialized.');
       }
 
@@ -365,7 +382,16 @@ export default function CourseDetailPage() {
         );
       }
 
-      const checkout = new window.Razorpay({
+      if (
+        !orderData.orderId ||
+        !orderData.keyId ||
+        !orderData.amount ||
+        !orderData.currency
+      ) {
+        throw new Error('Invalid payment order response.');
+      }
+
+      const checkout = new RazorpayCheckout({
         key: orderData.keyId,
         amount: orderData.amount,
         currency: orderData.currency,
@@ -419,7 +445,8 @@ export default function CourseDetailPage() {
 
       checkout.on('payment.failed', (failure) => {
         setMessage(
-          failure?.error?.description || 'Payment failed. Please try again.'
+          failure?.error?.description ||
+            'Payment failed. Please try again.'
         );
         setPaymentProcessing(false);
       });
@@ -937,7 +964,7 @@ export default function CourseDetailPage() {
             <div className="studentCourseHeroInner">
               <div>
                 <span className="studentSmallTag">
-                  {course.course_type.toUpperCase()}
+                  {(course.course_type || 'academic').toUpperCase()}
                 </span>
 
                 <h1>{course.title}</h1>
@@ -993,6 +1020,7 @@ export default function CourseDetailPage() {
               )}
               {course.subject && <span>{course.subject}</span>}
               {course.category && <span>{course.category}</span>}
+
               {mappings.map((mapping) => (
                 <span key={mapping.id}>
                   {mapping.board} · {mapping.academic_session}
@@ -1046,9 +1074,8 @@ export default function CourseDetailPage() {
                               <p>No chapters added yet.</p>
                             ) : (
                               unitChapters.map((chapter, chapterIndex) => {
-                                const chapterLessons = getChapterLessons(
-                                  chapter.id
-                                );
+                                const chapterLessons =
+                                  getChapterLessons(chapter.id);
 
                                 const isChapterOpen =
                                   expandedChapters.includes(chapter.id);
@@ -1079,9 +1106,7 @@ export default function CourseDetailPage() {
                                         )}
 
                                         {chapterLessons.length === 0 ? (
-                                          <p>
-                                            Lessons are being prepared.
-                                          </p>
+                                          <p>Lessons are being prepared.</p>
                                         ) : (
                                           chapterLessons.map((lesson) => {
                                             const lessonResources =
@@ -1170,22 +1195,9 @@ export default function CourseDetailPage() {
                                                         </p>
                                                       )}
 
-                                                    {lesson.lesson_type === 'text' && (
-                                                      <div>
-                                                        {lesson.content ||
-                                                          'Lesson content will be available soon.'}
-                                                      </div>
+                                                    {lesson.content && (
+                                                      <div>{lesson.content}</div>
                                                     )}
-
-                                                    {lesson.lesson_type === 'video' &&
-                                                      lesson.content && (
-                                                        <p>{lesson.content}</p>
-                                                      )}
-
-                                                    {lesson.lesson_type === 'live' &&
-                                                      lesson.content && (
-                                                        <p>{lesson.content}</p>
-                                                      )}
 
                                                     {lessonResources.length > 0 && (
                                                       <div>
@@ -1201,10 +1213,12 @@ export default function CourseDetailPage() {
                                                                 <div className="studentResourceTitle">
                                                                   {resource.title}
                                                                 </div>
+
                                                                 <div className="studentLessonMeta">
                                                                   <span className="studentSmallTag">
                                                                     {resource.resource_type.toUpperCase()}
                                                                   </span>
+
                                                                   <span
                                                                     className={`studentSmallTag ${
                                                                       resource.access_level === 'free'
