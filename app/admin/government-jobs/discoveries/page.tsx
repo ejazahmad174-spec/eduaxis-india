@@ -122,7 +122,9 @@ export default function DiscoveredGovernmentJobsPage() {
       client
         .from('government_job_discoveries')
         .select(
-          id,source_id,discovered_title,discovered_url,notice_category,status,discovered_at,processed_at,error_message,pdf_url,extracted_details,extraction_status,extraction_error,extracted_at
+          .from('government_job_discoveries')
+.select(
+  'id,source_id,discovered_title,discovered_url,notice_category,status,discovered_at,processed_at,error_message,pdf_url,extracted_details,extraction_status,extraction_error,extracted_at'
         )
         .order('discovered_at', { ascending: false }),
 
