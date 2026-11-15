@@ -69,6 +69,35 @@ type Resource = {
   status: string;
 };
 
+type RazorpayCheckoutOptions = {
+  key: string;
+  amount: number;
+  currency: string;
+  name: string;
+  description: string;
+  order_id: string;
+  handler: (response: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }) => void | Promise<void>;
+  modal?: {
+    ondismiss?: () => void;
+  };
+  theme?: {
+    color?: string;
+  };
+};
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: RazorpayCheckoutOptions) => {
+      open: () => void;
+      on: (event: string, callback: (response: any) => void) => void;
+    };
+  }
+}
+
 export default function CourseDetailPage() {
   const params = useParams<{ id: string }>();
   const courseId = params.id;
@@ -87,6 +116,8 @@ export default function CourseDetailPage() {
   const [expandedLessons, setExpandedLessons] = useState<string[]>([]);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const [isEnrolled, setIsEnrolled] = useState(false);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
 
   useEffect(() => {
     loadCourse();
@@ -106,6 +137,23 @@ export default function CourseDetailPage() {
     try {
       const { data: authData } = await supabase.auth.getUser();
       setUserId(authData.user?.id || null);
+
+      if (authData.user?.id) {
+        const { data: enrollmentData, error: enrollmentCheckError } =
+          await supabase
+            .from('course_enrollments')
+            .select('id, status')
+            .eq('user_id', authData.user.id)
+            .eq('course_id', courseId)
+            .eq('status', 'active')
+            .maybeSingle();
+
+        if (enrollmentCheckError) throw enrollmentCheckError;
+
+        setIsEnrolled(Boolean(enrollmentData));
+      } else {
+        setIsEnrolled(false);
+      }
 
       const { data: courseData, error: courseError } = await supabase
         .from('courses')
@@ -220,12 +268,171 @@ export default function CourseDetailPage() {
       if (resourceError) throw resourceError;
 
       setResources((resourceData || []) as Resource[]);
-
       setLoading(false);
     } catch (err) {
       console.error('Course detail loading error:', err);
       setError('Unable to load course content. Please try again.');
       setLoading(false);
+    }
+  }
+
+  async function purchaseCourse() {
+    if (!supabase || !course) return;
+
+    if (!userId) {
+      window.location.href =
+        `/student/login?next=${encodeURIComponent(`/courses/${courseId}`)}`;
+      return;
+    }
+
+    if (isEnrolled) {
+      setMessage('You are already enrolled in this course.');
+      return;
+    }
+
+    setPaymentProcessing(true);
+    setMessage('');
+
+    try {
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
+
+      const accessToken = sessionData.session?.access_token;
+
+      if (sessionError || !accessToken) {
+        window.location.href =
+          `/student/login?next=${encodeURIComponent(`/courses/${courseId}`)}`;
+        return;
+      }
+
+      // Load Razorpay Checkout.
+      if (!window.Razorpay) {
+        const existingScript = document.querySelector<HTMLScriptElement>(
+          'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+        );
+
+        if (!existingScript) {
+          const script = document.createElement('script');
+          script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+          script.async = true;
+          document.body.appendChild(script);
+
+          await new Promise<void>((resolve, reject) => {
+            script.onload = () => resolve();
+            script.onerror = () =>
+              reject(new Error('Unable to load Razorpay Checkout.'));
+          });
+        } else {
+          await new Promise<void>((resolve, reject) => {
+            existingScript.addEventListener('load', () => resolve(), {
+              once: true,
+            });
+            existingScript.addEventListener(
+              'error',
+              () => reject(new Error('Unable to load Razorpay Checkout.')),
+              { once: true }
+            );
+          });
+        }
+      }
+
+      if (!window.Razorpay) {
+        throw new Error('Razorpay Checkout could not be initialized.');
+      }
+
+      // Create payment order on the server.
+      const orderResponse = await fetch('/api/courses/create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ courseId }),
+        cache: 'no-store',
+      });
+
+      const orderData = await orderResponse.json();
+
+      if (!orderResponse.ok) {
+        if (orderResponse.status === 401) {
+          window.location.href =
+            `/student/login?next=${encodeURIComponent(`/courses/${courseId}`)}`;
+          return;
+        }
+
+        throw new Error(
+          orderData.error || 'Could not start course payment.'
+        );
+      }
+
+      const checkout = new window.Razorpay({
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: 'EduAxis India',
+        description: orderData.courseTitle || course.title,
+        order_id: orderData.orderId,
+        theme: { color: '#102b46' },
+
+        handler: async (paymentResponse) => {
+          try {
+            const verifyResponse = await fetch('/api/courses/verify', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify(paymentResponse),
+              cache: 'no-store',
+            });
+
+            const verifyData = await verifyResponse.json();
+
+            if (!verifyResponse.ok || !verifyData.success) {
+              throw new Error(
+                verifyData.error ||
+                  'Payment was received but enrolment could not be confirmed. Please contact support.'
+              );
+            }
+
+            setIsEnrolled(true);
+            setMessage(
+              'Payment successful! You are now enrolled in this course.'
+            );
+
+            await loadCourse();
+          } catch (verificationError) {
+            setMessage(
+              verificationError instanceof Error
+                ? verificationError.message
+                : 'Payment verification could not be completed. Please contact support.'
+            );
+          } finally {
+            setPaymentProcessing(false);
+          }
+        },
+
+        modal: {
+          ondismiss: () => setPaymentProcessing(false),
+        },
+      });
+
+      checkout.on('payment.failed', (failure) => {
+        setMessage(
+          failure?.error?.description || 'Payment failed. Please try again.'
+        );
+        setPaymentProcessing(false);
+      });
+
+      checkout.open();
+    } catch (purchaseError) {
+      setMessage(
+        purchaseError instanceof Error
+          ? purchaseError.message
+          : 'Unable to start course payment. Please try again.'
+      );
+
+      setPaymentProcessing(false);
     }
   }
 
@@ -315,7 +522,7 @@ export default function CourseDetailPage() {
   function formatPrice() {
     if (!course) return '';
 
-    if (course.is_free || Number(course.price || 0) === 0) {
+    if (Number(course.price || 0) <= 0) {
       return 'FREE';
     }
 
@@ -411,6 +618,35 @@ export default function CourseDetailPage() {
 
         .studentCoursePriceBox strong {
           font-size: 25px;
+        }
+
+        .studentBuyButton {
+          display: inline-block;
+          margin-top: 14px;
+          border: 0;
+          border-radius: 7px;
+          background: #18a5a0;
+          color: #ffffff;
+          padding: 13px 22px;
+          font-size: 14px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .studentBuyButton:disabled {
+          opacity: 0.65;
+          cursor: wait;
+        }
+
+        .studentEnrolledTag {
+          display: inline-block;
+          margin-top: 14px;
+          padding: 11px 16px;
+          border-radius: 7px;
+          background: #e3f6ee;
+          color: #16734b;
+          font-size: 13px;
+          font-weight: 700;
         }
 
         .studentCourseContainer {
@@ -717,6 +953,27 @@ export default function CourseDetailPage() {
                   </div>
                   <strong>{formatPrice()}</strong>
                 </div>
+
+                {Number(course.price || 0) > 0 ? (
+                  isEnrolled ? (
+                    <div className="studentEnrolledTag">
+                      ✓ Already Enrolled
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="studentBuyButton"
+                      onClick={purchaseCourse}
+                      disabled={paymentProcessing}
+                    >
+                      {paymentProcessing
+                        ? 'Preparing Payment...'
+                        : `Buy Now · ₹${Number(course.price).toLocaleString('en-IN')}`}
+                    </button>
+                  )
+                ) : (
+                  <div className="studentEnrolledTag">Free Course</div>
+                )}
               </div>
 
               {course.thumbnail_url && (
@@ -1008,7 +1265,9 @@ export default function CourseDetailPage() {
                   Log in to access your enrolled courses and learning
                   resources.
                 </p>
-                <Link href={`/student/login?next=${encodeURIComponent(`/courses/${courseId}`)}`}>
+                <Link
+                  href={`/student/login?next=${encodeURIComponent(`/courses/${courseId}`)}`}
+                >
                   Student Login
                 </Link>
               </div>
