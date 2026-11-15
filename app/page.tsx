@@ -1,4 +1,5 @@
 
+"use client";
 const examCategories = [
   { name: "BPSC TRE", detail: "Bihar teacher recruitment", icon: "🎓" },
   { name: "CTET", detail: "Central teacher eligibility", icon: "📚" },
