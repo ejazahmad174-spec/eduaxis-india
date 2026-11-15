@@ -72,10 +72,10 @@ export async function POST(request: Request) {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // Fetch published course and server-side price.
+    // Fetch published course and authoritative price.
     const { data: course, error: courseError } = await adminClient
       .from("courses")
-      .select("id, title, price, is_free, status")
+      .select("id, title, price, status")
       .eq("id", courseId)
       .single();
 
@@ -86,13 +86,10 @@ export async function POST(request: Request) {
       );
     }
 
+    // Course price is authoritative. Do not rely on is_free.
     const price = Number(course.price);
 
-    if (
-      course.is_free === true ||
-      !Number.isFinite(price) ||
-      price <= 0
-    ) {
+    if (!Number.isFinite(price) || price <= 0) {
       return NextResponse.json(
         { error: "This course is free or has no valid payment price." },
         { status: 400 }
@@ -119,6 +116,7 @@ export async function POST(request: Request) {
 
     if (enrollmentError) {
       console.error("Enrolment lookup failed:", enrollmentError);
+
       return NextResponse.json(
         { error: "Could not check your course enrolment." },
         { status: 500 }
@@ -147,6 +145,7 @@ export async function POST(request: Request) {
 
     if (pendingError) {
       console.error("Pending course order lookup failed:", pendingError);
+
       return NextResponse.json(
         { error: "Could not check existing payment orders." },
         { status: 500 }
@@ -164,7 +163,10 @@ export async function POST(request: Request) {
         pendingRecord.currency !== "INR"
       ) {
         return NextResponse.json(
-          { error: "An earlier payment order has a different price. Please contact support." },
+          {
+            error:
+              "An earlier payment order has a different price. Please contact support.",
+          },
           { status: 409 }
         );
       }
@@ -188,11 +190,18 @@ export async function POST(request: Request) {
         }
 
         return NextResponse.json(
-          { error: "An earlier payment order is no longer open. Please check your payment status before trying again." },
+          {
+            error:
+              "An earlier payment order is no longer open. Please check your payment status before trying again.",
+          },
           { status: 409 }
         );
       } catch (error) {
-        console.error("Existing Razorpay course order lookup failed:", error);
+        console.error(
+          "Existing Razorpay course order lookup failed:",
+          error
+        );
+
         return NextResponse.json(
           { error: "Could not verify your existing payment order." },
           { status: 502 }
@@ -215,7 +224,11 @@ export async function POST(request: Request) {
         .single();
 
     if (recordError || !paymentRecord) {
-      console.error("Course payment record creation failed:", recordError);
+      console.error(
+        "Course payment record creation failed:",
+        recordError
+      );
+
       return NextResponse.json(
         { error: "Could not create the course payment record." },
         { status: 500 }
@@ -245,9 +258,16 @@ export async function POST(request: Request) {
         .eq("status", "pending");
 
       if (updateError) {
-        console.error("Saving course Razorpay order ID failed:", updateError);
+        console.error(
+          "Saving course Razorpay order ID failed:",
+          updateError
+        );
+
         return NextResponse.json(
-          { error: "Razorpay created the order, but saving it failed. Please contact support." },
+          {
+            error:
+              "Razorpay created the order, but saving it failed. Please contact support.",
+          },
           { status: 500 }
         );
       }
