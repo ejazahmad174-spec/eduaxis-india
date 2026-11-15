@@ -1,5 +1,7 @@
 
 "use client";
+
+import { useState } from "react";
 const examCategories = [
   { name: "BPSC TRE", detail: "Bihar teacher recruitment", icon: "🎓" },
   { name: "CTET", detail: "Central teacher eligibility", icon: "📚" },
@@ -55,6 +57,9 @@ const jobCategories = [
 ];
 
 export default function Home() {
+  const [feedbackStatus, setFeedbackStatus] = useState("");
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+
   return (
     <main className="ea-home">
       <style jsx global>{`
@@ -359,6 +364,7 @@ export default function Home() {
           cursor: pointer;
         }
         .ea-feedback-submit:hover { background: #087d7a; }
+        .ea-feedback-submit:disabled { opacity: .65; cursor: not-allowed; }
         .ea-feedback-note {
           color: var(--ea-muted);
           font-size: 11px;
@@ -697,22 +703,39 @@ export default function Home() {
 
           <form
             className="ea-feedback-form"
-            onSubmit={(event) => {
+            onSubmit={async (event) => {
               event.preventDefault();
               const form = event.currentTarget;
               const data = new FormData(form);
-              const name = String(data.get("name") || "");
-              const email = String(data.get("email") || "");
-              const subject = String(data.get("subject") || "General Enquiry");
-              const message = String(data.get("message") || "");
+              setFeedbackStatus("");
+              setFeedbackSubmitting(true);
 
-              const emailSubject = encodeURIComponent(`EduAxis India: ${subject}`);
-              const emailBody = encodeURIComponent(
-                `Name: ${name}\\nEmail: ${email}\\nSubject: ${subject}\\n\\nMessage:\\n${message}`
-              );
+              try {
+                const response = await fetch("/api/feedback", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    name: data.get("name"),
+                    email: data.get("email"),
+                    subject: data.get("subject"),
+                    message: data.get("message"),
+                  }),
+                });
 
-              window.location.href =
-                `mailto:eduaxisindiateam@gmail.com?subject=${emailSubject}&body=${emailBody}`;
+                const result = await response.json();
+                if (!response.ok) {
+                  throw new Error(result.error || "Your feedback could not be submitted.");
+                }
+
+                form.reset();
+                setFeedbackStatus("success: Thank you! Your feedback has been submitted successfully.");
+              } catch (error) {
+                setFeedbackStatus(
+                  `error: ${error instanceof Error ? error.message : "Something went wrong. Please try again."}`
+                );
+              } finally {
+                setFeedbackSubmitting(false);
+              }
             }}
           >
             <h3>Send Us a Message</h3>
@@ -766,12 +789,25 @@ export default function Home() {
               />
             </div>
 
-            <button type="submit" className="ea-feedback-submit">
-              Submit Feedback →
+            <button type="submit" className="ea-feedback-submit" disabled={feedbackSubmitting}>
+              {feedbackSubmitting ? "Submitting..." : "Submit Feedback →"}
             </button>
+            {feedbackStatus && (
+              <p
+                role="status"
+                aria-live="polite"
+                style={{
+                  marginTop: 14,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: feedbackStatus.startsWith("success:") ? "#087d55" : "#b42318",
+                }}
+              >
+                {feedbackStatus.replace(/^(success|error): /, "")}
+              </p>
+            )}
             <p className="ea-feedback-note">
-              Submitting opens your email application with the message addressed
-              to EduAxis India.
+              Your message is submitted securely to the EduAxis India team. No login is required.
             </p>
           </form>
         </div>
