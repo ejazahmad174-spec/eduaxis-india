@@ -122,9 +122,7 @@ export default function DiscoveredGovernmentJobsPage() {
       client
         .from('government_job_discoveries')
         .select(
-          .from('government_job_discoveries')
-.select(
-  'id,source_id,discovered_title,discovered_url,notice_category,status,discovered_at,processed_at,error_message,pdf_url,extracted_details,extraction_status,extraction_error,extracted_at'
+          'id,source_id,discovered_title,discovered_url,notice_category,status,discovered_at,processed_at,error_message,pdf_url,extracted_details,extraction_status,extraction_error,extracted_at'
         )
         .order('discovered_at', { ascending: false }),
 
@@ -645,6 +643,78 @@ export default function DiscoveredGovernmentJobsPage() {
                         >
                           Open original notice ↗
                         </a>
+
+                        {item.pdf_url && (
+                          <div style={{
+                            marginTop: 12,
+                            padding: 12,
+                            background: '#f5f8fb',
+                            border: '1px solid #dce5ec',
+                            borderRadius: 8,
+                          }}>
+                            <div style={{ fontWeight: 700, marginBottom: 7 }}>
+                              PDF extraction: {(item.extraction_status || 'pending').replace('_', ' ')}
+                            </div>
+
+                            <a
+                              href={item.pdf_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: '#087d91', fontWeight: 700, fontSize: 13 }}
+                            >
+                              Open PDF notification ↗
+                            </a>
+
+                            {item.extraction_error && (
+                              <p style={{ color: '#bd2525', fontSize: 13, marginBottom: 0 }}>
+                                {item.extraction_error}
+                              </p>
+                            )}
+
+                            {item.extracted_details && (
+                              <div style={{ marginTop: 10, fontSize: 13, color: '#34536e', lineHeight: 1.7 }}>
+                                {item.extracted_details.job_title_candidates?.length ? (
+                                  <div><b>Title found:</b> {item.extracted_details.job_title_candidates.join(' / ')}</div>
+                                ) : null}
+                                {item.extracted_details.vacancies && (
+                                  <div><b>Vacancies:</b> {item.extracted_details.vacancies}</div>
+                                )}
+                                {item.extracted_details.qualification && (
+                                  <div><b>Qualification:</b> {item.extracted_details.qualification}</div>
+                                )}
+                                {item.extracted_details.age_limit && (
+                                  <div><b>Age limit:</b> {item.extracted_details.age_limit}</div>
+                                )}
+                                {item.extracted_details.application_fee && (
+                                  <div><b>Application fee:</b> {item.extracted_details.application_fee}</div>
+                                )}
+                                {item.extracted_details.application_start_date && (
+                                  <div><b>Application starts:</b> {item.extracted_details.application_start_date}</div>
+                                )}
+                                {item.extracted_details.last_date && (
+                                  <div><b>Last date:</b> {item.extracted_details.last_date}</div>
+                                )}
+                                {item.extracted_details.examination_date && (
+                                  <div><b>Exam date:</b> {item.extracted_details.examination_date}</div>
+                                )}
+                                {item.extracted_details.pdf_pages && (
+                                  <div><b>PDF pages:</b> {item.extracted_details.pdf_pages}</div>
+                                )}
+                                {item.extracted_details.extraction_note && (
+                                  <div style={{ marginTop: 6, fontStyle: 'italic' }}>
+                                    {item.extracted_details.extraction_note}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {item.extracted_at && (
+                              <div style={{ marginTop: 7, color: '#647b91', fontSize: 12 }}>
+                                Extracted: {formatDate(item.extracted_at)}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <span style={{
