@@ -1,3 +1,576 @@
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { readJobPDF } from "@/lib/job-pdf-reader";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+type JobLink = {
+  title: string;
+  url: string;
+};
+
+type NoticeCategory =
+  | "recruitment"
+  | "teacher_eligibility"
+  | "examination"
+  | "certificate"
+  | "general";
+
+function cleanText(value: string): string {
+  return value
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isPdfUrl(value: string): boolean {
+  return /\.pdf(?:$|[?#])/i.test(value);
+}
+
+function getTargetPages(sourceUrl: string): string[] {
+  const hostname = new URL(sourceUrl).hostname.toLowerCase();
+
+  if (hostname === "bpsc.bihar.gov.in") {
+    return [
+      "https://bpsc.bihar.gov.in/",
+      "https://bpsc.bihar.gov.in/advertisement/",
+    ];
+  }
+
+  if (hostname === "bssc.bihar.gov.in") {
+    return ["https://bssc.bihar.gov.in/NoticeBoard.htm"];
+  }
+
+  return [sourceUrl];
+}
+
+function classifyNotice(
+  title: string,
+  url: string,
+  sourceUrl: string
+): NoticeCategory {
+  const text = `${title} ${url}`.toLowerCase();
+  const hostname = new URL(sourceUrl).hostname.toLowerCase();
+
+  if (/certificate|marksheet|mark sheet|digilocker|credential|प्रमाणपत्र/i.test(text)) {
+    return "certificate";
+  }
+
+  if (/admit card|answer key|answer-key|result|exam date|examination schedule|exam schedule|exam city|hall ticket|प्रवेश पत्र|उत्तर कुंजी|परिणाम/i.test(text)) {
+    return "examination";
+  }
+
+  if (/ctet|teacher eligibility|eligibility test|eligibility certificate|application form|apply online|online application|registration|पात्रता परीक्षा/i.test(text)) {
+    return "teacher_eligibility";
+  }
+
+  if (/recruitment|vacancy|vacancies|advertisement|appointment|selection|career|job opening|भर्ती|नियुक्ति|रिक्ति/i.test(text)) {
+    return "recruitment";
+  }
+
+  if (hostname === "ctet.nic.in") {
+    return "teacher_eligibility";
+  }
+
+  return "general";
+}
+
+function findRecruitmentLinks(
+  html: string,
+  pageUrl: string
+): JobLink[] {
+  const results: JobLink[] = [];
+  const seen = new Set<string>();
+  const baseUrl = new URL(pageUrl);
+
+  const keywords =
+    /recruitment|notification|advertisement|vacanc|career|apply online|application|employment|job opening|job notice|public notice|latest notice|examination notice|selection|invitation of applications|admit card|answer key|result|certificate|eligibility|marksheet|भर्ती|नियुक्ति|विज्ञापन|रिक्ति|आवेदन|परीक्षा|परिणाम|प्रमाणपत्र/i;
+
+  const excludeKeywords =
+    /tender|quotation|procurement|purchase|supply of|auction/i;
+
+  const anchors = html.matchAll(
+    /<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
+  );
+
+  for (const match of anchors) {
+    const href = match[1].trim();
+    const anchorTitle = cleanText(match[2]);
+
+    const rowStart = html.lastIndexOf("<tr", match.index);
+    const rowEnd = html.indexOf("</tr>", match.index);
+
+    let rowText = "";
+
+    if (rowStart !== -1 && rowEnd !== -1) {
+      rowText = cleanText(html.slice(rowStart, rowEnd + 5));
+    }
+
+    const title = anchorTitle.length >= 5 ? anchorTitle : rowText;
+    const context = `${anchorTitle} ${rowText}`;
+
+    if (
+      !href ||
+      title.length < 5 ||
+      title.length > 600 ||
+      (!keywords.test(context) && !isPdfUrl(href)) ||
+      excludeKeywords.test(context)
+    ) {
+      continue;
+    }
+
+    try {
+      const url = new URL(href, baseUrl);
+
+      if (
+        !["http:", "https:"].includes(url.protocol) ||
+        !(
+          url.hostname === baseUrl.hostname ||
+          url.hostname.endsWith("." + baseUrl.hostname)
+        )
+      ) {
+        continue;
+      }
+
+      url.hash = "";
+
+      if (url.href === pageUrl || seen.has(url.href)) {
+        continue;
+      }
+
+      seen.add(url.href);
+
+      results.push({
+        title: title.slice(0, 600),
+        url: url.href,
+      });
+
+      if (results.length >= 50) break;
+    } catch {
+      continue;
+    }
+  }
+
+  return results;
+}
+
+async function fetchPage(url: string): Promise<string> {
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "User-Agent": "EduAxisIndiaJobCollector/3.0",
+      Accept: "text/html,application/xhtml+xml",
+    },
+    signal: AbortSignal.timeout(15000),
+    redirect: "follow",
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Website returned HTTP ${response.status}`);
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+
+  if (!contentType.includes("text/html")) {
+    throw new Error("Source did not return an HTML webpage.");
+  }
+
+  return (await response.text()).slice(0, 2_000_000);
+}
+
+function findField(
+  text: string,
+  patterns: RegExp[]
+): string | null {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+
+    if (match?.[1]) {
+      return match[1].replace(/\s+/g, " ").trim().slice(0, 500);
+    }
+  }
+
+  return null;
+}
+function extractJobDetails(text: string, pdfUrl: string) {
+  // Keep line boundaries: flattening the entire PDF causes unrelated sections
+  // to be joined and often produces incorrect field values.
+  const normalizedText = text
+    .replace(/\r/g, "\n")
+    .replace(/\u0000/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  const lines = normalizedText
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 1);
+
+  const compactText = normalizedText.replace(/\s+/g, " ");
+
+  function clean(value: string | undefined, max = 1000): string | null {
+    if (!value) return null;
+    const result = value.replace(/\s+/g, " ").replace(/^[\s:;,.\-]+|[\s;,.]+$/g, "").trim();
+    return result ? result.slice(0, max) : null;
+  }
+
+  function firstMatch(patterns: RegExp[], source = compactText): string | null {
+    for (const pattern of patterns) {
+      const match = source.match(pattern);
+      if (match?.[1]) return clean(match[1]);
+    }
+    return null;
+  }
+
+  function numberFromWords(value: string): string | null {
+    const words: Record<string, number> = {
+      zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5,
+      six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+      eleven: 11, twelve: 12, thirteen: 13, fourteen: 14,
+      fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18,
+      nineteen: 19, twenty: 20, thirty: 30, forty: 40,
+      fifty: 50, sixty: 60, seventy: 70, eighty: 80,
+      ninety: 90, hundred: 100,
+    };
+    const normalized = value.toLowerCase().replace(/-/g, " ").trim();
+    if (/^[\d,]+$/.test(normalized)) return normalized.replace(/,/g, "");
+    const parts = normalized.split(/\s+/).filter(Boolean);
+    let total = 0;
+    let current = 0;
+    let found = false;
+    for (const part of parts) {
+      if (!(part in words)) continue;
+      found = true;
+      const n = words[part];
+      if (n === 100) current = (current || 1) * 100;
+      else current += n;
+    }
+    if (!found) return null;
+    total += current;
+    return String(total);
+  }
+
+  const titleCandidates = lines
+    .filter((line) => /special advertisement|vacancy no\.?|assistant provident fund commissioner|recruitment by selection|invites online recruitment/i.test(line))
+    .slice(0, 8);
+
+  // Restrict vacancy extraction to the vacancy-details portion near the start.
+  const vacancySection = compactText.slice(0, Math.min(compactText.length, 9000));
+  let vacancies: string | null = null;
+  const vacancyPatterns = [
+    /\b([\d,]+|[a-z]+(?:[ -][a-z]+){0,2})\s+vacancies\s+for\s+the\s+post\b/i,
+    /\b(?:total\s+)?(?:number\s+of\s+)?vacancies\s*[:\-]?\s*([\d,]+)\b/i,
+    /\b([\d,]+)\s+(?:vacant\s+)?posts\b/i,
+  ];
+  for (const pattern of vacancyPatterns) {
+    const match = vacancySection.match(pattern);
+    if (match?.[1]) {
+      vacancies = numberFromWords(match[1]) || clean(match[1]);
+      if (vacancies) break;
+    }
+  }
+
+  const categoryVacancies: Record<string, string> = {};
+  const reservationMatch = vacancySection.match(/\(\s*UR\s*[-:]\s*(\d+)\s*,\s*EWS\s*[-:]\s*(\d+)\s*,\s*OBC\s*[-:]\s*(\d+)\s*,\s*SC\s*[-:]\s*(\d+)\s*,\s*ST\s*[-:]\s*(\d+)\s*\)/i);
+  if (reservationMatch) {
+    ["UR", "EWS", "OBC", "SC", "ST"].forEach((key, index) => {
+      categoryVacancies[key] = reservationMatch[index + 1];
+    });
+  }
+
+  // Qualification is extracted only from the short section immediately after
+  // the ESSENTIAL QUALIFICATIONS heading, not from later general instructions.
+  const essentialSectionMatch = normalizedText.match(/ESSENTIAL\s+QUALIFICATIONS?\s*:?([\s\S]{0,1800}?)(?=DUTIES\s*:|OTHER\s+DETAILS\s*:|PROBATION\s*:|HEADQUARTERS\s*:|IMPORTANT\s+ONLINE|\n\s*\d+\s*\.)/i);
+  const essentialSection = essentialSectionMatch?.[1] || "";
+  const qualification = firstMatch([
+    /EDUCATIONAL\s+([\s\S]{0,500}?)(?=DESIRABLE\s+QUALIFICATIONS?|NOTE\s*\d|DUTIES|$)/i,
+  ], essentialSection.replace(/\s+/g, " ")) || firstMatch([
+    /(?:essential\s+qualification|educational\s+qualification)\s*[:\-]?\s*(.{10,500}?)(?=desirable\s+qualification|age\s*:|pay\s+scale|duties|$)/i,
+  ]);
+
+  const desirableSectionMatch = normalizedText.match(/DESIRABLE\s+QUALIFICATIONS?\s*:?([\s\S]{0,700}?)(?=NOTE\s*1|DUTIES\s*:|OTHER\s+DETAILS\s*:|PROBATION\s*:)/i);
+  const desirableQualification = desirableSectionMatch
+    ? clean(desirableSectionMatch[1].replace(/\s+/g, " "), 700)
+    : null;
+
+  // The advertisement-specific AGE block appears before the qualifications.
+  const ageBlockMatch = normalizedText.match(/(?:^|\n)AGE\s*:\s*([\s\S]{0,500}?)(?=ESSENTIAL\s+QUALIFICATIONS?\s*:)/i);
+  const ageLimit = ageBlockMatch
+    ? clean(ageBlockMatch[1].replace(/\s+/g, " "), 500)
+    : firstMatch([/age\s+limit\s*[:\-]?\s*(.{3,250}?)(?=application\s+fee|qualification|pay\s+scale|important\s+dates|$)/i]);
+
+  const payScale = firstMatch([/PAY\s+SCALE\s*:\s*(.{3,180}?)(?=AGE\s*:|ESSENTIAL\s+QUALIFICATIONS?|$)/i]);
+
+  const applicationFee = firstMatch([
+    /APPLICATION\s+FEE\s*:\s*([\s\S]{0,650}?)(?=CONCESSIONS\s*&\s*RELAXATIONS|IMPORTANT\s+DATES|$)/i,
+    /fee\s+of\s+(Rs\.?\s*[\d,]+\/?-?)([\s\S]{0,180}?)(?=\(b\)|applications\s+without|$)/i,
+  ]);
+
+  const applicationStartDate = firstMatch([
+    /(?:applications?\s+are\s+invited[\s\S]{0,250}?from|applications?\s+from|application\s+starts?\s*(?:from|on)?|opening\s+date\s*[:\-]?)\s*(\d{1,2}[\-/.]\d{1,2}[\-/.]\d{4})/i,
+  ]);
+
+  const lastDate = firstMatch([
+    /CLOSING\s+DATE\s+FOR\s+SUBMISSION[\s\S]{0,180}?\b(\d{1,2}[\-/.]\d{1,2}[\-/.]\d{4})/i,
+    /(?:last\s+date|closing\s+date|application\s+ends)\s*[:\-]?\s*(\d{1,2}[\-/.]\d{1,2}[\-/.]\d{4})/i,
+  ]);
+
+  const examinationDate = firstMatch([
+    /RECRUITMENT\s+TEST[\s\S]{0,300}?\b(\d{1,2}[.-]\d{1,2}[.-]\d{4})/i,
+    /(?:date\s+of\s+)?(?:written\s+)?examination\s*[:\-]?\s*(\d{1,2}[\-/.]\d{1,2}[\-/.]\d{4})/i,
+    /exam(?:ination)?\s+date\s*[:\-]?\s*(\d{1,2}[\-/.]\d{1,2}[\-/.]\d{4})/i,
+  ]);
+
+  const department = firstMatch([
+    /for\s+the\s+post\s+of\s+[^.]{0,180}?in\s+([^,\.]{3,180}(?:,\s*Ministry\s+of\s+[^.]{3,150})?)/i,
+    /(?:name\s+of\s+the\s+)?department\s*[:\-]?\s*([^.;]{3,180})/i,
+  ]);
+
+  return {
+    job_title_candidates: titleCandidates,
+    department,
+    vacancies,
+    category_wise_vacancies: categoryVacancies,
+    qualification,
+    desirable_qualification: desirableQualification,
+    age_limit: ageLimit,
+    pay_scale: payScale,
+    application_fee: applicationFee,
+    application_start_date: applicationStartDate,
+    last_date: lastDate,
+    examination_date: examinationDate,
+    apply_url: (compactText.match(/https?:\/\/upsconline\.nic\.in\/ora\//i)?.[0] || null),
+    source_pdf_url: pdfUrl,
+    extraction_note:
+      "Field-focused extraction. Values are candidates only; verify every field against the official notification before publishing.",
+    extracted_text_excerpt: normalizedText.slice(0, 12000),
+    extracted_text_length: normalizedText.length,
+  };
+}
+export async function GET(request: Request) {
+  const cronSecret = process.env.CRON_SECRET;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const publishableKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !serviceKey) {
+    return NextResponse.json(
+      { error: "Collector configuration is incomplete." },
+      { status: 500 }
+    );
+  }
+
+  const supabase = createClient(supabaseUrl, serviceKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+
+  const authorization = request.headers.get("authorization") || "";
+
+  const isCronRequest = Boolean(
+    cronSecret && authorization === `Bearer ${cronSecret}`
+  );
+
+  // Cron requests use CRON_SECRET.
+  // Manual requests must come from a signed-in administrator.
+  if (!isCronRequest) {
+    const accessToken = authorization.startsWith("Bearer ")
+      ? authorization.slice(7).trim()
+      : "";
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: "Unauthorized. Please sign in as an administrator." },
+        { status: 401 }
+      );
+    }
+
+    if (!publishableKey) {
+      return NextResponse.json(
+        { error: "Supabase publishable key is not configured." },
+        { status: 500 }
+      );
+    }
+
+    const authClient = createClient(supabaseUrl, publishableKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+
+    const { data: userData, error: authError } =
+      await authClient.auth.getUser(accessToken);
+
+    if (authError || !userData.user) {
+      return NextResponse.json(
+        { error: "Your session is invalid or expired. Please sign in again." },
+        { status: 401 }
+      );
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userData.user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error("Could not verify administrator role:", profileError);
+
+      return NextResponse.json(
+        { error: "Could not verify administrator permissions." },
+        { status: 500 }
+      );
+    }
+
+    if (profile?.role !== "admin") {
+      return NextResponse.json(
+        { error: "Administrator access is required." },
+        { status: 403 }
+      );
+    }
+  }
+
+  const { data: sources, error: sourceError } = await supabase
+    .from("government_job_sources")
+    .select("id, source_name, source_url")
+    .eq("is_active", true);
+
+  if (sourceError) {
+    console.error("Could not load job sources:", sourceError);
+
+    return NextResponse.json(
+      { error: "Could not load recruitment sources." },
+      { status: 500 }
+    );
+  }
+
+  let checked = 0;
+  let discovered = 0;
+  let pdfsProcessed = 0;
+  let pdfsSuccessful = 0;
+
+  const MAX_PDFS_PER_RUN = 2;
+
+  const results: {
+    source: string;
+    pages_checked: number;
+    found: number;
+    pdfs_read: number;
+    error?: string;
+  }[] = [];
+
+  for (const source of sources || []) {
+    checked++;
+
+    try {
+      const targetPages = getTargetPages(source.source_url);
+      const allLinks = new Map<string, JobLink>();
+
+      let pagesChecked = 0;
+
+      for (const pageUrl of targetPages) {
+        try {
+          const html = await fetchPage(pageUrl);
+          pagesChecked++;
+
+          const links = findRecruitmentLinks(html, pageUrl);
+
+          for (const link of links) {
+            if (!allLinks.has(link.url)) {
+              allLinks.set(link.url, link);
+            }
+          }
+        } catch (pageError) {
+          console.error("Page scan failed:", pageUrl, pageError);
+        }
+      }
+
+      if (pagesChecked === 0) {
+        throw new Error("All configured pages failed to load.");
+      }
+
+      const links = Array.from(allLinks.values());
+
+      if (links.length > 0) {
+        const rows = links.map((link) => ({
+          source_id: source.id,
+          discovered_title: link.title,
+          discovered_url: link.url,
+          pdf_url: isPdfUrl(link.url) ? link.url : null,
+          notice_category: classifyNotice(
+            link.title,
+            link.url,
+            source.source_url
+          ),
+          status: "new",
+        }));
+
+        const { error: insertError } = await supabase
+          .from("government_job_discoveries")
+          .upsert(rows, {
+            onConflict: "source_id,discovered_url",
+            ignoreDuplicates: true,
+          });
+
+        if (insertError) {
+          throw new Error(insertError.message);
+        }
+
+        discovered += links.length;
+      }
+
+      let sourcePdfsRead = 0;
+
+      const { data: pendingDiscoveries, error: pendingError } =
+        await supabase
+          .from("government_job_discoveries")
+          .select("id, pdf_url, discovered_url, extraction_status")
+          .eq("source_id", source.id)
+          .eq("extraction_status", "pending")
+          .order("discovered_at", { ascending: true })
+          .limit(50);
+
+      if (pendingError) {
+        throw new Error(
+          `Could not load pending PDF notices: ${pendingError.message}`
+        );
+      }
+
+      for (const discovery of pendingDiscoveries || []) {
+        if (pdfsProcessed >= MAX_PDFS_PER_RUN) {
+          break;
+        }
+
+        const pdfUrl =
+          discovery.pdf_url ||
+          (isPdfUrl(discovery.discovered_url)
+            ? discovery.discovered_url
+            : null);
+
+        if (!pdfUrl || !isPdfUrl(pdfUrl)) {
+          continue;
+        }
+
+        pdfsProcessed++;
+
+        const { error: processingError } = await supabase
+          .from("government_job_discoveries")
           .update({
             pdf_url: pdfUrl,
             extraction_status: "processing",
@@ -126,3 +699,6 @@
     candidate_links_found: discovered,
     pdfs_processed: pdfsProcessed,
     pdfs_successfully_read: pdfsSuccessful,
+    results,
+  });
+}
