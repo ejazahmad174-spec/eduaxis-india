@@ -200,28 +200,179 @@ function findField(
 
   return null;
 }
+
 function extractJobDetails(text: string, pdfUrl: string) {
-  // Keep line boundaries: flattening the entire PDF causes unrelated sections
-  // to be joined and often produces incorrect field values.
   const normalizedText = text
     .replace(/\r/g, "\n")
-    .replace(/\u0000/g, " ")
     .replace(/[ \t]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+    .replace(/\n{3,}/g, "\n\n");
 
+  const compactText = normalizedText.replace(/\s+/g, " ");
   const lines = normalizedText
     .split(/\n+/)
     .map((line) => line.trim())
-    .filter((line) => line.length > 1);
+    .filter((line) => line.length > 2);
 
-  const compactText = normalizedText.replace(/\s+/g, " ");
+  function section(start: RegExp, end: RegExp): string | null {
+    const startMatch = start.exec(compactText);
+    if (!startMatch || startMatch.index === undefined) return null;
 
-  function clean(value: string | undefined, max = 1000): string | null {
-    if (!value) return null;
-    const result = value.replace(/\s+/g, " ").replace(/^[\s:;,.\-]+|[\s;,.]+$/g, "").trim();
-    return result ? result.slice(0, max) : null;
+    const contentStart = startMatch.index + startMatch[0].length;
+    const remaining = compactText.slice(contentStart);
+    const endMatch = end.exec(remaining);
+
+    return remaining
+      .slice(0, endMatch ? endMatch.index : 1200)
+      .trim()
+      .slice(0, 1500) || null;
   }
+
+  function firstMatch(patterns: RegExp[]): string | null {
+    for (const pattern of patterns) {
+      const match = compactText.match(pattern);
+      if (match?.[1]) {
+        return match[1].replace(/\s+/g, " ").trim().slice(0, 1000);
+      }
+    }
+    return null;
+  }
+
+  function numberFromWords(value: string): string | null {
+    const cleaned = value.trim().toLowerCase().replace(/[-,]/g, " ");
+    const words: Record<string, number> = {
+      one: 1, two: 2, three: 3, four: 4, five: 5,
+      six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+      eleven: 11, twelve: 12, thirteen: 13, fourteen: 14,
+      fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18,
+      nineteen: 19, twenty: 20, thirty: 30, forty: 40,
+      fifty: 50, sixty: 60, seventy: 70, eighty: 80,
+      ninety: 90, hundred: 100,
+    };
+
+    if (/^[\d,]+$/.test(value.trim())) {
+      return String(Number(value.replace(/,/g, "")));
+    }
+
+    const parts = cleaned.split(/\s+/);
+    let total = 0;
+    let current = 0;
+
+    for (const part of parts) {
+      if (part === "and") continue;
+      const number = words[part];
+      if (number === undefined) return null;
+
+      if (number === 100) {
+        current = (current || 1) * 100;
+      } else {
+        current += number;
+      }
+    }
+
+    total += current;
+    return total > 0 ? String(total) : null;
+  }
+
+  const vacancyMatch = compactText.match(
+    /\b((?:\d[\d,]*|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[\s-]+(?:one|two|three|four|five|six|seven|eight|nine|ten))?)\s+vacancies?\s+for\s+the\s+post\s+of\s+(.{5,180}?)(?=\s+in\s+|\s+under\s+|\.|$)/i
+  );
+
+  const vacancies = vacancyMatch
+    ? numberFromWords(vacancyMatch[1])
+    : firstMatch([
+        /(?:total\s+)?(?:number\s+of\s+)?vacancies\s*[:\-]?\s*([\d,]+)/i,
+        /([\d,]+)\s+(?:vacancies|vacant\s+posts|posts)/i,
+      ]);
+
+  const jobTitle = vacancyMatch?.[2]?.trim() || null;
+
+  const titleCandidates = [
+    ...(jobTitle ? [jobTitle] : []),
+    ...lines.filter((line) =>
+      /special advertisement|assistant|officer|teacher|translator|recruitment/i.test(line)
+    ),
+  ].filter((value, index, array) => array.indexOf(value) === index).slice(0, 8);
+
+  const payScale = section(
+    /PAY\s+SCALE\s*:/i,
+    /\bAGE\s*:/i
+  );
+
+  const ageLimit = section(
+    /\bAGE\s*:/i,
+    /\bESSENTIAL\s+QUALIFICATIONS?\s*:/i
+  );
+
+  const essentialSection = section(
+    /\bESSENTIAL\s+QUALIFICATIONS?\s*:/i,
+    /\bDUTIES\s*:/i
+  );
+
+  const qualification =
+    essentialSection
+      ?.replace(/^EDUCATIONAL\s*/i, "")
+      .replace(/\s+DESIRABLE\s+QUALIFICATIONS?[\s\S]*$/i, "")
+      .trim() || null;
+
+  const desirableQualification = firstMatch([
+    /DESIRABLE\s+QUALIFICATIONS?\s*:\s*(.{5,500}?)(?=\s+NOTE\s+\d|\s+DUTIES\s*:|$)/i,
+  ]);
+
+  const applicationFee = section(
+    /\bAPPLICATION\s+FEE\s*:/i,
+    /\bCONCESSIONS\s*(?:AND|&)\s*RELAXATIONS\b/i
+  );
+
+  const applicationStartDate = firstMatch([
+    /ONLINE\s+RECRUITMENT\s+APPLICATIONS\s+ARE\s+INVITED[\s\S]{0,250}?\bFROM\s+(\d{1,2}[.-]\d{1,2}[.-]\d{4})/i,
+    /APPLICATIONS?\s+(?:START|BEGIN|OPEN)[\s\S]{0,100}?(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/i,
+  ]);
+
+  const lastDate = firstMatch([
+    /CLOSING\s+DATE\s+FOR\s+SUBMISSION[\s\S]{0,250}?\bON\s+(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/i,
+    /LAST\s+DATE(?:\s+FOR\s+SUBMISSION|\s+TO\s+APPLY)?[\s:.-]{0,30}(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/i,
+  ]);
+
+  const examinationDate = firstMatch([
+    /RECRUITMENT\s+TEST[\s\S]{0,350}?\bON\s+(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/i,
+    /(?:DATE\s+OF\s+)?(?:WRITTEN\s+)?EXAMINATION\s*[:\-]?\s*(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/i,
+    /EXAM(?:INATION)?\s+DATE\s*[:\-]?\s*(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/i,
+  ]);
+
+  const departmentMatch = vacancyMatch
+    ? compactText.slice(
+        vacancyMatch.index! + vacancyMatch[0].length - vacancyMatch[2].length
+      ).match(/^(.{5,220}?)(?:\.|\s+RESERVATION\s+POSITION)/i)
+    : null;
+
+  const department =
+    departmentMatch?.[1]?.replace(/\s+/g, " ").trim() || null;
+
+  const reservation = firstMatch([
+    /RESERVATION\s+POSITION\s*:\s*\(([^)]{5,200})\)/i,
+  ]);
+
+  return {
+    job_title_candidates: titleCandidates,
+    department,
+    vacancies,
+    category_wise_vacancies: reservation,
+    pay_scale: payScale,
+    qualification,
+    desirable_qualification: desirableQualification,
+    age_limit: ageLimit,
+    application_fee: applicationFee,
+    application_start_date: applicationStartDate,
+    last_date: lastDate,
+    examination_date: examinationDate,
+    apply_url: null,
+    source_pdf_url: pdfUrl,
+    extraction_note:
+      "Automatically extracted text. All fields require admin verification against the official notification.",
+    extracted_text_excerpt: normalizedText.slice(0, 12000),
+    extracted_text_length: normalizedText.length,
+  };
+}
 
   function firstMatch(patterns: RegExp[], source = compactText): string | null {
     for (const pattern of patterns) {
