@@ -564,7 +564,7 @@ export async function GET(request: Request) {
           .from("government_job_discoveries")
           .select("id, pdf_url, discovered_url, extraction_status")
           .eq("source_id", source.id)
-          .eq("extraction_status", "pending")
+          .in("extraction_status", ["pending", "needs_ocr", "failed"])
           .order("discovered_at", { ascending: true })
           .limit(50);
 
@@ -598,7 +598,7 @@ export async function GET(request: Request) {
             extraction_status: "processing",
             extraction_error: null,
           })
-          .eq("id", discovery.id)
+          .in("extraction_status", ["pending", "needs_ocr", "failed"])
           .eq("extraction_status", "pending");
 
         if (processingError) {
