@@ -489,7 +489,15 @@ export async function GET(request: Request) {
     error?: string;
   }[] = [];
 
-  for (const source of sources || []) {
+  // Process UPSC first so its pending recruitment PDFs are not delayed
+  // by earlier sources when the per-run PDF limit is reached.
+  const orderedSources = [...(sources || [])].sort((a, b) => {
+    const aPriority = /\bUPSC\b/i.test(a.source_name || "") ? 0 : 1;
+    const bPriority = /\bUPSC\b/i.test(b.source_name || "") ? 0 : 1;
+    return aPriority - bPriority;
+  });
+
+  for (const source of orderedSources) {
     checked++;
 
     try {
