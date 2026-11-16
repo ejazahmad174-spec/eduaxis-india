@@ -226,76 +226,110 @@ function findField(
   return null;
 }
 
+
 function extractJobDetails(text: string, pdfUrl: string) {
-  const lines = text
+  const normalizedText = text
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n");
+
+  const lines = normalizedText
     .split(/\n+/)
     .map((line) => line.trim())
     .filter((line) => line.length > 2);
 
+  const compactText = normalizedText.replace(/\s+/g, " ");
+
+  function extract(patterns: RegExp[]): string | null {
+    for (const pattern of patterns) {
+      const match = compactText.match(pattern);
+
+      if (match?.[1]) {
+        return match[1]
+          .replace(/\s+/g, " ")
+          .replace(/[.;,:]+$/, "")
+          .trim()
+          .slice(0, 1000);
+      }
+    }
+
+    return null;
+  }
+
   const titleCandidates = lines
     .filter((line) =>
-      /recruitment|advertisement|vacancy|notification|भर्ती|विज्ञापन/i.test(
+      /special advertisement|recruitment|invites online|vacancy details|selection to the following posts|assistant|officer|teacher|translator|भर्ती|विज्ञापन/i.test(
         line
       )
     )
-    .slice(0, 5);
+    .slice(0, 8);
 
-  const vacancies = findField(text, [
+  const vacancies = extract([
     /(?:total\s+)?(?:number\s+of\s+)?vacancies\s*[:\-]?\s*([0-9,]+)/i,
-    /total\s+posts\s*[:\-]?\s*([0-9,]+)/i,
-    /number\s+of\s+posts\s*[:\-]?\s*([0-9,]+)/i,
+    /(?:total\s+)?(?:number\s+of\s+)?posts\s*[:\-]?\s*([0-9,]+)/i,
+    /([0-9,]+)\s+(?:vacancies|vacant\s+posts|posts)/i,
+    /(?:a total of|total of)\s+([0-9,]+)\s+(?:posts|vacancies)/i,
     /कुल\s+पदों?\s*(?:की\s+संख्या)?\s*[:\-]?\s*([0-9,]+)/i,
   ]);
 
-  const qualification = findField(text, [
-    /educational\s+qualification\s*[:\-]?\s*([\s\S]{5,300}?)(?:\n|age\s+limit|application\s+fee)/i,
-    /essential\s+qualification\s*[:\-]?\s*([\s\S]{5,300}?)(?:\n|age\s+limit|application\s+fee)/i,
-    /शैक्षणिक\s+योग्यता\s*[:\-]?\s*([\s\S]{5,300}?)(?:\n|आयु|शुल्क)/i,
+  const qualification = extract([
+    /(?:educational|essential|minimum)\s+qualification\s*[:\-]?\s*(.{10,600}?)(?=age\s+limit|application\s+fee|pay\s+scale|salary|selection\s+process|important\s+dates|$)/i,
+    /(?:required|prescribed)\s+qualification\s*[:\-]?\s*(.{10,600}?)(?=age\s+limit|application\s+fee|pay\s+scale|salary|selection\s+process|important\s+dates|$)/i,
+    /शैक्षणिक\s+योग्यता\s*[:\-]?\s*(.{10,500}?)(?=आयु|शुल्क|वेतन|$)/i,
   ]);
 
-  const ageLimit = findField(text, [
-    /age\s+limit\s*[:\-]?\s*([\s\S]{3,200}?)(?:\n|application\s+fee|qualification)/i,
-    /age\s+criteria\s*[:\-]?\s*([\s\S]{3,200}?)(?:\n|application\s+fee)/i,
-    /आयु\s+सीमा\s*[:\-]?\s*([\s\S]{3,200}?)(?:\n|शुल्क)/i,
+  const ageLimit = extract([
+    /age\s+limit\s*[:\-]?\s*(.{3,250}?)(?=application\s+fee|educational\s+qualification|pay\s+scale|important\s+dates|$)/i,
+    /age\s+criteria\s*[:\-]?\s*(.{3,250}?)(?=application\s+fee|qualification|$)/i,
+    /minimum\s+age\s*[:\-]?\s*(.{3,150}?)(?=maximum\s+age|relaxation|$)/i,
+    /आयु\s+सीमा\s*[:\-]?\s*(.{3,200}?)(?=शुल्क|योग्यता|$)/i,
   ]);
 
-  const applicationFee = findField(text, [
-    /application\s+fee\s*[:\-]?\s*([\s\S]{2,150}?)(?:\n|important\s+dates|last\s+date)/i,
-    /examination\s+fee\s*[:\-]?\s*([\s\S]{2,150}?)(?:\n|important\s+dates)/i,
-    /आवेदन\s+शुल्क\s*[:\-]?\s*([\s\S]{2,150}?)(?:\n|महत्वपूर्ण\s+तिथियां)/i,
+  const applicationFee = extract([
+    /application\s+fee\s*[:\-]?\s*(.{3,350}?)(?=important\s+dates|last\s+date|how\s+to\s+apply|$)/i,
+    /examination\s+fee\s*[:\-]?\s*(.{3,350}?)(?=important\s+dates|last\s+date|$)/i,
+    /registration\s+fee\s*[:\-]?\s*(.{3,250}?)(?=important\s+dates|last\s+date|$)/i,
+    /आवेदन\s+शुल्क\s*[:\-]?\s*(.{3,250}?)(?=महत्वपूर्ण\s+तिथियां|अंतिम\s+तिथि|$)/i,
   ]);
 
-  const applicationStartDate = findField(text, [
-    /(?:online\s+)?application\s+(?:starts?|start\s+date|begin(?:s|ning)?|from)\s*[:\-]?\s*([0-9]{1,2}[\/.-][0-9]{1,2}[\/.-][0-9]{2,4}|[0-9]{1,2}\s+[A-Za-z]+\s+[0-9]{4})/i,
+  const applicationStartDate = extract([
+    /(?:online\s+)?application\s+(?:starts?|start\s+date|beginning|from)\s*[:\-]?\s*([0-9]{1,2}[\/.-][0-9]{1,2}[\/.-][0-9]{2,4}|[0-9]{1,2}\s+[A-Za-z]+\s+[0-9]{4})/i,
+    /registration\s+(?:starts?|start\s+date)\s*[:\-]?\s*([0-9]{1,2}[\/.-][0-9]{1,2}[\/.-][0-9]{2,4})/i,
     /आवेदन\s+प्रारंभ\s+तिथि\s*[:\-]?\s*([0-9]{1,2}[\/.-][0-9]{1,2}[\/.-][0-9]{2,4})/i,
   ]);
 
-  const lastDate = findField(text, [
-    /(?:last\s+date|closing\s+date|last\s+date\s+for\s+application)\s*[:\-]?\s*([0-9]{1,2}[\/.-][0-9]{1,2}[\/.-][0-9]{2,4}|[0-9]{1,2}\s+[A-Za-z]+\s+[0-9]{4})/i,
+  const lastDate = extract([
+    /(?:last\s+date|closing\s+date|last\s+date\s+for\s+application|application\s+ends)\s*[:\-]?\s*([0-9]{1,2}[\/.-][0-9]{1,2}[\/.-][0-9]{2,4}|[0-9]{1,2}\s+[A-Za-z]+\s+[0-9]{4})/i,
     /अंतिम\s+तिथि\s*[:\-]?\s*([0-9]{1,2}[\/.-][0-9]{1,2}[\/.-][0-9]{2,4})/i,
   ]);
 
-  const examDate = findField(text, [
+  const examinationDate = extract([
     /(?:date\s+of\s+)?(?:written\s+)?examination\s*[:\-]?\s*([0-9]{1,2}[\/.-][0-9]{1,2}[\/.-][0-9]{2,4}|[0-9]{1,2}\s+[A-Za-z]+\s+[0-9]{4})/i,
+    /exam(?:ination)?\s+date\s*[:\-]?\s*([0-9]{1,2}[\/.-][0-9]{1,2}[\/.-][0-9]{2,4})/i,
     /परीक्षा\s+तिथि\s*[:\-]?\s*([0-9]{1,2}[\/.-][0-9]{1,2}[\/.-][0-9]{2,4})/i,
+  ]);
+
+  const department = extract([
+    /(?:name\s+of\s+the\s+)?department\s*[:\-]?\s*([^.;]{3,200})/i,
+    /organisation\s*[:\-]?\s*([^.;]{3,200})/i,
   ]);
 
   return {
     job_title_candidates: titleCandidates,
-    department: null,
+    department,
     vacancies,
     qualification,
     age_limit: ageLimit,
     application_fee: applicationFee,
     application_start_date: applicationStartDate,
     last_date: lastDate,
-    examination_date: examDate,
+    examination_date: examinationDate,
     apply_url: null,
     source_pdf_url: pdfUrl,
     extraction_note:
-      "Automatically extracted text. All fields require admin verification.",
-    extracted_text_excerpt: text.slice(0, 12000),
-    extracted_text_length: text.length,
+      "Improved automatic text extraction. Verify all information against the official notification before publishing.",
+    extracted_text_excerpt: normalizedText.slice(0, 12000),
+    extracted_text_length: normalizedText.length,
   };
 }
 
