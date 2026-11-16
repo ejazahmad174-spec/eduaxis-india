@@ -50,7 +50,7 @@ async function readWithOCR(buffer: Buffer): Promise<string> {
   );
 
   formData.append("file", pdfBlob, "government-notice.pdf");
-  formData.append("language", "eng");
+  formData.append("language", "auto");
   formData.append("filetype", "PDF");
   formData.append("isOverlayRequired", "false");
   formData.append("OCREngine", "2");
