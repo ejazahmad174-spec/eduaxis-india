@@ -51,7 +51,12 @@ type JobSource = {
 };
 
 const statusFilters = [
-  'all', 'new', 'processing', 'imported', 'ignored', 'error',
+  'all',
+  'new',
+  'processing',
+  'imported',
+  'ignored',
+  'error',
 ];
 
 const categoryFilters = [
@@ -86,7 +91,10 @@ function formatDate(value: string | null) {
   if (!value) return 'Not recorded';
 
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Not recorded';
+
+  if (Number.isNaN(date.getTime())) {
+    return 'Not recorded';
+  }
 
   return date.toLocaleString('en-IN', {
     day: '2-digit',
@@ -104,11 +112,13 @@ export default function DiscoveredGovernmentJobsPage() {
   const [sources, setSources] = useState<JobSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [collecting, setCollecting] = useState(false);
   const [filter, setFilter] = useState('new');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
+  // Load existing discoveries and source names.
   const loadDiscoveries = useCallback(async () => {
     const client = supabase;
 
@@ -134,7 +144,7 @@ export default function DiscoveredGovernmentJobsPage() {
     if (discoveriesResult.error) {
       setErrorMessage(
         'Could not load discovered notices: ' +
-        discoveriesResult.error.message
+          discoveriesResult.error.message
       );
     } else {
       setItems((discoveriesResult.data || []) as Discovery[]);
@@ -148,6 +158,74 @@ export default function DiscoveredGovernmentJobsPage() {
     setLoading(false);
   }, []);
 
+  // Run the collector manually using the logged-in administrator's token.
+  async function runCollection() {
+    const client = supabase;
+
+    if (!client) {
+      setErrorMessage('Supabase connection is not configured.');
+      return;
+    }
+
+    setCollecting(true);
+    setMessage('Collection is running. Please wait...');
+    setErrorMessage('');
+
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await client.auth.getSession();
+
+      if (sessionError || !session?.access_token) {
+        throw new Error(
+          'Your login session has expired. Please sign in again.'
+        );
+      }
+
+      const response = await fetch('/api/jobs/collect', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        cache: 'no-store',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error || 'Government job collection failed.'
+        );
+      }
+
+      await loadDiscoveries();
+
+      setMessage(
+        `Collection completed successfully. Sources checked: ${
+          result.sources_checked ?? 0
+        }. Candidate links found: ${
+          result.candidate_links_found ?? 0
+        }. PDFs processed: ${
+          result.pdfs_processed ?? 0
+        }. PDFs successfully read: ${
+          result.pdfs_successfully_read ?? 0
+        }.`
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'An unexpected collection error occurred.'
+      );
+
+      setMessage('');
+    } finally {
+      setCollecting(false);
+    }
+  }
+
+  // Verify administrator access before showing the dashboard.
   useEffect(() => {
     let active = true;
 
@@ -183,7 +261,9 @@ export default function DiscoveredGovernmentJobsPage() {
 
       await loadDiscoveries();
 
-      if (active) setLoading(false);
+      if (active) {
+        setLoading(false);
+      }
     }
 
     checkAdmin();
@@ -193,8 +273,10 @@ export default function DiscoveredGovernmentJobsPage() {
     };
   }, [router, loadDiscoveries]);
 
+  // Update the status of a discovered notice.
   async function updateStatus(item: Discovery, nextStatus: string) {
     const client = supabase;
+
     if (!client) return;
 
     setBusyId(item.id);
@@ -211,7 +293,9 @@ export default function DiscoveredGovernmentJobsPage() {
       .eq('id', item.id);
 
     if (error) {
-      setErrorMessage('Could not update notice: ' + error.message);
+      setErrorMessage(
+        'Could not update notice: ' + error.message
+      );
     } else {
       setMessage('Notice status updated successfully.');
       await loadDiscoveries();
@@ -220,8 +304,18 @@ export default function DiscoveredGovernmentJobsPage() {
     setBusyId(null);
   }
 
+  // Get the name of the source organisation.
+  function getSourceName(sourceId: string) {
+    return (
+      sources.find(source => source.id === sourceId)?.source_name ||
+      'Unknown source'
+    );
+  }
+
+  // Create a draft job after checking for duplicates.
   async function createDraftJob(item: Discovery) {
     const client = supabase;
+
     if (!client) return;
 
     setBusyId(item.id);
@@ -230,7 +324,6 @@ export default function DiscoveredGovernmentJobsPage() {
 
     const sourceName = getSourceName(item.source_id);
 
-    // Check the source reference first so the same notice is not imported twice.
     const { data: existingJob, error: lookupError } = await client
       .from('government_jobs')
       .select('id')
@@ -239,7 +332,11 @@ export default function DiscoveredGovernmentJobsPage() {
       .maybeSingle();
 
     if (lookupError) {
-      setErrorMessage('Could not check for an existing job: ' + lookupError.message);
+      setErrorMessage(
+        'Could not check for an existing job: ' +
+          lookupError.message
+      );
+
       setBusyId(null);
       return;
     }
@@ -257,10 +354,13 @@ export default function DiscoveredGovernmentJobsPage() {
       if (discoveryError) {
         setErrorMessage(
           'This notice is already in Government Jobs, but its discovery status could not be updated: ' +
-          discoveryError.message
+            discoveryError.message
         );
       } else {
-        setMessage('This notice was already imported. No duplicate draft was created.');
+        setMessage(
+          'This notice was already imported. No duplicate draft was created.'
+        );
+
         await loadDiscoveries();
       }
 
@@ -271,7 +371,9 @@ export default function DiscoveredGovernmentJobsPage() {
     const { error: insertError } = await client
       .from('government_jobs')
       .insert({
-        title: item.discovered_title || 'Untitled government job notice',
+        title:
+          item.discovered_title ||
+          'Untitled government job notice',
         organization: sourceName,
         notification_url: item.discovered_url,
         status: 'draft',
@@ -281,7 +383,10 @@ export default function DiscoveredGovernmentJobsPage() {
       });
 
     if (insertError) {
-      setErrorMessage('Could not create draft job: ' + insertError.message);
+      setErrorMessage(
+        'Could not create draft job: ' + insertError.message
+      );
+
       setBusyId(null);
       return;
     }
@@ -299,6 +404,7 @@ export default function DiscoveredGovernmentJobsPage() {
       setMessage(
         'Draft job created successfully. However, the discovery status could not be updated. Refresh the page before trying again.'
       );
+
       setErrorMessage(discoveryError.message);
     } else {
       setMessage(
@@ -310,11 +416,13 @@ export default function DiscoveredGovernmentJobsPage() {
     setBusyId(null);
   }
 
+  // Change the category of a discovered notice.
   async function updateCategory(
     item: Discovery,
     nextCategory: NoticeCategory
   ) {
     const client = supabase;
+
     if (!client) return;
 
     setBusyId(item.id);
@@ -327,7 +435,9 @@ export default function DiscoveredGovernmentJobsPage() {
       .eq('id', item.id);
 
     if (error) {
-      setErrorMessage('Could not update category: ' + error.message);
+      setErrorMessage(
+        'Could not update category: ' + error.message
+      );
     } else {
       setMessage('Notice category updated successfully.');
       await loadDiscoveries();
@@ -356,13 +466,6 @@ export default function DiscoveredGovernmentJobsPage() {
     error: items.filter(item => item.status === 'error').length,
   };
 
-  function getSourceName(sourceId: string) {
-    return (
-      sources.find(source => source.id === sourceId)?.source_name ||
-      'Unknown source'
-    );
-  }
-
   if (loading) {
     return (
       <main className="admin-loading">
@@ -383,16 +486,26 @@ export default function DiscoveredGovernmentJobsPage() {
         </a>
 
         <div className="admin-side-label">WORKSPACE</div>
+
         <a className="admin-side-link" href="/admin/dashboard">
           ▦ &nbsp; Dashboard
         </a>
 
-        <div className="admin-side-label">CONTENT MANAGEMENT</div>
-        <a className="admin-side-link" href="/admin/study-materials">
+        <div className="admin-side-label">
+          CONTENT MANAGEMENT
+        </div>
+
+        <a
+          className="admin-side-link"
+          href="/admin/study-materials"
+        >
           ▤ &nbsp; Study Materials
         </a>
 
-        <a className="admin-side-link" href="/admin/government-jobs">
+        <a
+          className="admin-side-link"
+          href="/admin/government-jobs"
+        >
           ▤ &nbsp; Government Jobs
         </a>
 
@@ -415,11 +528,17 @@ export default function DiscoveredGovernmentJobsPage() {
       <section className="admin-main">
         <header className="admin-topbar">
           <div>
-            <div className="admin-kicker">EDUAXIS INDIA / ADMIN</div>
+            <div className="admin-kicker">
+              EDUAXIS INDIA / ADMIN
+            </div>
+
             <h1>Discovered Notices</h1>
           </div>
 
-          <a className="admin-logout" href="/admin/government-jobs">
+          <a
+            className="admin-logout"
+            href="/admin/government-jobs"
+          >
             Back to Government Jobs
           </a>
         </header>
@@ -434,37 +553,46 @@ export default function DiscoveredGovernmentJobsPage() {
           </p>
 
           {message && (
-            <div style={{
-              padding: 12,
-              margin: '15px 0',
-              background: '#e5f8ef',
-              color: '#087443',
-              borderRadius: 8,
-            }}>
+            <div
+              style={{
+                padding: 12,
+                margin: '15px 0',
+                background: '#e5f8ef',
+                color: '#087443',
+                borderRadius: 8,
+              }}
+            >
               {message}
             </div>
           )}
 
           {errorMessage && (
-            <div role="alert" style={{
-              padding: 12,
-              margin: '15px 0',
-              background: '#fff0f0',
-              color: '#bd2525',
-              borderRadius: 8,
-            }}>
+            <div
+              role="alert"
+              style={{
+                padding: 12,
+                margin: '15px 0',
+                background: '#fff0f0',
+                color: '#bd2525',
+                borderRadius: 8,
+              }}
+            >
               {errorMessage}
             </div>
           )}
 
-          <h3 style={{ marginTop: 25 }}>Filter by Status</h3>
+          <h3 style={{ marginTop: 25 }}>
+            Filter by Status
+          </h3>
 
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 10,
-            margin: '15px 0 25px',
-          }}>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 10,
+              margin: '15px 0 25px',
+            }}
+          >
             {statusFilters.map(item => (
               <button
                 key={item}
@@ -474,7 +602,8 @@ export default function DiscoveredGovernmentJobsPage() {
                   padding: '10px 15px',
                   borderRadius: 8,
                   border: '1px solid #dce5ec',
-                  background: filter === item ? '#102d49' : '#fff',
+                  background:
+                    filter === item ? '#102d49' : '#fff',
                   color: filter === item ? '#fff' : '#17324d',
                   cursor: 'pointer',
                   fontWeight: 700,
@@ -486,24 +615,31 @@ export default function DiscoveredGovernmentJobsPage() {
             ))}
           </div>
 
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: 12,
-            marginBottom: 22,
-          }}>
-            <label htmlFor="notice-category" style={{
-              fontWeight: 700,
-              color: '#17324d',
-            }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 12,
+              marginBottom: 22,
+            }}
+          >
+            <label
+              htmlFor="notice-category"
+              style={{
+                fontWeight: 700,
+                color: '#17324d',
+              }}
+            >
               Filter by Category:
             </label>
 
             <select
               id="notice-category"
               value={categoryFilter}
-              onChange={event => setCategoryFilter(event.target.value)}
+              onChange={event =>
+                setCategoryFilter(event.target.value)
+              }
               style={{
                 padding: '11px 14px',
                 minWidth: 230,
@@ -515,63 +651,76 @@ export default function DiscoveredGovernmentJobsPage() {
               }}
             >
               {categoryFilters.map(category => (
-                <option key={category.value} value={category.value}>
+                <option
+                  key={category.value}
+                  value={category.value}
+                >
                   {category.label}
                 </option>
               ))}
             </select>
           </div>
 
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: 12,
-            flexWrap: 'wrap',
-            marginBottom: 18,
-          }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 12,
+              flexWrap: 'wrap',
+              marginBottom: 18,
+            }}
+          >
             <h2 style={{ margin: 0 }}>
               Notices ({visibleItems.length})
             </h2>
 
             <button
               type="button"
-              onClick={loadDiscoveries}
-              disabled={busyId !== null}
+              onClick={runCollection}
+              disabled={collecting || busyId !== null}
               style={{
                 padding: '10px 15px',
                 border: 0,
                 borderRadius: 8,
-                background: '#e8f1fb',
-                color: '#174a7c',
+                background: collecting ? '#647b91' : '#102d49',
+                color: '#fff',
                 fontWeight: 700,
-                cursor: 'pointer',
+                cursor: collecting ? 'not-allowed' : 'pointer',
               }}
             >
-              Refresh Notices
+              {collecting
+                ? 'Collecting Notices...'
+                : 'Run Collection & Refresh'}
             </button>
           </div>
 
           {visibleItems.length === 0 ? (
-            <div style={{
-              background: '#fff',
-              padding: 35,
-              border: '1px solid #dce5ec',
-              borderRadius: 12,
-              textAlign: 'center',
-            }}>
+            <div
+              style={{
+                background: '#fff',
+                padding: 35,
+                border: '1px solid #dce5ec',
+                borderRadius: 12,
+                textAlign: 'center',
+              }}
+            >
               <h3>No notices found</h3>
+
               <p style={{ color: '#647b91' }}>
-                There are currently no notices matching these filters.
-                New discoveries will appear here after collection.
+                There are currently no notices matching these
+                filters. New discoveries will appear here after
+                collection.
               </p>
             </div>
           ) : (
             <div style={{ display: 'grid', gap: 15 }}>
               {visibleItems.map(item => {
                 const category = item.notice_category || 'general';
+
                 const categoryStyle =
-                  categoryColors[category] || categoryColors.general;
+                  categoryColors[category] ||
+                  categoryColors.general;
 
                 return (
                   <article
@@ -583,51 +732,63 @@ export default function DiscoveredGovernmentJobsPage() {
                       padding: 20,
                     }}
                   >
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'flex-start',
-                      gap: 12,
-                      flexWrap: 'wrap',
-                    }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        gap: 12,
+                        flexWrap: 'wrap',
+                      }}
+                    >
                       <div style={{ flex: '1 1 350px' }}>
-                        <h3 style={{
-                          margin: '0 0 12px',
-                          fontSize: 19,
-                          lineHeight: 1.4,
-                        }}>
+                        <h3
+                          style={{
+                            margin: '0 0 12px',
+                            fontSize: 19,
+                            lineHeight: 1.4,
+                          }}
+                        >
                           {item.discovered_title ||
                             'Untitled recruitment notice'}
                         </h3>
 
-                        <div style={{
-                          color: '#174a7c',
-                          fontSize: 14,
-                          fontWeight: 700,
-                          marginBottom: 8,
-                        }}>
-                          Organisation: {getSourceName(item.source_id)}
+                        <div
+                          style={{
+                            color: '#174a7c',
+                            fontSize: 14,
+                            fontWeight: 700,
+                            marginBottom: 8,
+                          }}
+                        >
+                          Organisation:{' '}
+                          {getSourceName(item.source_id)}
                         </div>
 
-                        <span style={{
-                          display: 'inline-block',
-                          background: categoryStyle.background,
-                          color: categoryStyle.color,
-                          padding: '7px 11px',
-                          borderRadius: 20,
-                          fontSize: 12,
-                          fontWeight: 700,
-                          marginBottom: 10,
-                        }}>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            background: categoryStyle.background,
+                            color: categoryStyle.color,
+                            padding: '7px 11px',
+                            borderRadius: 20,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            marginBottom: 10,
+                          }}
+                        >
                           {categoryLabels[category] || 'General'}
                         </span>
 
-                        <div style={{
-                          color: '#647b91',
-                          fontSize: 13,
-                          marginBottom: 8,
-                        }}>
-                          Discovered: {formatDate(item.discovered_at)}
+                        <div
+                          style={{
+                            color: '#647b91',
+                            fontSize: 13,
+                            marginBottom: 8,
+                          }}
+                        >
+                          Discovered:{' '}
+                          {formatDate(item.discovered_at)}
                         </div>
 
                         <a
@@ -645,63 +806,139 @@ export default function DiscoveredGovernmentJobsPage() {
                         </a>
 
                         {item.pdf_url && (
-                          <div style={{
-                            marginTop: 12,
-                            padding: 12,
-                            background: '#f5f8fb',
-                            border: '1px solid #dce5ec',
-                            borderRadius: 8,
-                          }}>
-                            <div style={{ fontWeight: 700, marginBottom: 7 }}>
-                              PDF extraction: {(item.extraction_status || 'pending').replace('_', ' ')}
+                          <div
+                            style={{
+                              marginTop: 12,
+                              padding: 12,
+                              background: '#f5f8fb',
+                              border: '1px solid #dce5ec',
+                              borderRadius: 8,
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontWeight: 700,
+                                marginBottom: 7,
+                              }}
+                            >
+                              PDF extraction:{' '}
+                              {(item.extraction_status || 'pending')
+                                .replace('_', ' ')}
                             </div>
 
                             <a
                               href={item.pdf_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              style={{ color: '#087d91', fontWeight: 700, fontSize: 13 }}
+                              style={{
+                                color: '#087d91',
+                                fontWeight: 700,
+                                fontSize: 13,
+                              }}
                             >
                               Open PDF notification ↗
                             </a>
 
                             {item.extraction_error && (
-                              <p style={{ color: '#bd2525', fontSize: 13, marginBottom: 0 }}>
+                              <p
+                                style={{
+                                  color: '#bd2525',
+                                  fontSize: 13,
+                                  marginBottom: 0,
+                                }}
+                              >
                                 {item.extraction_error}
                               </p>
                             )}
 
                             {item.extracted_details && (
-                              <div style={{ marginTop: 10, fontSize: 13, color: '#34536e', lineHeight: 1.7 }}>
+                              <div
+                                style={{
+                                  marginTop: 10,
+                                  fontSize: 13,
+                                  color: '#34536e',
+                                  lineHeight: 1.7,
+                                }}
+                              >
                                 {item.extracted_details.job_title_candidates?.length ? (
-                                  <div><b>Title found:</b> {item.extracted_details.job_title_candidates.join(' / ')}</div>
+                                  <div>
+                                    <b>Title found:</b>{' '}
+                                    {item.extracted_details.job_title_candidates.join(
+                                      ' / '
+                                    )}
+                                  </div>
                                 ) : null}
+
+                                {item.extracted_details.department && (
+                                  <div>
+                                    <b>Department:</b>{' '}
+                                    {item.extracted_details.department}
+                                  </div>
+                                )}
+
                                 {item.extracted_details.vacancies && (
-                                  <div><b>Vacancies:</b> {item.extracted_details.vacancies}</div>
+                                  <div>
+                                    <b>Vacancies:</b>{' '}
+                                    {item.extracted_details.vacancies}
+                                  </div>
                                 )}
+
                                 {item.extracted_details.qualification && (
-                                  <div><b>Qualification:</b> {item.extracted_details.qualification}</div>
+                                  <div>
+                                    <b>Qualification:</b>{' '}
+                                    {item.extracted_details.qualification}
+                                  </div>
                                 )}
+
                                 {item.extracted_details.age_limit && (
-                                  <div><b>Age limit:</b> {item.extracted_details.age_limit}</div>
+                                  <div>
+                                    <b>Age limit:</b>{' '}
+                                    {item.extracted_details.age_limit}
+                                  </div>
                                 )}
+
                                 {item.extracted_details.application_fee && (
-                                  <div><b>Application fee:</b> {item.extracted_details.application_fee}</div>
+                                  <div>
+                                    <b>Application fee:</b>{' '}
+                                    {item.extracted_details.application_fee}
+                                  </div>
                                 )}
+
                                 {item.extracted_details.application_start_date && (
-                                  <div><b>Application starts:</b> {item.extracted_details.application_start_date}</div>
+                                  <div>
+                                    <b>Application starts:</b>{' '}
+                                    {item.extracted_details.application_start_date}
+                                  </div>
                                 )}
+
                                 {item.extracted_details.last_date && (
-                                  <div><b>Last date:</b> {item.extracted_details.last_date}</div>
+                                  <div>
+                                    <b>Last date:</b>{' '}
+                                    {item.extracted_details.last_date}
+                                  </div>
                                 )}
+
                                 {item.extracted_details.examination_date && (
-                                  <div><b>Exam date:</b> {item.extracted_details.examination_date}</div>
+                                  <div>
+                                    <b>Exam date:</b>{' '}
+                                    {item.extracted_details.examination_date}
+                                  </div>
                                 )}
+
                                 {item.extracted_details.pdf_pages && (
-                                  <div><b>PDF pages:</b> {item.extracted_details.pdf_pages}</div>
+                                  <div>
+                                    <b>PDF pages:</b>{' '}
+                                    {item.extracted_details.pdf_pages}
+                                  </div>
                                 )}
+
                                 {item.extracted_details.extraction_note && (
-                                  <div style={{ marginTop: 6, fontStyle: 'italic' }}>
+                                  <div
+                                    style={{
+                                      marginTop: 6,
+                                      fontStyle: 'italic',
+                                    }}
+                                  >
                                     {item.extracted_details.extraction_note}
                                   </div>
                                 )}
@@ -709,34 +946,45 @@ export default function DiscoveredGovernmentJobsPage() {
                             )}
 
                             {item.extracted_at && (
-                              <div style={{ marginTop: 7, color: '#647b91', fontSize: 12 }}>
-                                Extracted: {formatDate(item.extracted_at)}
+                              <div
+                                style={{
+                                  marginTop: 7,
+                                  color: '#647b91',
+                                  fontSize: 12,
+                                }}
+                              >
+                                Extracted:{' '}
+                                {formatDate(item.extracted_at)}
                               </div>
                             )}
                           </div>
                         )}
                       </div>
 
-                      <span style={{
-                        background: '#edf3f8',
-                        color: '#34536e',
-                        padding: '7px 12px',
-                        borderRadius: 20,
-                        fontSize: 12,
-                        fontWeight: 700,
-                        textTransform: 'capitalize',
-                      }}>
+                      <span
+                        style={{
+                          background: '#edf3f8',
+                          color: '#34536e',
+                          padding: '7px 12px',
+                          borderRadius: 20,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          textTransform: 'capitalize',
+                        }}
+                      >
                         {item.status}
                       </span>
                     </div>
 
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                      gap: 10,
-                      marginTop: 16,
-                    }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 10,
+                        marginTop: 16,
+                      }}
+                    >
                       <label
                         htmlFor={`category-${item.id}`}
                         style={{
@@ -751,7 +999,7 @@ export default function DiscoveredGovernmentJobsPage() {
                       <select
                         id={`category-${item.id}`}
                         value={category}
-                        disabled={busyId !== null}
+                        disabled={busyId !== null || collecting}
                         onChange={event =>
                           updateCategory(
                             item,
@@ -781,40 +1029,48 @@ export default function DiscoveredGovernmentJobsPage() {
                       </select>
 
                       {busyId === item.id && (
-                        <span style={{
-                          fontSize: 12,
-                          color: '#647b91',
-                        }}>
+                        <span
+                          style={{
+                            fontSize: 12,
+                            color: '#647b91',
+                          }}
+                        >
                           Saving…
                         </span>
                       )}
                     </div>
 
                     {item.error_message && (
-                      <p style={{
-                        color: '#bd2525',
-                        background: '#fff0f0',
-                        padding: 10,
-                        borderRadius: 7,
-                        fontSize: 13,
-                      }}>
+                      <p
+                        style={{
+                          color: '#bd2525',
+                          background: '#fff0f0',
+                          padding: 10,
+                          borderRadius: 7,
+                          fontSize: 13,
+                        }}
+                      >
                         {item.error_message}
                       </p>
                     )}
 
-                    <div style={{
-                      display: 'flex',
-                      gap: 9,
-                      flexWrap: 'wrap',
-                      marginTop: 18,
-                      paddingTop: 14,
-                      borderTop: '1px solid #edf1f5',
-                    }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 9,
+                        flexWrap: 'wrap',
+                        marginTop: 18,
+                        paddingTop: 14,
+                        borderTop: '1px solid #edf1f5',
+                      }}
+                    >
                       {item.status !== 'ignored' && (
                         <button
                           type="button"
-                          disabled={busyId !== null}
-                          onClick={() => updateStatus(item, 'ignored')}
+                          disabled={busyId !== null || collecting}
+                          onClick={() =>
+                            updateStatus(item, 'ignored')
+                          }
                           style={{
                             padding: '9px 13px',
                             border: 0,
@@ -834,8 +1090,10 @@ export default function DiscoveredGovernmentJobsPage() {
                       {item.status === 'ignored' && (
                         <button
                           type="button"
-                          disabled={busyId !== null}
-                          onClick={() => updateStatus(item, 'new')}
+                          disabled={busyId !== null || collecting}
+                          onClick={() =>
+                            updateStatus(item, 'new')
+                          }
                           style={{
                             padding: '9px 13px',
                             border: 0,
@@ -852,30 +1110,35 @@ export default function DiscoveredGovernmentJobsPage() {
                         </button>
                       )}
 
-                      {item.status !== 'imported' && item.status !== 'ignored' && (
-                        <button
-                          type="button"
-                          disabled={busyId !== null}
-                          onClick={() => createDraftJob(item)}
-                          style={{
-                            padding: '9px 13px',
-                            border: 0,
-                            borderRadius: 7,
-                            background: '#e8f1fb',
-                            color: '#174a7c',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {busyId === item.id ? 'Please wait…' : 'Create Draft Job'}
-                        </button>
-                      )}
+                      {item.status !== 'imported' &&
+                        item.status !== 'ignored' && (
+                          <button
+                            type="button"
+                            disabled={busyId !== null || collecting}
+                            onClick={() => createDraftJob(item)}
+                            style={{
+                              padding: '9px 13px',
+                              border: 0,
+                              borderRadius: 7,
+                              background: '#e8f1fb',
+                              color: '#174a7c',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {busyId === item.id
+                              ? 'Please wait…'
+                              : 'Create Draft Job'}
+                          </button>
+                        )}
 
                       {item.status === 'error' && (
                         <button
                           type="button"
-                          disabled={busyId !== null}
-                          onClick={() => updateStatus(item, 'new')}
+                          disabled={busyId !== null || collecting}
+                          onClick={() =>
+                            updateStatus(item, 'new')
+                          }
                           style={{
                             padding: '9px 13px',
                             border: 0,
@@ -896,15 +1159,17 @@ export default function DiscoveredGovernmentJobsPage() {
             </div>
           )}
 
-          <div style={{
-            marginTop: 25,
-            padding: 16,
-            background: '#edf4f8',
-            borderRadius: 10,
-            color: '#526b80',
-            fontSize: 13,
-            lineHeight: 1.7,
-          }}>
+          <div
+            style={{
+              marginTop: 25,
+              padding: 16,
+              background: '#edf4f8',
+              borderRadius: 10,
+              color: '#526b80',
+              fontSize: 13,
+              lineHeight: 1.7,
+            }}
+          >
             <strong>Administrator reminder:</strong> Automatically
             discovered links are candidates, not verified information.
             Open the official notice, verify its details and dates,
