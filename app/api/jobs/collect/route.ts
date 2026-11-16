@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { readJobPDF } from "@/lib/job-pdf-reader";
@@ -31,11 +32,7 @@ function cleanText(value: string): string {
 }
 
 function isPdfUrl(value: string): boolean {
-  try {
-    return /\.pdf(?:$|[?#])/i.test(value);
-  } catch {
-    return false;
-  }
+  return /\.pdf(?:$|[?#])/i.test(value);
 }
 
 function getTargetPages(sourceUrl: string): string[] {
@@ -63,35 +60,19 @@ function classifyNotice(
   const text = `${title} ${url}`.toLowerCase();
   const hostname = new URL(sourceUrl).hostname.toLowerCase();
 
-  if (
-    /certificate|marksheet|mark sheet|digilocker|credential|प्रमाणपत्र/i.test(
-      text
-    )
-  ) {
+  if (/certificate|marksheet|mark sheet|digilocker|credential|प्रमाणपत्र/i.test(text)) {
     return "certificate";
   }
 
-  if (
-    /admit card|answer key|answer-key|result|exam date|examination schedule|exam schedule|exam city|hall ticket|प्रवेश पत्र|उत्तर कुंजी|परिणाम/i.test(
-      text
-    )
-  ) {
+  if (/admit card|answer key|answer-key|result|exam date|examination schedule|exam schedule|exam city|hall ticket|प्रवेश पत्र|उत्तर कुंजी|परिणाम/i.test(text)) {
     return "examination";
   }
 
-  if (
-    /ctet|teacher eligibility|eligibility test|eligibility certificate|application form|apply online|online application|registration|पात्रता परीक्षा/i.test(
-      text
-    )
-  ) {
+  if (/ctet|teacher eligibility|eligibility test|eligibility certificate|application form|apply online|online application|registration|पात्रता परीक्षा/i.test(text)) {
     return "teacher_eligibility";
   }
 
-  if (
-    /recruitment|vacancy|vacancies|advertisement|appointment|selection|career|job opening|भर्ती|नियुक्ति|रिक्ति/i.test(
-      text
-    )
-  ) {
+  if (/recruitment|vacancy|vacancies|advertisement|appointment|selection|career|job opening|भर्ती|नियुक्ति|रिक्ति/i.test(text)) {
     return "recruitment";
   }
 
@@ -133,9 +114,7 @@ function findRecruitmentLinks(
       rowText = cleanText(html.slice(rowStart, rowEnd + 5));
     }
 
-    const title =
-      anchorTitle.length >= 5 ? anchorTitle : rowText;
-
+    const title = anchorTitle.length >= 5 ? anchorTitle : rowText;
     const context = `${anchorTitle} ${rowText}`;
 
     if (
@@ -174,9 +153,7 @@ function findRecruitmentLinks(
         url: url.href,
       });
 
-      if (results.length >= 50) {
-        break;
-      }
+      if (results.length >= 50) break;
     } catch {
       continue;
     }
@@ -225,7 +202,6 @@ function findField(
   return null;
 }
 
-
 function extractJobDetails(text: string, pdfUrl: string) {
   const normalizedText = text
     .replace(/\r/g, "\n")
@@ -257,9 +233,7 @@ function extractJobDetails(text: string, pdfUrl: string) {
 
   const titleCandidates = lines
     .filter((line) =>
-      /special advertisement|recruitment|invites online|vacancy details|selection to the following posts|assistant|officer|teacher|translator|भर्ती|विज्ञापन/i.test(
-        line
-      )
+      /special advertisement|recruitment|invites online|vacancy details|selection to the following posts|assistant|officer|teacher|translator|भर्ती|विज्ञापन/i.test(line)
     )
     .slice(0, 8);
 
@@ -337,17 +311,14 @@ export async function GET(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!cronSecret || !supabaseUrl || !serviceKey) {
+  const publishableKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !serviceKey) {
     return NextResponse.json(
       { error: "Collector configuration is incomplete." },
       { status: 500 }
-    );
-  }
-
-  if (request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
-    return NextResponse.json(
-      { error: "Unauthorized." },
-      { status: 401 }
     );
   }
 
@@ -357,6 +328,73 @@ export async function GET(request: Request) {
       autoRefreshToken: false,
     },
   });
+
+  const authorization = request.headers.get("authorization") || "";
+
+  const isCronRequest = Boolean(
+    cronSecret && authorization === `Bearer ${cronSecret}`
+  );
+
+  // Cron requests use CRON_SECRET.
+  // Manual requests must come from a signed-in administrator.
+  if (!isCronRequest) {
+    const accessToken = authorization.startsWith("Bearer ")
+      ? authorization.slice(7).trim()
+      : "";
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: "Unauthorized. Please sign in as an administrator." },
+        { status: 401 }
+      );
+    }
+
+    if (!publishableKey) {
+      return NextResponse.json(
+        { error: "Supabase publishable key is not configured." },
+        { status: 500 }
+      );
+    }
+
+    const authClient = createClient(supabaseUrl, publishableKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+
+    const { data: userData, error: authError } =
+      await authClient.auth.getUser(accessToken);
+
+    if (authError || !userData.user) {
+      return NextResponse.json(
+        { error: "Your session is invalid or expired. Please sign in again." },
+        { status: 401 }
+      );
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userData.user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error("Could not verify administrator role:", profileError);
+
+      return NextResponse.json(
+        { error: "Could not verify administrator permissions." },
+        { status: 500 }
+      );
+    }
+
+    if (profile?.role !== "admin") {
+      return NextResponse.json(
+        { error: "Administrator access is required." },
+        { status: 403 }
+      );
+    }
+  }
 
   const { data: sources, error: sourceError } = await supabase
     .from("government_job_sources")
@@ -449,19 +487,19 @@ export async function GET(request: Request) {
 
       let sourcePdfsRead = 0;
 
-      // Process existing pending PDF records first. This includes older
-      // discoveries that may no longer appear among the latest page links.
-      // The global limit is checked only after a valid pending PDF is found.
-      const { data: pendingDiscoveries, error: pendingError } = await supabase
-        .from("government_job_discoveries")
-        .select("id, pdf_url, discovered_url, extraction_status")
-        .eq("source_id", source.id)
-        .eq("extraction_status", "pending")
-        .order("discovered_at", { ascending: true })
-        .limit(50);
+      const { data: pendingDiscoveries, error: pendingError } =
+        await supabase
+          .from("government_job_discoveries")
+          .select("id, pdf_url, discovered_url, extraction_status")
+          .eq("source_id", source.id)
+          .eq("extraction_status", "pending")
+          .order("discovered_at", { ascending: true })
+          .limit(50);
 
       if (pendingError) {
-        throw new Error(`Could not load pending PDF notices: ${pendingError.message}`);
+        throw new Error(
+          `Could not load pending PDF notices: ${pendingError.message}`
+        );
       }
 
       for (const discovery of pendingDiscoveries || []) {
@@ -471,13 +509,14 @@ export async function GET(request: Request) {
 
         const pdfUrl =
           discovery.pdf_url ||
-          (isPdfUrl(discovery.discovered_url) ? discovery.discovered_url : null);
+          (isPdfUrl(discovery.discovered_url)
+            ? discovery.discovered_url
+            : null);
 
         if (!pdfUrl || !isPdfUrl(pdfUrl)) {
           continue;
         }
 
-        // Count only records that are actually eligible for PDF extraction.
         pdfsProcessed++;
 
         const { error: processingError } = await supabase
@@ -491,7 +530,10 @@ export async function GET(request: Request) {
           .eq("extraction_status", "pending");
 
         if (processingError) {
-          console.error("Could not mark PDF as processing:", processingError);
+          console.error(
+            "Could not mark PDF as processing:",
+            processingError
+          );
           continue;
         }
 
@@ -507,13 +549,17 @@ export async function GET(request: Request) {
             .update({
               pdf_url: pdfUrl,
               extraction_status: needsOcr ? "needs_ocr" : "failed",
-              extraction_error: pdfResult.error || "PDF reading failed.",
+              extraction_error:
+                pdfResult.error || "PDF reading failed.",
               extracted_at: new Date().toISOString(),
             })
             .eq("id", discovery.id);
 
           if (failureUpdateError) {
-            console.error("Could not save PDF extraction failure:", failureUpdateError);
+            console.error(
+              "Could not save PDF extraction failure:",
+              failureUpdateError
+            );
           }
 
           continue;
@@ -539,7 +585,10 @@ export async function GET(request: Request) {
           .eq("id", discovery.id);
 
         if (updateError) {
-          console.error("Could not save extracted PDF details:", updateError);
+          console.error(
+            "Could not save extracted PDF details:",
+            updateError
+          );
         } else {
           pdfsSuccessful++;
           sourcePdfsRead++;
