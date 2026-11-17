@@ -325,6 +325,20 @@ export default function DiscoveredGovernmentJobsPage() {
     setMessage('');
     setErrorMessage('');
 
+    // Keep PDFs with incomplete or empty extraction in the review queue.
+if (
+  item.pdf_url &&
+  (
+    item.extraction_status !== 'completed' ||
+    !item.extracted_details?.extracted_text_excerpt?.trim()
+  )
+) {
+  setErrorMessage(
+    'PDF extraction is incomplete or contains no readable text. Review this notice manually before importing.'
+  );
+  setBusyId(null);
+  return;
+}
     const sourceName = getSourceName(item.source_id);
     const title = item.discovered_title || 'Untitled career notice';
     const lowerTitle = title.toLowerCase();
