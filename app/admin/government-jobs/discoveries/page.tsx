@@ -7,11 +7,12 @@ import { supabase } from '@/lib/supabase';
 import '../../admin.css';
 
 type NoticeCategory =
-  | 'recruitment'
-  | 'teacher_eligibility'
-  | 'examination'
-  | 'certificate'
-  | 'general';
+  | 'government_job'
+  | 'recruitment_notice'
+  | 'admit_card'
+  | 'result_answer_key'
+  | 'syllabus'
+  | 'other_update';
 
 type Discovery = {
   id: string;
