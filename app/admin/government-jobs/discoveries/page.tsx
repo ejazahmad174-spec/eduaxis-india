@@ -20,6 +20,8 @@ type Discovery = {
   discovered_url: string;
   notice_category: NoticeCategory;
   status: 'new' | 'processing' | 'imported' | 'ignored' | 'error';
+    imported_job_id: string | null;
+  imported_update_id: string | null;
   discovered_at: string;
   processed_at: string | null;
   error_message: string | null;
