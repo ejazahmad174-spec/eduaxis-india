@@ -61,27 +61,34 @@ function classifyNotice(
   const text = `${title} ${url}`.toLowerCase();
   const hostname = new URL(sourceUrl).hostname.toLowerCase();
 
-  if (/certificate|marksheet|mark sheet|digilocker|credential|प्रमाणपत्र/i.test(text)) {
-    return "certificate";
+  if (/admit card|hall ticket|call letter|प्रवेश पत्र/i.test(text)) {
+    return "admit_card";
   }
 
-  if (/admit card|answer key|answer-key|result|exam date|examination schedule|exam schedule|exam city|hall ticket|प्रवेश पत्र|उत्तर कुंजी|परिणाम/i.test(text)) {
-    return "examination";
+  if (/answer key|answer-key|result|merit list|score card|उत्तर कुंजी|परिणाम/i.test(text)) {
+    return "result_answer_key";
   }
 
-  if (/ctet|teacher eligibility|eligibility test|eligibility certificate|application form|apply online|online application|registration|पात्रता परीक्षा/i.test(text)) {
-    return "teacher_eligibility";
+  if (/syllabus|exam pattern|पाठ्यक्रम/i.test(text)) {
+    return "syllabus";
   }
 
-  if (/recruitment|vacancy|vacancies|advertisement|appointment|selection|career|job opening|भर्ती|नियुक्ति|रिक्ति/i.test(text)) {
-    return "recruitment";
+  if (/cancellation|cancelled|canceled|corrigendum|withdrawn|postponed|deferred|extension|revised notification/i.test(text)) {
+    return "recruitment_notice";
   }
 
-  if (hostname === "ctet.nic.in") {
-    return "teacher_eligibility";
+  if (/recruitment|vacancy|vacancies|advertisement|appointment|selection|career|job opening|apply online|application form|भर्ती|नियुक्ति|रिक्ति/i.test(text)) {
+    return "government_job";
   }
 
-  return "general";
+  if (
+    hostname === "ctet.nic.in" ||
+    /ctet|teacher eligibility|eligibility test|पात्रता परीक्षा/i.test(text)
+  ) {
+    return "other_update";
+  }
+
+  return "other_update";
 }
 
 function findRecruitmentLinks(
