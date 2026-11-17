@@ -429,12 +429,13 @@ export default function Home() {
             <span>EduAxis India<small>LEARN. PREPARE. PROGRESS.</small></span>
           </a>
           <nav className="ea-nav-links" aria-label="Main navigation">
-            <a href="/courses">Courses</a>
-            <a href="/mock-tests">Mock Tests</a>
-            <a href="/study-materials">Study Materials</a>
-            <a href="/government-jobs">Government Jobs</a>
-            <a href="/blogs">Blogs</a>
-          </nav>
+  <a href="/courses">Courses</a>
+  <a href="/mock-tests">Mock Tests</a>
+  <a href="/study-materials">Study Materials</a>
+  <a href="/government-jobs">Government Jobs</a>
+  <a href="/career-updates">Career Updates</a>
+  <a href="/blogs">Blogs</a>
+</nav>
           <a className="ea-login" href="/student/login">Student Login</a>
         </div>
       </header>
