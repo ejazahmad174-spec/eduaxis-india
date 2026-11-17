@@ -172,10 +172,16 @@ export default function AdminDashboardPage() {
           ▤ &nbsp; Study Materials
         </a>
 
-        <div className="admin-side-link muted">
-          ▤ &nbsp; Government Jobs
-          <small>Coming next</small>
-        </div>
+        
+<a
+  className="admin-side-link"
+  href="/admin/government-jobs"
+>
+  ▤ &nbsp; Government Jobs
+  <small style={{ marginLeft: '24px' }}>
+    Manage recruitment →
+  </small>
+</a>
 
         <Link
           className="admin-side-link"
