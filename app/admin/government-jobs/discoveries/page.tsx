@@ -21,7 +21,7 @@ type Discovery = {
   discovered_url: string;
   notice_category: NoticeCategory;
   status: 'new' | 'processing' | 'imported' | 'ignored' | 'error';
-    imported_job_id: string | null;
+  imported_job_id: string | null;
   imported_update_id: string | null;
   discovered_at: string;
   processed_at: string | null;
@@ -329,43 +329,42 @@ export default function DiscoveredGovernmentJobsPage() {
     setMessage('');
     setErrorMessage('');
 
-    // Keep PDFs with incomplete or empty extraction in the review queue.
-if (
-  item.pdf_url &&
-  (
-    item.extraction_status !== 'completed' ||
-    !item.extracted_details?.extracted_text_excerpt?.trim()
-  )
-) {
-  setErrorMessage(
-    'PDF extraction is incomplete or contains no readable text. Review this notice manually before importing.'
-  );
-  setBusyId(null);
-  return;
-}
+    // PDFs with incomplete or empty extraction remain in the review queue.
+    if (
+      item.pdf_url &&
+      (item.extraction_status !== 'completed' ||
+        !item.extracted_details?.extracted_text_excerpt?.trim())
+    ) {
+      setErrorMessage(
+        'PDF extraction is incomplete or contains no readable text. Review this notice manually before importing.'
+      );
+      setBusyId(null);
+      return;
+    }
+
     const sourceName = getSourceName(item.source_id);
     const title = item.discovered_title || 'Untitled career notice';
-    const lowerTitle = title.toLowerCase();
-    const lowerUrl = (item.discovered_url || '').toLowerCase();
-    const searchableText = `${lowerTitle} ${lowerUrl}`;
+    const searchableText = `${title} ${item.discovered_url || ''}`.toLowerCase();
 
     const isCancellation =
-      /\b(cancelled|canceled|cancellation|corrigendum|withdrawn|postponed|rescheduled|extension|revised)\b/i.test(searchableText);
+      /\b(cancelled|canceled|cancellation|corrigendum|withdrawn|postponed|rescheduled|extension|revised)\b/i.test(
+        searchableText
+      );
 
     const isAdmitCard =
       /\b(admit card|hall ticket|call letter)\b/i.test(searchableText);
-
     const isResult =
-      /\b(result|answer key|merit list|score card|scorecard)\b/i.test(searchableText);
+      /\b(result|answer key|merit list|score card|scorecard)\b/i.test(
+        searchableText
+      );
+    const isSyllabus = /\b(syllabus|exam pattern)\b/i.test(searchableText);
 
-    const isSyllabus =
-      /\b(syllabus|exam pattern)\b/i.test(searchableText);
-
+    // The administrator's selected category determines the destination.
+    // A cancellation/corrigendum is always a recruitment update, not a vacancy.
     const isVacancy =
-      item.notice_category === 'recruitment' &&
-      !isCancellation &&
-      /\b(recruitment|vacanc|apply online|application form|posts?)\b/i.test(searchableText);
+      item.notice_category === 'government_job' && !isCancellation;
 
+    // Check whether this notice has already been imported as a government job.
     const { data: existingJob, error: jobLookupError } = await client
       .from('government_jobs')
       .select('id')
@@ -374,7 +373,9 @@ if (
       .maybeSingle();
 
     if (jobLookupError) {
-      setErrorMessage('Could not check existing jobs: ' + jobLookupError.message);
+      setErrorMessage(
+        'Could not check existing jobs: ' + jobLookupError.message
+      );
       setBusyId(null);
       return;
     }
@@ -394,7 +395,7 @@ if (
       if (error) {
         setErrorMessage(error.message);
       } else {
-        setMessage('This job already exists. Its existing record has been linked.');
+        setMessage('This government job already exists. Its record has been linked.');
         await loadDiscoveries();
       }
 
@@ -402,6 +403,7 @@ if (
       return;
     }
 
+    // Check whether this notice has already been imported as a career update.
     const { data: existingUpdate, error: updateLookupError } = await client
       .from('career_updates')
       .select('id')
@@ -409,7 +411,9 @@ if (
       .maybeSingle();
 
     if (updateLookupError) {
-      setErrorMessage('Could not check existing career updates: ' + updateLookupError.message);
+      setErrorMessage(
+        'Could not check existing career updates: ' + updateLookupError.message
+      );
       setBusyId(null);
       return;
     }
@@ -429,7 +433,7 @@ if (
       if (error) {
         setErrorMessage(error.message);
       } else {
-        setMessage('This career update already exists. Its existing record has been linked.');
+        setMessage('This career update already exists. Its record has been linked.');
         await loadDiscoveries();
       }
 
@@ -453,7 +457,10 @@ if (
         .single();
 
       if (insertError || !newJob) {
-        setErrorMessage('Could not create draft job: ' + (insertError?.message || 'No record returned.'));
+        setErrorMessage(
+          'Could not create draft government job: ' +
+            (insertError?.message || 'No record returned.')
+        );
         setBusyId(null);
         return;
       }
@@ -470,11 +477,18 @@ if (
         .eq('id', item.id);
 
       if (discoveryError) {
-        setErrorMessage('Job draft created, but discovery tracking failed: ' + discoveryError.message);
+        setErrorMessage(
+          'Government job draft created, but discovery tracking failed: ' +
+            discoveryError.message
+        );
       } else {
-        setMessage('Draft job created. Verify its details in Government Jobs before publishing.');
+        setMessage(
+          'Draft government job created. Verify all details before publishing.'
+        );
       }
     } else {
+      // Use the selected category for the career_updates destination.
+      // Cancellation/corrigendum notices are classified as recruitment notices.
       let updateCategory:
         | 'recruitment_notice'
         | 'admit_card'
@@ -482,13 +496,15 @@ if (
         | 'syllabus'
         | 'other_update' = 'other_update';
 
-      if (isAdmitCard) {
+      if (isCancellation) {
+        updateCategory = 'recruitment_notice';
+      } else if (isAdmitCard || item.notice_category === 'admit_card') {
         updateCategory = 'admit_card';
-      } else if (isResult) {
+      } else if (isResult || item.notice_category === 'result_answer_key') {
         updateCategory = 'result_answer_key';
-      } else if (isSyllabus) {
+      } else if (isSyllabus || item.notice_category === 'syllabus') {
         updateCategory = 'syllabus';
-      } else if (isCancellation || item.notice_category === 'recruitment') {
+      } else if (item.notice_category === 'recruitment_notice') {
         updateCategory = 'recruitment_notice';
       }
 
@@ -510,7 +526,10 @@ if (
         .single();
 
       if (insertError || !newUpdate) {
-        setErrorMessage('Could not create draft career update: ' + (insertError?.message || 'No record returned.'));
+        setErrorMessage(
+          'Could not create draft career update: ' +
+            (insertError?.message || 'No record returned.')
+        );
         setBusyId(null);
         return;
       }
@@ -527,9 +546,14 @@ if (
         .eq('id', item.id);
 
       if (discoveryError) {
-        setErrorMessage('Career update created, but discovery tracking failed: ' + discoveryError.message);
+        setErrorMessage(
+          'Career update created, but discovery tracking failed: ' +
+            discoveryError.message
+        );
       } else {
-        setMessage('Draft career update created. Verify its category and details before publishing.');
+        setMessage(
+          'Draft career update created. Verify its category and details before publishing.'
+        );
       }
     }
 
@@ -668,9 +692,9 @@ if (
           <h2>Automatic Notice Discovery</h2>
 
           <p style={{ color: '#647b91', lineHeight: 1.7 }}>
-            Review recruitment, CTET eligibility, examination and
-            certificate notices collected from official websites.
-            Verify every notice before publishing information.
+            Review government job vacancies, recruitment notices, admit cards,
+            results, answer keys, syllabi and other career updates collected
+            from official websites. Verify every notice before publishing.
           </p>
 
           {message && (
@@ -837,11 +861,11 @@ if (
           ) : (
             <div style={{ display: 'grid', gap: 15 }}>
               {visibleItems.map(item => {
-                const category = item.notice_category || 'general';
+                const category: NoticeCategory = item.notice_category || 'other_update';
 
                 const categoryStyle =
                   categoryColors[category] ||
-                  categoryColors.general;
+                  categoryColors.other_update;
 
                 return (
                   <article
@@ -898,7 +922,7 @@ if (
                             marginBottom: 10,
                           }}
                         >
-                          {categoryLabels[category] || 'General'}
+                          {categoryLabels[category] || 'Other Updates'}
                         </span>
 
                         <div
@@ -1249,7 +1273,7 @@ if (
                           >
                             {busyId === item.id
                               ? 'Please wait…'
-                              : 'Create Draft Job'}
+                              : 'Create Draft Record'}
                           </button>
                         )}
 
