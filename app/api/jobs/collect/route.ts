@@ -589,11 +589,9 @@ export async function GET(request: Request) {
           break;
         }
 
-        const pdfUrl =
-          discovery.pdf_url ||
-          (isPdfUrl(discovery.discovered_url)
-            ? discovery.discovered_url
-            : null);
+        const pdfUrl = isPdfUrl(discovery.discovered_url)
+  ? discovery.discovered_url
+  : null;
 
         if (!pdfUrl || !isPdfUrl(pdfUrl)) {
           continue;
