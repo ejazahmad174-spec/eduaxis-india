@@ -432,8 +432,7 @@ export default function Home() {
   <a href="/courses">Courses</a>
   <a href="/mock-tests">Mock Tests</a>
   <a href="/study-materials">Study Materials</a>
-  <a href="/government-jobs">Government Jobs</a>
-  <a href="/career-updates">Career Updates</a>
+  <a href="/career-updates">Government Jobs & Updates</a>
   <a href="/blogs">Blogs</a>
 </nav>
           <a className="ea-login" href="/student/login">Student Login</a>
