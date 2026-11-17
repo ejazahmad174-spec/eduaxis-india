@@ -77,9 +77,11 @@ function classifyNotice(
     return "recruitment_notice";
   }
 
-  if (/recruitment|vacancy|vacancies|advertisement|appointment|selection|career|job opening|apply online|application form|भर्ती|नियुक्ति|रिक्ति/i.test(text)) {
-    return "government_job";
-  }
+  if (
+  /\b(vacanc(?:y|ies)|posts? of|recruitment for|recruitment to|apply online|application invited for|applications invited for|advertisement for the posts)\b/i.test(text)
+) {
+  return "government_job";
+}
 
   if (
     hostname === "ctet.nic.in" ||
