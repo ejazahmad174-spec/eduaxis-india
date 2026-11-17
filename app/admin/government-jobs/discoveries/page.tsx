@@ -314,7 +314,8 @@ export default function DiscoveredGovernmentJobsPage() {
     );
   }
 
-  // Create a draft job after checking for duplicates.
+  
+  // Import a discovery into the correct destination after checking for duplicates.
   async function createDraftJob(item: Discovery) {
     const client = supabase;
 
@@ -325,44 +326,57 @@ export default function DiscoveredGovernmentJobsPage() {
     setErrorMessage('');
 
     const sourceName = getSourceName(item.source_id);
+    const title = item.discovered_title || 'Untitled career notice';
+    const lowerTitle = title.toLowerCase();
+    const lowerUrl = (item.discovered_url || '').toLowerCase();
+    const searchableText = `${lowerTitle} ${lowerUrl}`;
 
-    const { data: existingJob, error: lookupError } = await client
+    const isCancellation =
+      /\b(cancelled|canceled|cancellation|corrigendum|withdrawn|postponed|rescheduled|extension|revised)\b/i.test(searchableText);
+
+    const isAdmitCard =
+      /\b(admit card|hall ticket|call letter)\b/i.test(searchableText);
+
+    const isResult =
+      /\b(result|answer key|merit list|score card|scorecard)\b/i.test(searchableText);
+
+    const isSyllabus =
+      /\b(syllabus|exam pattern)\b/i.test(searchableText);
+
+    const isVacancy =
+      item.notice_category === 'recruitment' &&
+      !isCancellation &&
+      /\b(recruitment|vacanc|apply online|application form|posts?)\b/i.test(searchableText);
+
+    const { data: existingJob, error: jobLookupError } = await client
       .from('government_jobs')
       .select('id')
       .eq('source_id', item.source_id)
       .eq('source_reference', item.discovered_url)
       .maybeSingle();
 
-    if (lookupError) {
-      setErrorMessage(
-        'Could not check for an existing job: ' +
-          lookupError.message
-      );
-
+    if (jobLookupError) {
+      setErrorMessage('Could not check existing jobs: ' + jobLookupError.message);
       setBusyId(null);
       return;
     }
 
     if (existingJob) {
-      const { error: discoveryError } = await client
+      const { error } = await client
         .from('government_job_discoveries')
         .update({
           status: 'imported',
+          imported_job_id: existingJob.id,
+          imported_update_id: null,
           processed_at: new Date().toISOString(),
           error_message: null,
         })
         .eq('id', item.id);
 
-      if (discoveryError) {
-        setErrorMessage(
-          'This notice is already in Government Jobs, but its discovery status could not be updated: ' +
-            discoveryError.message
-        );
+      if (error) {
+        setErrorMessage(error.message);
       } else {
-        setMessage(
-          'This notice was already imported. No duplicate draft was created.'
-        );
-
+        setMessage('This job already exists. Its existing record has been linked.');
         await loadDiscoveries();
       }
 
@@ -370,48 +384,135 @@ export default function DiscoveredGovernmentJobsPage() {
       return;
     }
 
-    const { error: insertError } = await client
-      .from('government_jobs')
-      .insert({
-        title:
-          item.discovered_title ||
-          'Untitled government job notice',
-        organization: sourceName,
-        notification_url: item.discovered_url,
-        status: 'draft',
-        source_id: item.source_id,
-        source_reference: item.discovered_url,
-        auto_collected: true,
-      });
+    const { data: existingUpdate, error: updateLookupError } = await client
+      .from('career_updates')
+      .select('id')
+      .eq('official_url', item.discovered_url)
+      .maybeSingle();
 
-    if (insertError) {
-      setErrorMessage(
-        'Could not create draft job: ' + insertError.message
-      );
+    if (updateLookupError) {
+      setErrorMessage('Could not check existing career updates: ' + updateLookupError.message);
+      setBusyId(null);
+      return;
+    }
+
+    if (existingUpdate) {
+      const { error } = await client
+        .from('government_job_discoveries')
+        .update({
+          status: 'imported',
+          imported_job_id: null,
+          imported_update_id: existingUpdate.id,
+          processed_at: new Date().toISOString(),
+          error_message: null,
+        })
+        .eq('id', item.id);
+
+      if (error) {
+        setErrorMessage(error.message);
+      } else {
+        setMessage('This career update already exists. Its existing record has been linked.');
+        await loadDiscoveries();
+      }
 
       setBusyId(null);
       return;
     }
 
-    const { error: discoveryError } = await client
-      .from('government_job_discoveries')
-      .update({
-        status: 'imported',
-        processed_at: new Date().toISOString(),
-        error_message: null,
-      })
-      .eq('id', item.id);
+    if (isVacancy) {
+      const { data: newJob, error: insertError } = await client
+        .from('government_jobs')
+        .insert({
+          title,
+          organization: sourceName,
+          notification_url: item.discovered_url,
+          status: 'draft',
+          source_id: item.source_id,
+          source_reference: item.discovered_url,
+          auto_collected: true,
+        })
+        .select('id')
+        .single();
 
-    if (discoveryError) {
-      setMessage(
-        'Draft job created successfully. However, the discovery status could not be updated. Refresh the page before trying again.'
-      );
+      if (insertError || !newJob) {
+        setErrorMessage('Could not create draft job: ' + (insertError?.message || 'No record returned.'));
+        setBusyId(null);
+        return;
+      }
 
-      setErrorMessage(discoveryError.message);
+      const { error: discoveryError } = await client
+        .from('government_job_discoveries')
+        .update({
+          status: 'imported',
+          imported_job_id: newJob.id,
+          imported_update_id: null,
+          processed_at: new Date().toISOString(),
+          error_message: null,
+        })
+        .eq('id', item.id);
+
+      if (discoveryError) {
+        setErrorMessage('Job draft created, but discovery tracking failed: ' + discoveryError.message);
+      } else {
+        setMessage('Draft job created. Verify its details in Government Jobs before publishing.');
+      }
     } else {
-      setMessage(
-        'Draft job created successfully. Complete and verify its details in Government Jobs before publishing.'
-      );
+      let updateCategory:
+        | 'recruitment_notice'
+        | 'admit_card'
+        | 'result_answer_key'
+        | 'syllabus'
+        | 'other_update' = 'other_update';
+
+      if (isAdmitCard) {
+        updateCategory = 'admit_card';
+      } else if (isResult) {
+        updateCategory = 'result_answer_key';
+      } else if (isSyllabus) {
+        updateCategory = 'syllabus';
+      } else if (isCancellation || item.notice_category === 'recruitment') {
+        updateCategory = 'recruitment_notice';
+      }
+
+      const { data: newUpdate, error: insertError } = await client
+        .from('career_updates')
+        .insert({
+          category: updateCategory,
+          title,
+          organization: sourceName,
+          description: item.extracted_details?.extraction_note || null,
+          notice_date: item.discovered_at
+            ? item.discovered_at.slice(0, 10)
+            : null,
+          official_url: item.discovered_url,
+          download_url: item.pdf_url || null,
+          status: 'draft',
+        })
+        .select('id')
+        .single();
+
+      if (insertError || !newUpdate) {
+        setErrorMessage('Could not create draft career update: ' + (insertError?.message || 'No record returned.'));
+        setBusyId(null);
+        return;
+      }
+
+      const { error: discoveryError } = await client
+        .from('government_job_discoveries')
+        .update({
+          status: 'imported',
+          imported_job_id: null,
+          imported_update_id: newUpdate.id,
+          processed_at: new Date().toISOString(),
+          error_message: null,
+        })
+        .eq('id', item.id);
+
+      if (discoveryError) {
+        setErrorMessage('Career update created, but discovery tracking failed: ' + discoveryError.message);
+      } else {
+        setMessage('Draft career update created. Verify its category and details before publishing.');
+      }
     }
 
     await loadDiscoveries();
