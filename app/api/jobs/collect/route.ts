@@ -12,11 +12,12 @@ type JobLink = {
 };
 
 type NoticeCategory =
-  | "recruitment"
-  | "teacher_eligibility"
-  | "examination"
-  | "certificate"
-  | "general";
+  | "government_job"
+  | "recruitment_notice"
+  | "admit_card"
+  | "result_answer_key"
+  | "syllabus"
+  | "other_update";
 
 function cleanText(value: string): string {
   return value
