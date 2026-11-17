@@ -64,11 +64,12 @@ const statusFilters = [
 
 const categoryFilters = [
   { value: 'all', label: 'All Categories' },
-  { value: 'recruitment', label: 'Recruitment' },
-  { value: 'teacher_eligibility', label: 'Teacher Eligibility' },
-  { value: 'examination', label: 'Examination Updates' },
-  { value: 'certificate', label: 'Certificate Updates' },
-  { value: 'general', label: 'General' },
+  { value: 'government_job', label: 'Government Jobs' },
+  { value: 'recruitment_notice', label: 'Recruitment Notices & Updates' },
+  { value: 'admit_card', label: 'Admit Cards' },
+  { value: 'result_answer_key', label: 'Results & Answer Keys' },
+  { value: 'syllabus', label: 'Syllabus' },
+  { value: 'other_update', label: 'Other Updates' },
 ];
 
 const categoryLabels: Record<NoticeCategory, string> = {
