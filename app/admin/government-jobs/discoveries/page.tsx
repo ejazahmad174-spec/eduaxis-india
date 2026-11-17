@@ -73,22 +73,24 @@ const categoryFilters = [
 ];
 
 const categoryLabels: Record<NoticeCategory, string> = {
-  recruitment: 'Recruitment',
-  teacher_eligibility: 'Teacher Eligibility',
-  examination: 'Examination Updates',
-  certificate: 'Certificate Updates',
-  general: 'General',
+  government_job: 'Government Jobs',
+  recruitment_notice: 'Recruitment Notices & Updates',
+  admit_card: 'Admit Cards',
+  result_answer_key: 'Results & Answer Keys',
+  syllabus: 'Syllabus',
+  other_update: 'Other Updates',
 };
 
 const categoryColors: Record<
   NoticeCategory,
   { background: string; color: string }
 > = {
-  recruitment: { background: '#e5f8ef', color: '#087443' },
-  teacher_eligibility: { background: '#e8f1fb', color: '#174a7c' },
-  examination: { background: '#f0eaff', color: '#6336a5' },
-  certificate: { background: '#fff4df', color: '#98620a' },
-  general: { background: '#edf3f8', color: '#34536e' },
+  government_job: { background: '#e5f8ef', color: '#087443' },
+  recruitment_notice: { background: '#e8f1fb', color: '#174a7c' },
+  admit_card: { background: '#f0eaff', color: '#6336a5' },
+  result_answer_key: { background: '#fff4df', color: '#98620a' },
+  syllabus: { background: '#e8f1fb', color: '#174a7c' },
+  other_update: { background: '#edf3f8', color: '#34536e' },
 };
 
 function formatDate(value: string | null) {
