@@ -6,6 +6,27 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import '../admin.css';
 
+type Job = {
+  id: string;
+  title: string;
+  organization: string | null;
+  post_name: string | null;
+  state: string | null;
+  vacancies: string | number | null;
+  qualification: string | null;
+  application_fee: string | null;
+  notification_url: string | null;
+  apply_url: string | null;
+  last_date: string | null;
+  status: string;
+  job_category: string | null;
+  age_limit: string | null;
+  application_start_date: string | null;
+  official_website: string | null;
+  last_verified_at: string | null;
+  created_at: string;
+};
+
 type CareerUpdate = {
   id: string;
   category: string;
@@ -23,7 +44,7 @@ type CareerUpdate = {
   created_at: string;
 };
 
-const categories = [
+const careerCategories = [
   { value: 'recruitment_notice', label: 'Recruitment Notices & Updates' },
   { value: 'admit_card', label: 'Admit Cards' },
   { value: 'result_answer_key', label: 'Results & Answer Keys' },
@@ -31,7 +52,36 @@ const categories = [
   { value: 'other_update', label: 'Other Updates' },
 ];
 
-const emptyForm = {
+const jobCategories = [
+  'Bihar Government Jobs',
+  'Central Government Jobs',
+  'Teaching Jobs',
+  'Banking Jobs',
+  'Railway Jobs',
+  'Defence Jobs',
+  'Other State Government Jobs',
+  'Other Government Jobs',
+];
+
+const emptyJob = {
+  title: '',
+  organization: '',
+  postName: '',
+  state: 'Bihar',
+  category: 'Bihar Government Jobs',
+  vacancies: '',
+  qualification: '',
+  ageLimit: '',
+  applicationFee: '',
+  startDate: '',
+  lastDate: '',
+  notificationUrl: '',
+  applyUrl: '',
+  officialWebsite: '',
+  status: 'draft',
+};
+
+const emptyUpdate = {
   category: 'recruitment_notice',
   title: '',
   organization: '',
@@ -46,17 +96,45 @@ const emptyForm = {
   status: 'draft',
 };
 
-export default function CareerUpdatesPage() {
+type Section =
+  | 'jobs'
+  | 'recruitment_notice'
+  | 'admit_card'
+  | 'result_answer_key'
+  | 'syllabus'
+  | 'other_update';
+
+const sections: { value: Section; label: string }[] = [
+  { value: 'jobs', label: 'Latest Government Jobs' },
+  { value: 'recruitment_notice', label: 'Recruitment Notices' },
+  { value: 'admit_card', label: 'Admit Cards' },
+  { value: 'result_answer_key', label: 'Results & Answer Keys' },
+  { value: 'syllabus', label: 'Syllabus' },
+  { value: 'other_update', label: 'Other Updates' },
+];
+
+export default function CareerManagementPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [updates, setUpdates] = useState<CareerUpdate[]>([]);
-  const [form, setForm] = useState(emptyForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const [activeSection, setActiveSection] = useState<Section>('jobs');
+
+  const [jobForm, setJobForm] = useState(emptyJob);
+  const [updateForm, setUpdateForm] = useState(emptyUpdate);
+
+  const [editingJobId, setEditingJobId] = useState<string | null>(null);
+  const [editingUpdateId, setEditingUpdateId] = useState<string | null>(null);
+
+  const [jobFilter, setJobFilter] = useState('all');
+  const [updateFilter, setUpdateFilter] = useState('all');
+
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  const [filter, setFilter] = useState('all');
 
   useEffect(() => {
     let active = true;
@@ -88,7 +166,7 @@ export default function CareerUpdatesPage() {
         return;
       }
 
-      await loadUpdates();
+      await Promise.all([loadJobs(), loadUpdates()]);
 
       if (active) setLoading(false);
     }
@@ -100,6 +178,23 @@ export default function CareerUpdatesPage() {
     };
   }, [router]);
 
+  async function loadJobs() {
+    const client = supabase;
+    if (!client) return;
+
+    const { data, error } = await client
+      .from('government_jobs')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      setErrorMessage('Could not load government jobs: ' + error.message);
+      return;
+    }
+
+    setJobs((data || []) as Job[]);
+  }
+
   async function loadUpdates() {
     const client = supabase;
     if (!client) return;
@@ -110,30 +205,72 @@ export default function CareerUpdatesPage() {
       .order('created_at', { ascending: false });
 
     if (error) {
-      setErrorMessage('Could not load updates: ' + error.message);
+      setErrorMessage('Could not load career updates: ' + error.message);
       return;
     }
 
     setUpdates((data || []) as CareerUpdate[]);
   }
 
-  function updateField(
-    field: keyof typeof emptyForm,
-    value: string
-  ) {
-    setForm(previous => ({
-      ...previous,
-      [field]: value,
-    }));
+  function showMessage(text: string) {
+    setMessage(text);
+    setErrorMessage('');
   }
 
-  function resetForm() {
-    setForm(emptyForm);
-    setEditingId(null);
+  function showError(text: string) {
+    setErrorMessage(text);
+    setMessage('');
+  }
+
+  function resetJobForm() {
+    setJobForm(emptyJob);
+    setEditingJobId(null);
+  }
+
+  function resetUpdateForm() {
+    setUpdateForm(emptyUpdate);
+    setEditingUpdateId(null);
+  }
+
+  function validOptionalUrl(value: string) {
+    if (!value.trim()) return true;
+
+    try {
+      const url = new URL(value);
+      return url.protocol === 'https:' || url.protocol === 'http:';
+    } catch {
+      return false;
+    }
+  }
+
+  function editJob(job: Job) {
+    setJobForm({
+      title: job.title || '',
+      organization: job.organization || '',
+      postName: job.post_name || '',
+      state: job.state || '',
+      category: job.job_category || 'Other Government Jobs',
+      vacancies: job.vacancies == null ? '' : String(job.vacancies),
+      qualification: job.qualification || '',
+      ageLimit: job.age_limit || '',
+      applicationFee: job.application_fee || '',
+      startDate: job.application_start_date || '',
+      lastDate: job.last_date || '',
+      notificationUrl: job.notification_url || '',
+      applyUrl: job.apply_url || '',
+      officialWebsite: job.official_website || '',
+      status: job.status || 'draft',
+    });
+
+    setEditingJobId(job.id);
+    setActiveSection('jobs');
+    setMessage('');
+    setErrorMessage('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function editUpdate(item: CareerUpdate) {
-    setForm({
+    setUpdateForm({
       category: item.category,
       title: item.title || '',
       organization: item.organization || '',
@@ -148,11 +285,98 @@ export default function CareerUpdatesPage() {
       status: item.status || 'draft',
     });
 
-    setEditingId(item.id);
+    setEditingUpdateId(item.id);
+    setActiveSection(item.category as Section);
+    setMessage('');
+    setErrorMessage('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function saveJob(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const client = supabase;
+    if (!client) return;
+
+    if (!jobForm.title.trim() || !jobForm.organization.trim()) {
+      showError('Please enter the job title and recruiting organisation.');
+      return;
+    }
+
+    if (
+      ![
+        jobForm.notificationUrl,
+        jobForm.applyUrl,
+        jobForm.officialWebsite,
+      ].every(validOptionalUrl)
+    ) {
+      showError('Please enter valid official website links.');
+      return;
+    }
+
+    setBusy(true);
     setMessage('');
     setErrorMessage('');
 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    try {
+      const { data: { user }, error: userError } = await client.auth.getUser();
+
+      if (userError || !user) {
+        throw new Error('Your session has expired. Please sign in again.');
+      }
+
+      const values = {
+        title: jobForm.title.trim(),
+        organization: jobForm.organization.trim(),
+        post_name: jobForm.postName.trim() || null,
+        state: jobForm.state.trim() || null,
+        job_category: jobForm.category,
+        vacancies: jobForm.vacancies.trim() || null,
+        qualification: jobForm.qualification.trim() || null,
+        age_limit: jobForm.ageLimit.trim() || null,
+        application_fee: jobForm.applicationFee.trim() || null,
+        application_start_date: jobForm.startDate || null,
+        last_date: jobForm.lastDate || null,
+        notification_url: jobForm.notificationUrl.trim() || null,
+        apply_url: jobForm.applyUrl.trim() || null,
+        official_website: jobForm.officialWebsite.trim() || null,
+        last_verified_at: new Date().toISOString(),
+        status: jobForm.status,
+      };
+
+      if (editingJobId) {
+        const { error } = await client
+          .from('government_jobs')
+          .update(values)
+          .eq('id', editingJobId);
+
+        if (error) throw error;
+
+        showMessage('Government job updated successfully.');
+      } else {
+        const { error } = await client
+          .from('government_jobs')
+          .insert({
+            ...values,
+            created_by: user.id,
+          });
+
+        if (error) throw error;
+
+        showMessage('Government job added successfully.');
+      }
+
+      resetJobForm();
+      await loadJobs();
+    } catch (error) {
+      showError(
+        error instanceof Error
+          ? error.message
+          : 'Something went wrong while saving the job.'
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function saveUpdate(event: FormEvent<HTMLFormElement>) {
@@ -161,8 +385,16 @@ export default function CareerUpdatesPage() {
     const client = supabase;
     if (!client) return;
 
-    if (!form.title.trim()) {
-      setErrorMessage('Please enter the title.');
+    if (!updateForm.title.trim()) {
+      showError('Please enter the title.');
+      return;
+    }
+
+    if (
+      ![updateForm.official_url, updateForm.download_url]
+        .every(validOptionalUrl)
+    ) {
+      showError('Please enter valid website links.');
       return;
     }
 
@@ -174,30 +406,30 @@ export default function CareerUpdatesPage() {
       const { data: { user } } = await client.auth.getUser();
 
       const values = {
-        category: form.category,
-        title: form.title.trim(),
-        organization: form.organization.trim() || null,
-        exam_name: form.exam_name.trim() || null,
-        state: form.state.trim() || 'All India',
-        description: form.description.trim() || null,
-        notice_date: form.notice_date || null,
-        event_date: form.event_date || null,
-        last_date: form.last_date || null,
-        official_url: form.official_url.trim() || null,
-        download_url: form.download_url.trim() || null,
-        status: form.status,
+        category: updateForm.category,
+        title: updateForm.title.trim(),
+        organization: updateForm.organization.trim() || null,
+        exam_name: updateForm.exam_name.trim() || null,
+        state: updateForm.state.trim() || 'All India',
+        description: updateForm.description.trim() || null,
+        notice_date: updateForm.notice_date || null,
+        event_date: updateForm.event_date || null,
+        last_date: updateForm.last_date || null,
+        official_url: updateForm.official_url.trim() || null,
+        download_url: updateForm.download_url.trim() || null,
+        status: updateForm.status,
         updated_at: new Date().toISOString(),
       };
 
-      if (editingId) {
+      if (editingUpdateId) {
         const { error } = await client
           .from('career_updates')
           .update(values)
-          .eq('id', editingId);
+          .eq('id', editingUpdateId);
 
         if (error) throw error;
 
-        setMessage('Career update updated successfully.');
+        showMessage('Career update updated successfully.');
       } else {
         const { error } = await client
           .from('career_updates')
@@ -208,23 +440,49 @@ export default function CareerUpdatesPage() {
 
         if (error) throw error;
 
-        setMessage('Career update added successfully.');
+        showMessage('Career update added successfully.');
       }
 
-      resetForm();
+      resetUpdateForm();
       await loadUpdates();
     } catch (error) {
-      setErrorMessage(
+      showError(
         error instanceof Error
           ? error.message
-          : 'Something went wrong while saving.'
+          : 'Something went wrong while saving the update.'
       );
     } finally {
       setBusy(false);
     }
   }
 
-  async function changeStatus(item: CareerUpdate, status: string) {
+  async function changeJobStatus(job: Job, status: string) {
+    const client = supabase;
+    if (!client) return;
+
+    setBusy(true);
+    setMessage('');
+    setErrorMessage('');
+
+    const { error } = await client
+      .from('government_jobs')
+      .update({
+        status,
+        last_verified_at: new Date().toISOString(),
+      })
+      .eq('id', job.id);
+
+    if (error) {
+      showError('Could not update job status: ' + error.message);
+    } else {
+      showMessage('Government job status updated successfully.');
+      await loadJobs();
+    }
+
+    setBusy(false);
+  }
+
+  async function changeUpdateStatus(item: CareerUpdate, status: string) {
     const client = supabase;
     if (!client) return;
 
@@ -241,10 +499,34 @@ export default function CareerUpdatesPage() {
       .eq('id', item.id);
 
     if (error) {
-      setErrorMessage('Could not change status: ' + error.message);
+      showError('Could not update career update status: ' + error.message);
     } else {
-      setMessage('Status updated successfully.');
+      showMessage('Career update status changed successfully.');
       await loadUpdates();
+    }
+
+    setBusy(false);
+  }
+
+  async function deleteJob(job: Job) {
+    if (!window.confirm(`Delete "${job.title}" permanently?`)) return;
+
+    const client = supabase;
+    if (!client) return;
+
+    setBusy(true);
+
+    const { error } = await client
+      .from('government_jobs')
+      .delete()
+      .eq('id', job.id);
+
+    if (error) {
+      showError('Could not delete job: ' + error.message);
+    } else {
+      showMessage('Government job deleted successfully.');
+      if (editingJobId === job.id) resetJobForm();
+      await loadJobs();
     }
 
     setBusy(false);
@@ -257,8 +539,6 @@ export default function CareerUpdatesPage() {
     if (!client) return;
 
     setBusy(true);
-    setMessage('');
-    setErrorMessage('');
 
     const { error } = await client
       .from('career_updates')
@@ -266,24 +546,26 @@ export default function CareerUpdatesPage() {
       .eq('id', item.id);
 
     if (error) {
-      setErrorMessage('Could not delete update: ' + error.message);
+      showError('Could not delete update: ' + error.message);
     } else {
-      setMessage('Career update deleted successfully.');
-
-      if (editingId === item.id) resetForm();
-
+      showMessage('Career update deleted successfully.');
+      if (editingUpdateId === item.id) resetUpdateForm();
       await loadUpdates();
     }
 
     setBusy(false);
   }
 
-  function categoryLabel(value: string) {
-    return categories.find(item => item.value === value)?.label || value;
+  function updateCategoryLabel(value: string) {
+    return careerCategories.find(item => item.value === value)?.label || value;
   }
 
+  const visibleJobs = jobs.filter(job =>
+    jobFilter === 'all' || job.status === jobFilter
+  );
+
   const visibleUpdates = updates.filter(item =>
-    filter === 'all' || item.category === filter
+    (updateFilter === 'all' || item.category === updateFilter)
   );
 
   const inputStyle = {
@@ -322,6 +604,8 @@ export default function CareerUpdatesPage() {
     );
   }
 
+  const isJobSection = activeSection === 'jobs';
+
   return (
     <main className="admin-shell">
       <aside className="admin-sidebar">
@@ -342,14 +626,11 @@ export default function CareerUpdatesPage() {
         <a className="admin-side-link" href="/admin/study-materials">
           ▤ &nbsp; Study Materials
         </a>
-        <a className="admin-side-link" href="/admin/government-jobs">
-          ▤ &nbsp; Government Jobs
+        <a className="admin-side-link active" href="/admin/career-updates">
+          ▤ &nbsp; Government Jobs & Updates
         </a>
         <a className="admin-side-link" href="/admin/government-jobs/discoveries">
           ↳ &nbsp; Discovered Jobs
-        </a>
-        <a className="admin-side-link active" href="/admin/career-updates">
-          ▤ &nbsp; Career Management
         </a>
 
         <div className="admin-side-label">OTHER</div>
@@ -361,8 +642,9 @@ export default function CareerUpdatesPage() {
       <section className="admin-main">
         <header className="admin-topbar">
           <div>
+            <div className="admin-kicker">EDUAXIS INDIA / ADMIN</div>
             <h1>Career Management</h1>
-            <p>Manage recruitment notices, admit cards, results and syllabus.</p>
+            <p>Manage all government jobs and examination updates in one place.</p>
           </div>
         </header>
 
@@ -392,349 +674,654 @@ export default function CareerUpdatesPage() {
             </div>
           )}
 
+          {/* Main section navigation */}
           <section style={{
             background: '#fff',
-            padding: '22px',
+            padding: '18px',
             borderRadius: '12px',
             border: '1px solid #e5eaf0',
-            marginBottom: '25px',
+            marginBottom: '22px',
           }}>
             <h2 style={{ marginTop: 0, color: '#17324d' }}>
-              {editingId ? 'Edit Career Update' : 'Add New Career Update'}
+              Manage Career Categories
             </h2>
 
-            <p style={{ color: '#64748b', fontSize: '13px' }}>
-              Add verified information. New entries are saved as drafts by default.
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '9px',
+            }}>
+              {sections.map(section => (
+                <button
+                  key={section.value}
+                  type="button"
+                  onClick={() => {
+                    setActiveSection(section.value);
+                    setMessage('');
+                    setErrorMessage('');
+                  }}
+                  style={{
+                    border: activeSection === section.value
+                      ? '1px solid #126b45'
+                      : '1px solid #dce5ed',
+                    background: activeSection === section.value
+                      ? '#126b45'
+                      : '#fff',
+                    color: activeSection === section.value
+                      ? '#fff'
+                      : '#29435b',
+                    borderRadius: '7px',
+                    padding: '10px 13px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {section.label}
+                </button>
+              ))}
+            </div>
+
+            <p style={{
+              color: '#64748b',
+              fontSize: '12px',
+              marginBottom: 0,
+            }}>
+              Government Jobs use the detailed recruitment form.
+              Other categories use the career update form.
             </p>
+          </section>
 
-            <form onSubmit={saveUpdate}>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
-                gap: '16px',
+          {/* Government Jobs form */}
+          {isJobSection && (
+            <>
+              <section style={{
+                background: '#fff',
+                padding: '22px',
+                borderRadius: '12px',
+                border: '1px solid #e5eaf0',
+                marginBottom: '25px',
               }}>
-                <div>
-                  <label style={labelStyle}>Category *</label>
-                  <select
-                    style={inputStyle}
-                    value={form.category}
-                    onChange={e => updateField('category', e.target.value)}
-                  >
-                    {categories.map(item => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <h2 style={{ marginTop: 0, color: '#17324d' }}>
+                  {editingJobId ? 'Edit Government Job' : 'Add a Government Job'}
+                </h2>
 
-                <div>
-                  <label style={labelStyle}>Title *</label>
-                  <input
-                    style={inputStyle}
-                    value={form.title}
-                    onChange={e => updateField('title', e.target.value)}
-                    placeholder="Enter notice or update title"
-                    required
-                  />
-                </div>
+                <p style={{ color: '#64748b', fontSize: '13px' }}>
+                  Add verified recruitment information. New entries are saved as drafts by default.
+                </p>
 
-                <div>
-                  <label style={labelStyle}>Organization / Department</label>
-                  <input
-                    style={inputStyle}
-                    value={form.organization}
-                    onChange={e => updateField('organization', e.target.value)}
-                    placeholder="e.g. UPSC, BPSC, NTA"
-                  />
-                </div>
+                <form onSubmit={saveJob}>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
+                    gap: '16px',
+                  }}>
+                    <div>
+                      <label style={labelStyle}>Job Title *</label>
+                      <input style={inputStyle} required value={jobForm.title}
+                        onChange={e => setJobForm({ ...jobForm, title: e.target.value })}
+                        placeholder="e.g. BPSC Teacher Recruitment" />
+                    </div>
 
-                <div>
-                  <label style={labelStyle}>Exam Name</label>
-                  <input
-                    style={inputStyle}
-                    value={form.exam_name}
-                    onChange={e => updateField('exam_name', e.target.value)}
-                    placeholder="e.g. NEET UG, CTET, SSC CGL"
-                  />
-                </div>
+                    <div>
+                      <label style={labelStyle}>Recruiting Organisation *</label>
+                      <input style={inputStyle} required value={jobForm.organization}
+                        onChange={e => setJobForm({ ...jobForm, organization: e.target.value })}
+                        placeholder="e.g. Bihar Public Service Commission" />
+                    </div>
 
-                <div>
-                  <label style={labelStyle}>State / Region</label>
-                  <input
-                    style={inputStyle}
-                    value={form.state}
-                    onChange={e => updateField('state', e.target.value)}
-                    placeholder="All India / Bihar / Other State"
-                  />
-                </div>
+                    <div>
+                      <label style={labelStyle}>Post Name</label>
+                      <input style={inputStyle} value={jobForm.postName}
+                        onChange={e => setJobForm({ ...jobForm, postName: e.target.value })}
+                        placeholder="e.g. School Teacher" />
+                    </div>
 
-                <div>
-                  <label style={labelStyle}>Notice Date</label>
-                  <input
-                    type="date"
-                    style={inputStyle}
-                    value={form.notice_date}
-                    onChange={e => updateField('notice_date', e.target.value)}
-                  />
-                </div>
+                    <div>
+                      <label style={labelStyle}>Job Category *</label>
+                      <select style={inputStyle} value={jobForm.category}
+                        onChange={e => setJobForm({ ...jobForm, category: e.target.value })}>
+                        {jobCategories.map(item => (
+                          <option key={item} value={item}>{item}</option>
+                        ))}
+                      </select>
+                    </div>
 
-                <div>
-                  <label style={labelStyle}>Exam / Event Date</label>
-                  <input
-                    type="date"
-                    style={inputStyle}
-                    value={form.event_date}
-                    onChange={e => updateField('event_date', e.target.value)}
-                  />
-                </div>
+                    <div>
+                      <label style={labelStyle}>State / Jurisdiction</label>
+                      <input style={inputStyle} value={jobForm.state}
+                        onChange={e => setJobForm({ ...jobForm, state: e.target.value })}
+                        placeholder="Bihar / All India / Uttar Pradesh" />
+                    </div>
 
-                <div>
-                  <label style={labelStyle}>Last Date (if applicable)</label>
-                  <input
-                    type="date"
-                    style={inputStyle}
-                    value={form.last_date}
-                    onChange={e => updateField('last_date', e.target.value)}
-                  />
-                </div>
+                    <div>
+                      <label style={labelStyle}>Total Vacancies</label>
+                      <input style={inputStyle} value={jobForm.vacancies}
+                        onChange={e => setJobForm({ ...jobForm, vacancies: e.target.value })}
+                        placeholder="e.g. 2500 or As per notification" />
+                    </div>
 
-                <div>
-                  <label style={labelStyle}>Official Website URL</label>
-                  <input
-                    type="url"
-                    style={inputStyle}
-                    value={form.official_url}
-                    onChange={e => updateField('official_url', e.target.value)}
-                    placeholder="https://..."
-                  />
-                </div>
+                    <div>
+                      <label style={labelStyle}>Age Limit</label>
+                      <input style={inputStyle} value={jobForm.ageLimit}
+                        onChange={e => setJobForm({ ...jobForm, ageLimit: e.target.value })}
+                        placeholder="e.g. 18–37 years" />
+                    </div>
 
-                <div>
-                  <label style={labelStyle}>Download URL</label>
-                  <input
-                    type="url"
-                    style={inputStyle}
-                    value={form.download_url}
-                    onChange={e => updateField('download_url', e.target.value)}
-                    placeholder="PDF or official download link"
-                  />
-                </div>
+                    <div>
+                      <label style={labelStyle}>Application Fee</label>
+                      <input style={inputStyle} value={jobForm.applicationFee}
+                        onChange={e => setJobForm({ ...jobForm, applicationFee: e.target.value })}
+                        placeholder="e.g. ₹100; category-wise fee" />
+                    </div>
 
-                <div>
-                  <label style={labelStyle}>Publication Status</label>
-                  <select
-                    style={inputStyle}
-                    value={form.status}
-                    onChange={e => updateField('status', e.target.value)}
-                  >
+                    <div>
+                      <label style={labelStyle}>Application Start Date</label>
+                      <input type="date" style={inputStyle} value={jobForm.startDate}
+                        onChange={e => setJobForm({ ...jobForm, startDate: e.target.value })} />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Last Date to Apply</label>
+                      <input type="date" style={inputStyle} value={jobForm.lastDate}
+                        onChange={e => setJobForm({ ...jobForm, lastDate: e.target.value })} />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Official Notification URL</label>
+                      <input type="url" style={inputStyle} value={jobForm.notificationUrl}
+                        onChange={e => setJobForm({ ...jobForm, notificationUrl: e.target.value })}
+                        placeholder="https://..." />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Official Application URL</label>
+                      <input type="url" style={inputStyle} value={jobForm.applyUrl}
+                        onChange={e => setJobForm({ ...jobForm, applyUrl: e.target.value })}
+                        placeholder="https://..." />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Official Organisation Website</label>
+                      <input type="url" style={inputStyle} value={jobForm.officialWebsite}
+                        onChange={e => setJobForm({ ...jobForm, officialWebsite: e.target.value })}
+                        placeholder="https://..." />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Publication Status</label>
+                      <select style={inputStyle} value={jobForm.status}
+                        onChange={e => setJobForm({ ...jobForm, status: e.target.value })}>
+                        <option value="draft">Save as Draft</option>
+                        <option value="published">Publish</option>
+                        <option value="closed">Closed</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: '16px' }}>
+                    <label style={labelStyle}>Educational Qualification</label>
+                    <textarea style={{ ...inputStyle, minHeight: '85px' }}
+                      value={jobForm.qualification}
+                      onChange={e => setJobForm({ ...jobForm, qualification: e.target.value })}
+                      placeholder="Mention qualification exactly as stated in the official notification." />
+                  </div>
+
+                  <div style={{ marginTop: '18px' }}>
+                    <button type="submit" disabled={busy} style={{
+                      ...buttonStyle,
+                      background: '#126b45',
+                      color: '#fff',
+                      padding: '12px 20px',
+                    }}>
+                      {busy ? 'Please wait...' : editingJobId ? 'Save Changes' : 'Save Government Job'}
+                    </button>
+
+                    {editingJobId && (
+                      <button type="button" onClick={resetJobForm} style={{
+                        ...buttonStyle,
+                        background: '#e9eef4',
+                        color: '#17324d',
+                        padding: '12px 18px',
+                      }}>
+                        Cancel Editing
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </section>
+
+              {/* Government Jobs list */}
+              <section style={{
+                background: '#fff',
+                padding: '22px',
+                borderRadius: '12px',
+                border: '1px solid #e5eaf0',
+              }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: '12px',
+                  flexWrap: 'wrap',
+                }}>
+                  <div>
+                    <h2 style={{ marginTop: 0, color: '#17324d' }}>
+                      Government Job Notifications
+                    </h2>
+                    <p style={{ color: '#64748b', fontSize: '13px' }}>
+                      Total jobs: {jobs.length}
+                    </p>
+                  </div>
+
+                  <select style={{ ...inputStyle, maxWidth: '220px' }}
+                    value={jobFilter} onChange={e => setJobFilter(e.target.value)}>
+                    <option value="all">All Statuses</option>
                     <option value="draft">Draft</option>
                     <option value="published">Published</option>
                     <option value="closed">Closed</option>
                   </select>
                 </div>
-              </div>
 
-              <div style={{ marginTop: '16px' }}>
-                <label style={labelStyle}>Description / Important Details</label>
-                <textarea
-                  style={{ ...inputStyle, minHeight: '110px', resize: 'vertical' }}
-                  value={form.description}
-                  onChange={e => updateField('description', e.target.value)}
-                  placeholder="Write important details, instructions, eligibility or updates..."
-                />
-              </div>
-
-              <div style={{ marginTop: '18px' }}>
-                <button
-                  type="submit"
-                  disabled={busy}
-                  style={{
-                    ...buttonStyle,
-                    background: '#126b45',
-                    color: '#fff',
-                    padding: '11px 20px',
-                  }}
-                >
-                  {busy ? 'Please wait...' : editingId ? 'Update Entry' : 'Save Entry'}
-                </button>
-
-                {editingId && (
-                  <button
-                    type="button"
-                    onClick={resetForm}
-                    style={{
-                      ...buttonStyle,
-                      background: '#e9eef4',
-                      color: '#17324d',
-                      padding: '11px 18px',
-                    }}
-                  >
-                    Cancel Editing
-                  </button>
-                )}
-              </div>
-            </form>
-          </section>
-
-          <section style={{
-            background: '#fff',
-            padding: '22px',
-            borderRadius: '12px',
-            border: '1px solid #e5eaf0',
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '12px',
-              marginBottom: '18px',
-            }}>
-              <div>
-                <h2 style={{ margin: 0, color: '#17324d' }}>
-                  All Career Updates
-                </h2>
-                <p style={{ color: '#64748b', fontSize: '13px', marginBottom: 0 }}>
-                  Total entries: {updates.length}
-                </p>
-              </div>
-
-              <select
-                style={{ ...inputStyle, maxWidth: '260px' }}
-                value={filter}
-                onChange={e => setFilter(e.target.value)}
-              >
-                <option value="all">All Categories</option>
-                {categories.map(item => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {visibleUpdates.length === 0 ? (
-              <p style={{ color: '#64748b', padding: '20px 0' }}>
-                No career updates found. Add your first entry using the form above.
-              </p>
-            ) : (
-              <div style={{ display: 'grid', gap: '14px' }}>
-                {visibleUpdates.map(item => (
-                  <article
-                    key={item.id}
-                    style={{
-                      border: '1px solid #e5eaf0',
-                      borderRadius: '10px',
-                      padding: '16px',
-                    }}
-                  >
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      gap: '12px',
-                      flexWrap: 'wrap',
-                    }}>
-                      <div style={{ flex: 1, minWidth: '220px' }}>
-                        <div style={{
-                          fontSize: '12px',
-                          color: '#126b45',
-                          fontWeight: 700,
-                          marginBottom: '7px',
-                        }}>
-                          {categoryLabel(item.category)}
-                        </div>
-
-                        <h3 style={{
-                          margin: '0 0 8px',
-                          color: '#17324d',
-                          fontSize: '17px',
-                        }}>
-                          {item.title}
-                        </h3>
-
-                        <p style={{
-                          margin: '4px 0',
-                          color: '#64748b',
-                          fontSize: '13px',
-                        }}>
-                          {item.organization || 'Organization not specified'}
-                          {item.exam_name ? ` • ${item.exam_name}` : ''}
-                          {item.state ? ` • ${item.state}` : ''}
-                        </p>
-
-                        <p style={{
-                          margin: '7px 0',
-                          fontSize: '12px',
-                          color: '#64748b',
-                        }}>
-                          Status: <b>{item.status.toUpperCase()}</b>
-                          {item.last_date ? ` • Last Date: ${item.last_date}` : ''}
-                        </p>
-                      </div>
-
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        flexWrap: 'wrap',
+                {visibleJobs.length === 0 ? (
+                  <p style={{ color: '#64748b', padding: '15px 0' }}>
+                    No government jobs found. Add your first verified vacancy using the form above.
+                  </p>
+                ) : (
+                  <div style={{ display: 'grid', gap: '14px' }}>
+                    {visibleJobs.map(job => (
+                      <article key={job.id} style={{
+                        border: '1px solid #e5eaf0',
+                        borderRadius: '10px',
+                        padding: '16px',
                       }}>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => editUpdate(item)}
-                          style={{ ...buttonStyle, background: '#e8f1ff', color: '#2457a6' }}
-                        >
-                          Edit
-                        </button>
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: '12px',
+                        }}>
+                          <div style={{ flex: 1, minWidth: '220px' }}>
+                            <div style={{
+                              color: '#126b45',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                            }}>
+                              {job.job_category || 'Government Jobs'}
+                            </div>
 
-                        {item.status !== 'published' && (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => changeStatus(item, 'published')}
-                            style={{ ...buttonStyle, background: '#e8f7ee', color: '#176b39' }}
-                          >
-                            Publish
-                          </button>
-                        )}
+                            <h3 style={{
+                              color: '#17324d',
+                              margin: '7px 0',
+                              fontSize: '17px',
+                            }}>
+                              {job.title}
+                            </h3>
 
-                        {item.status === 'published' && (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => changeStatus(item, 'draft')}
-                            style={{ ...buttonStyle, background: '#fff4df', color: '#925d00' }}
-                          >
-                            Unpublish
-                          </button>
-                        )}
+                            <p style={{
+                              margin: '5px 0',
+                              color: '#64748b',
+                              fontSize: '13px',
+                            }}>
+                              {job.organization || 'Organisation not specified'}
+                              {job.post_name ? ` • ${job.post_name}` : ''}
+                              {job.state ? ` • ${job.state}` : ''}
+                            </p>
 
-                        {item.status !== 'closed' && (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => changeStatus(item, 'closed')}
-                            style={{ ...buttonStyle, background: '#f1f2f4', color: '#475569' }}
-                          >
-                            Close
-                          </button>
-                        )}
+                            <p style={{
+                              margin: '7px 0',
+                              fontSize: '12px',
+                              color: '#64748b',
+                            }}>
+                              Status: <b>{job.status.toUpperCase()}</b>
+                              {job.last_date ? ` • Last date: ${job.last_date}` : ''}
+                            </p>
+                          </div>
 
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => deleteUpdate(item)}
-                          style={{ ...buttonStyle, background: '#fff0f0', color: '#b42318' }}
-                        >
-                          Delete
-                        </button>
-                      </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                            <button type="button" disabled={busy}
+                              onClick={() => editJob(job)}
+                              style={{ ...buttonStyle, background: '#e8f1ff', color: '#2457a6' }}>
+                              Edit
+                            </button>
+
+                            {job.status !== 'published' && (
+                              <button type="button" disabled={busy}
+                                onClick={() => changeJobStatus(job, 'published')}
+                                style={{ ...buttonStyle, background: '#e8f7ee', color: '#176b39' }}>
+                                Publish
+                              </button>
+                            )}
+
+                            {job.status === 'published' && (
+                              <button type="button" disabled={busy}
+                                onClick={() => changeJobStatus(job, 'draft')}
+                                style={{ ...buttonStyle, background: '#fff4df', color: '#925d00' }}>
+                                Unpublish
+                              </button>
+                            )}
+
+                            {job.status !== 'closed' && (
+                              <button type="button" disabled={busy}
+                                onClick={() => changeJobStatus(job, 'closed')}
+                                style={{ ...buttonStyle, background: '#f1f2f4', color: '#475569' }}>
+                                Close
+                              </button>
+                            )}
+
+                            <button type="button" disabled={busy}
+                              onClick={() => deleteJob(job)}
+                              style={{ ...buttonStyle, background: '#fff0f0', color: '#b42318' }}>
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+
+          {/* Other five category forms */}
+          {!isJobSection && (
+            <>
+              <section style={{
+                background: '#fff',
+                padding: '22px',
+                borderRadius: '12px',
+                border: '1px solid #e5eaf0',
+                marginBottom: '25px',
+              }}>
+                <h2 style={{ marginTop: 0, color: '#17324d' }}>
+                  {editingUpdateId ? 'Edit Career Update' : 'Add New Career Update'}
+                </h2>
+
+                <p style={{ color: '#64748b', fontSize: '13px' }}>
+                  Add verified information. New entries are saved as drafts by default.
+                </p>
+
+                <form onSubmit={saveUpdate}>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
+                    gap: '16px',
+                  }}>
+                    <div>
+                      <label style={labelStyle}>Category *</label>
+                      <select style={inputStyle} value={updateForm.category}
+                        onChange={e => setUpdateForm({ ...updateForm, category: e.target.value })}>
+                        {careerCategories.map(item => (
+                          <option key={item.value} value={item.value}>{item.label}</option>
+                        ))}
+                      </select>
                     </div>
-                  </article>
-                ))}
-              </div>
-            )}
-          </section>
+
+                    <div>
+                      <label style={labelStyle}>Title *</label>
+                      <input style={inputStyle} required value={updateForm.title}
+                        onChange={e => setUpdateForm({ ...updateForm, title: e.target.value })}
+                        placeholder="Enter notice or update title" />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Organization / Department</label>
+                      <input style={inputStyle} value={updateForm.organization}
+                        onChange={e => setUpdateForm({ ...updateForm, organization: e.target.value })}
+                        placeholder="e.g. UPSC, BPSC, NTA" />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Exam Name</label>
+                      <input style={inputStyle} value={updateForm.exam_name}
+                        onChange={e => setUpdateForm({ ...updateForm, exam_name: e.target.value })}
+                        placeholder="e.g. NEET UG, CTET, SSC CGL" />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>State / Region</label>
+                      <input style={inputStyle} value={updateForm.state}
+                        onChange={e => setUpdateForm({ ...updateForm, state: e.target.value })}
+                        placeholder="All India / Bihar / Other State" />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Notice Date</label>
+                      <input type="date" style={inputStyle} value={updateForm.notice_date}
+                        onChange={e => setUpdateForm({ ...updateForm, notice_date: e.target.value })} />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Exam / Event Date</label>
+                      <input type="date" style={inputStyle} value={updateForm.event_date}
+                        onChange={e => setUpdateForm({ ...updateForm, event_date: e.target.value })} />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Last Date (if applicable)</label>
+                      <input type="date" style={inputStyle} value={updateForm.last_date}
+                        onChange={e => setUpdateForm({ ...updateForm, last_date: e.target.value })} />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Official Website URL</label>
+                      <input type="url" style={inputStyle} value={updateForm.official_url}
+                        onChange={e => setUpdateForm({ ...updateForm, official_url: e.target.value })}
+                        placeholder="https://..." />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Download URL</label>
+                      <input type="url" style={inputStyle} value={updateForm.download_url}
+                        onChange={e => setUpdateForm({ ...updateForm, download_url: e.target.value })}
+                        placeholder="PDF or official download link" />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Publication Status</label>
+                      <select style={inputStyle} value={updateForm.status}
+                        onChange={e => setUpdateForm({ ...updateForm, status: e.target.value })}>
+                        <option value="draft">Draft</option>
+                        <option value="published">Published</option>
+                        <option value="closed">Closed</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: '16px' }}>
+                    <label style={labelStyle}>Description / Important Details</label>
+                    <textarea style={{ ...inputStyle, minHeight: '110px', resize: 'vertical' }}
+                      value={updateForm.description}
+                      onChange={e => setUpdateForm({ ...updateForm, description: e.target.value })}
+                      placeholder="Write important details, instructions, eligibility or updates..." />
+                  </div>
+
+                  <div style={{ marginTop: '18px' }}>
+                    <button type="submit" disabled={busy} style={{
+                      ...buttonStyle,
+                      background: '#126b45',
+                      color: '#fff',
+                      padding: '11px 20px',
+                    }}>
+                      {busy ? 'Please wait...' : editingUpdateId ? 'Update Entry' : 'Save Entry'}
+                    </button>
+
+                    {editingUpdateId && (
+                      <button type="button" onClick={resetUpdateForm} style={{
+                        ...buttonStyle,
+                        background: '#e9eef4',
+                        color: '#17324d',
+                        padding: '11px 18px',
+                      }}>
+                        Cancel Editing
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </section>
+
+              {/* Career update list */}
+              <section style={{
+                background: '#fff',
+                padding: '22px',
+                borderRadius: '12px',
+                border: '1px solid #e5eaf0',
+              }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '12px',
+                  marginBottom: '18px',
+                }}>
+                  <div>
+                    <h2 style={{ margin: 0, color: '#17324d' }}>
+                      {sections.find(item => item.value === activeSection)?.label}
+                    </h2>
+                    <p style={{ color: '#64748b', fontSize: '13px', marginBottom: 0 }}>
+                      Total entries: {updates.filter(item => item.category === activeSection).length}
+                    </p>
+                  </div>
+
+                  <select style={{ ...inputStyle, maxWidth: '240px' }}
+                    value={updateFilter}
+                    onChange={e => setUpdateFilter(e.target.value)}>
+                    <option value="all">All Categories</option>
+                    {careerCategories.map(item => (
+                      <option key={item.value} value={item.value}>{item.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {visibleUpdates.filter(item =>
+                  item.category === activeSection ||
+                  updateFilter === 'all'
+                ).length === 0 ? (
+                  <p style={{ color: '#64748b', padding: '20px 0' }}>
+                    No entries found. Add your first entry using the form above.
+                  </p>
+                ) : (
+                  <div style={{ display: 'grid', gap: '14px' }}>
+                    {visibleUpdates
+                      .filter(item =>
+                        item.category === activeSection ||
+                        updateFilter !== 'all'
+                      )
+                      .map(item => (
+                        <article key={item.id} style={{
+                          border: '1px solid #e5eaf0',
+                          borderRadius: '10px',
+                          padding: '16px',
+                        }}>
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            gap: '12px',
+                            flexWrap: 'wrap',
+                          }}>
+                            <div style={{ flex: 1, minWidth: '220px' }}>
+                              <div style={{
+                                fontSize: '12px',
+                                color: '#126b45',
+                                fontWeight: 700,
+                                marginBottom: '7px',
+                              }}>
+                                {updateCategoryLabel(item.category)}
+                              </div>
+
+                              <h3 style={{
+                                margin: '0 0 8px',
+                                color: '#17324d',
+                                fontSize: '17px',
+                              }}>
+                                {item.title}
+                              </h3>
+
+                              <p style={{
+                                margin: '4px 0',
+                                color: '#64748b',
+                                fontSize: '13px',
+                              }}>
+                                {item.organization || 'Organization not specified'}
+                                {item.exam_name ? ` • ${item.exam_name}` : ''}
+                                {item.state ? ` • ${item.state}` : ''}
+                              </p>
+
+                              <p style={{
+                                margin: '7px 0',
+                                fontSize: '12px',
+                                color: '#64748b',
+                              }}>
+                                Status: <b>{item.status.toUpperCase()}</b>
+                                {item.last_date ? ` • Last Date: ${item.last_date}` : ''}
+                              </p>
+                            </div>
+
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              flexWrap: 'wrap',
+                            }}>
+                              <button type="button" disabled={busy}
+                                onClick={() => editUpdate(item)}
+                                style={{ ...buttonStyle, background: '#e8f1ff', color: '#2457a6' }}>
+                                Edit
+                              </button>
+
+                              {item.status !== 'published' && (
+                                <button type="button" disabled={busy}
+                                  onClick={() => changeUpdateStatus(item, 'published')}
+                                  style={{ ...buttonStyle, background: '#e8f7ee', color: '#176b39' }}>
+                                  Publish
+                                </button>
+                              )}
+
+                              {item.status === 'published' && (
+                                <button type="button" disabled={busy}
+                                  onClick={() => changeUpdateStatus(item, 'draft')}
+                                  style={{ ...buttonStyle, background: '#fff4df', color: '#925d00' }}>
+                                  Unpublish
+                                </button>
+                              )}
+
+                              {item.status !== 'closed' && (
+                                <button type="button" disabled={busy}
+                                  onClick={() => changeUpdateStatus(item, 'closed')}
+                                  style={{ ...buttonStyle, background: '#f1f2f4', color: '#475569' }}>
+                                  Close
+                                </button>
+                              )}
+
+                              <button type="button" disabled={busy}
+                                onClick={() => deleteUpdate(item)}
+                                style={{ ...buttonStyle, background: '#fff0f0', color: '#b42318' }}>
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+
+          <div style={{
+            marginTop: '20px',
+            padding: '14px',
+            background: '#edf4f8',
+            borderRadius: '9px',
+            color: '#526b80',
+            fontSize: '12px',
+            lineHeight: 1.7,
+          }}>
+            <strong>Administrator reminder:</strong> Verify every vacancy,
+            notice, date and official link before publication. Draft entries
+            are not displayed publicly.
+          </div>
         </div>
       </section>
     </main>
