@@ -60,7 +60,40 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      
+<body>
+  <script
+    type="application/ld+json"
+    dangerouslySetInnerHTML={{
+      __html: JSON.stringify({
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "EducationalOrganization",
+            "@id": "https://eduaxisindia.com/#organization",
+            "name": "EduAxis India",
+            "url": "https://eduaxisindia.com",
+            "description":
+              "EduAxis India is an educational platform offering quality study materials, competitive exam preparation, online courses, mock tests, career guidance and government job updates.",
+            "email": "eduax​​isindiateam@gmail.com"
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://eduaxisindia.com/#website",
+            "url": "https://eduaxisindia.com",
+            "name": "EduAxis India",
+            "publisher": {
+              "@id": "https://eduaxisindia.com/#organization"
+            },
+            "inLanguage": "en-IN"
+          }
+        ]
+      })
+    }}
+  />
+  {children}
+</body>
+
     </html>
   );
 }
