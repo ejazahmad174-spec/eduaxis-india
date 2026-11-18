@@ -600,14 +600,14 @@ export async function GET(request: Request) {
         pdfsProcessed++;
 
         const { error: processingError } = await supabase
-          .from("government_job_discoveries")
-          .update({
-            pdf_url: pdfUrl,
-            extraction_status: "processing",
-            extraction_error: null,
-          })
-          .in("extraction_status", ["pending", "needs_ocr", "failed"])
-          .eq("extraction_status", "pending");
+  .from("government_job_discoveries")
+  .update({
+    pdf_url: pdfUrl,
+    extraction_status: "processing",
+    extraction_error: null,
+  })
+  .eq("id", discovery.id)
+  .eq("extraction_status", "pending");
 
         if (processingError) {
           console.error(
