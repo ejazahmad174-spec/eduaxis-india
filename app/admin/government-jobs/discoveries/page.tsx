@@ -230,7 +230,64 @@ export default function DiscoveredGovernmentJobsPage() {
       setCollecting(false);
     }
   }
+  // Process one pending government notification PDF.
+  async function processNextPdf() {
+    const client = supabase;
 
+    if (!client) {
+      setErrorMessage('Supabase connection is not configured.');
+      return;
+    }
+
+    setCollecting(true);
+    setMessage('Processing one pending PDF. Please wait...');
+    setErrorMessage('');
+
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await client.auth.getSession();
+
+      if (sessionError || !session?.access_token) {
+        throw new Error(
+          'Your login session has expired. Please sign in again.'
+        );
+      }
+
+      const response = await fetch('/api/jobs/process-pdfs', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        cache: 'no-store',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error || 'PDF processing failed.'
+        );
+      }
+
+      await loadDiscoveries();
+
+      setMessage(
+        result.message || 'PDF processing request completed.'
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'An unexpected PDF processing error occurred.'
+      );
+
+      setMessage('');
+    } finally {
+      setCollecting(false);
+    }
+  }
   // Verify administrator access before showing the dashboard.
   useEffect(() => {
     let active = true;
