@@ -490,7 +490,6 @@ export async function GET(request: Request) {
   let pdfsProcessed = 0;
   let pdfsSuccessful = 0;
 
-  const MAX_PDFS_PER_RUN = 2;
 
   const results: {
     source: string;
