@@ -317,341 +317,368 @@ export default function DiscoveredGovernmentJobsPage() {
         .maybeSingle();
 
       if (profileError || profile?.role !== 'admin') {
+        router.replace('/admin/login');
+        return;
+      }
 
-  async function createDraftJob(item: Discovery) {
+      if (active) {
+        await loadDiscoveries();
+      }
+    }
+
+    void checkAdmin();
+
+    return () => {
+      active = false;
+    };
+  }, [router, loadDiscoveries]);
+
+  // Get the official source name for a discovered notice.
+  function getSourceName(sourceId: string): string {
+    return (
+      sources.find(source => source.id === sourceId)?.source_name ||
+      'Official Government Source'
+    );
+  }
+
+  // Update the review status of a discovered notice.
+  async function updateStatus(
+    item: Discovery,
+    nextStatus: 'new' | 'ignored'
+  ) {
     const client = supabase;
-
     if (!client) return;
 
     setBusyId(item.id);
     setMessage('');
     setErrorMessage('');
 
-    const details = item.extracted_details || {};
+    const { error } = await client
+      .from('government_job_discoveries')
+      .update({
+        status: nextStatus,
+        processed_at:
+          nextStatus === 'ignored' ? new Date().toISOString() : null,
+        error_message: null,
+      })
+      .eq('id', item.id);
 
-    // Convert extracted dates into a database-compatible YYYY-MM-DD value.
-    function toISODate(value: string | null | undefined): string | null {
-      if (!value) return null;
-
-      const text = value.trim();
-      if (!text) return null;
-
-      const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-
-      const indianMatch = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-      if (indianMatch) {
-        const day = indianMatch[1].padStart(2, '0');
-        const month = indianMatch[2].padStart(2, '0');
-        return `${indianMatch[3]}-${month}-${day}`;
-      }
-
-      const parsed = new Date(text);
-      if (Number.isNaN(parsed.getTime())) return null;
-
-      return [
-        parsed.getFullYear(),
-        String(parsed.getMonth() + 1).padStart(2, '0'),
-        String(parsed.getDate()).padStart(2, '0'),
-      ].join('-');
-    }
-
-    // The government_jobs table stores vacancies as a number.
-    function toVacancyNumber(value: string | null | undefined): number | null {
-      if (!value) return null;
-
-      const match = value.replace(/,/g, '').match(/\d+/);
-      if (!match) return null;
-
-      const number = Number(match[0]);
-      return Number.isSafeInteger(number) ? number : null;
-    }
-
-    // Do not import a PDF until extraction has completed successfully.
-    if (
-      item.pdf_url &&
-      (item.extraction_status !== 'completed' ||
-        !details.extracted_text_excerpt?.trim())
-    ) {
-      setErrorMessage(
-        'PDF extraction is incomplete or contains no readable text. Review this notice manually before importing.'
-      );
-      setBusyId(null);
-      return;
-    }
-
-    const sourceName = getSourceName(item.source_id);
-    const title =
-      details.job_title_candidates?.find(value => value.trim()) ||
-      item.discovered_title ||
-      'Untitled career notice';
-
-    const searchableText = `${title} ${item.discovered_title || ''} ${
-      item.discovered_url || ''
-    }`.toLowerCase();
-
-    const isCancellation =
-      /\b(cancelled|canceled|cancellation|corrigendum|withdrawn|postponed|rescheduled|extension|revised)\b/i.test(
-        searchableText
-      );
-
-    const isAdmitCard =
-      /\b(admit card|hall ticket|call letter)\b/i.test(searchableText);
-
-    const isResult =
-      /\b(result|answer key|merit list|score card|scorecard)\b/i.test(
-        searchableText
-      );
-
-    const isSyllabus = /\b(syllabus|exam pattern)\b/i.test(searchableText);
-
-    const isVacancy =
-      item.notice_category === 'government_job' && !isCancellation;
-
-    // Check for an existing government job.
-    const { data: existingJob, error: jobLookupError } = await client
-      .from('government_jobs')
-      .select('id')
-      .eq('source_id', item.source_id)
-      .eq('source_reference', item.discovered_url)
-      .maybeSingle();
-
-    if (jobLookupError) {
-      setErrorMessage('Could not check existing jobs: ' + jobLookupError.message);
-      setBusyId(null);
-      return;
-    }
-
-    if (existingJob) {
-      const { error } = await client
-        .from('government_job_discoveries')
-        .update({
-          status: 'imported',
-          imported_job_id: existingJob.id,
-          imported_update_id: null,
-          processed_at: new Date().toISOString(),
-          error_message: null,
-        })
-        .eq('id', item.id);
-
-      if (error) {
-        setErrorMessage(error.message);
-      } else {
-        setMessage('This government job already exists. Its record has been linked.');
-        await loadDiscoveries();
-      }
-
-      setBusyId(null);
-      return;
-    }
-
-    // Check for an existing career update.
-    const { data: existingUpdate, error: updateLookupError } = await client
-      .from('career_updates')
-      .select('id')
-      .eq('official_url', item.discovered_url)
-      .maybeSingle();
-
-    if (updateLookupError) {
-      setErrorMessage(
-        'Could not check existing career updates: ' + updateLookupError.message
-      );
-      setBusyId(null);
-      return;
-    }
-
-    if (existingUpdate) {
-      const { error } = await client
-        .from('government_job_discoveries')
-        .update({
-          status: 'imported',
-          imported_job_id: null,
-          imported_update_id: existingUpdate.id,
-          processed_at: new Date().toISOString(),
-          error_message: null,
-        })
-        .eq('id', item.id);
-
-      if (error) {
-        setErrorMessage(error.message);
-      } else {
-        setMessage('This career update already exists. Its record has been linked.');
-        await loadDiscoveries();
-      }
-
-      setBusyId(null);
-      return;
-    }
-
-    if (isVacancy) {
-      // Transfer extracted PDF information into the government_jobs table.
-      const { data: newJob, error: insertError } = await client
-        .from('government_jobs')
-        .insert({
-          title,
-          organization: details.department || sourceName,
-          post_name: details.job_title_candidates?.[0] || title,
-          vacancies: toVacancyNumber(details.vacancies),
-          qualification: details.qualification || null,
-          age_limit: details.age_limit || null,
-          application_fee: details.application_fee || null,
-          application_start_date: toISODate(details.application_start_date),
-          last_date: toISODate(details.last_date),
-          notification_url: item.pdf_url || item.discovered_url,
-          apply_url: details.apply_url || null,
-          official_website: (() => {
-            try {
-              return new URL(item.discovered_url).origin;
-            } catch {
-              return null;
-            }
-          })(),
-          status: 'draft',
-          source_id: item.source_id,
-          source_reference: item.discovered_url,
-          auto_collected: true,
-        })
-        .select('id')
-        .single();
-
-      if (insertError || !newJob) {
-        setErrorMessage(
-          'Could not create draft government job: ' +
-            (insertError?.message || 'No record returned.')
-        );
-        setBusyId(null);
-        return;
-      }
-
-      const { error: discoveryError } = await client
-        .from('government_job_discoveries')
-        .update({
-          status: 'imported',
-          imported_job_id: newJob.id,
-          imported_update_id: null,
-          processed_at: new Date().toISOString(),
-          error_message: null,
-        })
-        .eq('id', item.id);
-
-      if (discoveryError) {
-        setErrorMessage(
-          'Government job draft created, but discovery tracking failed: ' +
-            discoveryError.message
-        );
-      } else {
-        setMessage(
-          'Draft government job created with the extracted information. Verify all details before publishing.'
-        );
-      }
+    if (error) {
+      setErrorMessage('Could not update notice status: ' + error.message);
     } else {
-      // Select the correct career update category.
-      let updateCategory:
-        | 'recruitment_notice'
-        | 'admit_card'
-        | 'result_answer_key'
-        | 'syllabus'
-        | 'other_update' = 'other_update';
-
-      if (isCancellation) {
-        updateCategory = 'recruitment_notice';
-      } else if (isAdmitCard || item.notice_category === 'admit_card') {
-        updateCategory = 'admit_card';
-      } else if (isResult || item.notice_category === 'result_answer_key') {
-        updateCategory = 'result_answer_key';
-      } else if (isSyllabus || item.notice_category === 'syllabus') {
-        updateCategory = 'syllabus';
-      } else if (item.notice_category === 'recruitment_notice') {
-        updateCategory = 'recruitment_notice';
-      }
-
-      // Include extracted information in the career update description.
-      const extractedInformation = [
-        details.department ? `Department: ${details.department}` : null,
-        details.vacancies ? `Vacancies: ${details.vacancies}` : null,
-        details.qualification
-          ? `Educational Qualification: ${details.qualification}`
-          : null,
-        details.age_limit ? `Age Limit: ${details.age_limit}` : null,
-        details.application_fee
-          ? `Application Fee: ${details.application_fee}`
-          : null,
-        details.application_start_date
-          ? `Application Start Date: ${details.application_start_date}`
-          : null,
-        details.last_date ? `Last Date to Apply: ${details.last_date}` : null,
-        details.examination_date
-          ? `Examination Date: ${details.examination_date}`
-          : null,
-        details.apply_url ? `Application Link: ${details.apply_url}` : null,
-        details.extraction_note || null,
-      ].filter(Boolean);
-
-      const description = [
-        details.extraction_note || 'Automatically extracted information. Please verify against the official notification.',
-        '',
-        ...extractedInformation.filter(
-          line => line !== details.extraction_note
-        ),
-      ]
-        .filter(Boolean)
-        .join('\n');
-
-      const { data: newUpdate, error: insertError } = await client
-        .from('career_updates')
-        .insert({
-          category: updateCategory,
-          title,
-          organization: details.department || sourceName,
-          exam_name: null,
-          state: 'All India',
-          description,
-          notice_date: toISODate(item.discovered_at),
-          event_date: toISODate(details.examination_date),
-          last_date: toISODate(details.last_date),
-          official_url: item.discovered_url,
-          download_url: item.pdf_url || null,
-          status: 'draft',
-        })
-        .select('id')
-        .single();
-
-      if (insertError || !newUpdate) {
-        setErrorMessage(
-          'Could not create draft career update: ' +
-            (insertError?.message || 'No record returned.')
-        );
-        setBusyId(null);
-        return;
-      }
-
-      const { error: discoveryError } = await client
-        .from('government_job_discoveries')
-        .update({
-          status: 'imported',
-          imported_job_id: null,
-          imported_update_id: newUpdate.id,
-          processed_at: new Date().toISOString(),
-          error_message: null,
-        })
-        .eq('id', item.id);
-
-      if (discoveryError) {
-        setErrorMessage(
-          'Career update created, but discovery tracking failed: ' +
-            discoveryError.message
-        );
-      } else {
-        setMessage(
-          'Draft career update created with the extracted information. Verify its category and details before publishing.'
-        );
-      }
+      setMessage(
+        nextStatus === 'ignored'
+          ? 'Notice marked as ignored.'
+          : 'Notice restored to the new review queue.'
+      );
+      await loadDiscoveries();
     }
 
-    await loadDiscoveries();
     setBusyId(null);
   }
 
+  // Import a discovery into the correct destination after checking for duplicates.
+  async function createDraftJob(item: Discovery) {
+    const client = supabase;
+    if (!client) return;
+
+    setBusyId(item.id);
+    setMessage('');
+    setErrorMessage('');
+
+    try {
+      const details = item.extracted_details || {};
+
+      function toISODate(value: string | null | undefined): string | null {
+        if (!value) return null;
+        const text = value.trim();
+        if (!text) return null;
+
+        const isoMatch = text.match(/^(\\d{4})-(\\d{2})-(\\d{2})/);
+        if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+
+        const indianMatch = text.match(/^(\\d{1,2})[/-](\\d{1,2})[/-](\\d{4})$/);
+        if (indianMatch) {
+          return `${indianMatch[3]}-${indianMatch[2].padStart(2, '0')}-${indianMatch[1].padStart(2, '0')}`;
+        }
+
+        const parsed = new Date(text);
+        if (Number.isNaN(parsed.getTime())) return null;
+
+        return [
+          parsed.getFullYear(),
+          String(parsed.getMonth() + 1).padStart(2, '0'),
+          String(parsed.getDate()).padStart(2, '0'),
+        ].join('-');
+      }
+
+      function toVacancyNumber(value: string | null | undefined): number | null {
+        if (!value) return null;
+        const match = value.replace(/,/g, '').match(/\\d+/);
+        if (!match) return null;
+        const number = Number(match[0]);
+        return Number.isSafeInteger(number) ? number : null;
+      }
+
+      if (
+        item.pdf_url &&
+        (item.extraction_status !== 'completed' ||
+          !details.extracted_text_excerpt?.trim())
+      ) {
+        throw new Error(
+          'PDF extraction is incomplete or contains no readable text. Review this notice manually before importing.'
+        );
+      }
+
+      const sourceName = getSourceName(item.source_id);
+      const title =
+        details.job_title_candidates?.find(value => value.trim()) ||
+        item.discovered_title ||
+        'Untitled career notice';
+
+      const searchableText = `${title} ${item.discovered_title || ''} ${
+        item.discovered_url || ''
+      }`.toLowerCase();
+
+      const isCancellation =
+        /\\b(cancelled|canceled|cancellation|corrigendum|withdrawn|postponed|rescheduled|extension|revised)\\b/i.test(
+          searchableText
+        );
+      const isAdmitCard =
+        /\\b(admit card|hall ticket|call letter)\\b/i.test(searchableText);
+      const isResult =
+        /\\b(result|answer key|merit list|score card|scorecard)\\b/i.test(
+          searchableText
+        );
+      const isSyllabus = /\\b(syllabus|exam pattern)\\b/i.test(searchableText);
+      const isVacancy =
+        item.notice_category === 'government_job' && !isCancellation;
+
+      // Check whether this discovery has already been imported as a government job.
+      const { data: existingJob, error: jobLookupError } = await client
+        .from('government_jobs')
+        .select('id')
+        .eq('source_id', item.source_id)
+        .eq('source_reference', item.discovered_url)
+        .maybeSingle();
+
+      if (jobLookupError) {
+        throw new Error('Could not check existing jobs: ' + jobLookupError.message);
+      }
+
+      if (existingJob) {
+        const { error } = await client
+          .from('government_job_discoveries')
+          .update({
+            status: 'imported',
+            imported_job_id: existingJob.id,
+            imported_update_id: null,
+            processed_at: new Date().toISOString(),
+            error_message: null,
+          })
+          .eq('id', item.id);
+
+        if (error) throw new Error(error.message);
+        setMessage('This government job already exists. Its record has been linked.');
+        await loadDiscoveries();
+        return;
+      }
+
+      // Check whether this discovery already exists as a career update.
+      const { data: existingUpdate, error: updateLookupError } = await client
+        .from('career_updates')
+        .select('id')
+        .eq('official_url', item.discovered_url)
+        .maybeSingle();
+
+      if (updateLookupError) {
+        throw new Error(
+          'Could not check existing career updates: ' + updateLookupError.message
+        );
+      }
+
+      if (existingUpdate) {
+        const { error } = await client
+          .from('government_job_discoveries')
+          .update({
+            status: 'imported',
+            imported_job_id: null,
+            imported_update_id: existingUpdate.id,
+            processed_at: new Date().toISOString(),
+            error_message: null,
+          })
+          .eq('id', item.id);
+
+        if (error) throw new Error(error.message);
+        setMessage('This career update already exists. Its record has been linked.');
+        await loadDiscoveries();
+        return;
+      }
+
+      if (isVacancy) {
+        const { data: newJob, error: insertError } = await client
+          .from('government_jobs')
+          .insert({
+            title,
+            organization: details.department || sourceName,
+            post_name: details.job_title_candidates?.[0] || title,
+            vacancies: toVacancyNumber(details.vacancies),
+            qualification: details.qualification || null,
+            age_limit: details.age_limit || null,
+            application_fee: details.application_fee || null,
+            application_start_date: toISODate(details.application_start_date),
+            last_date: toISODate(details.last_date),
+            notification_url: item.pdf_url || item.discovered_url,
+            apply_url: details.apply_url || null,
+            official_website: (() => {
+              try {
+                return new URL(item.discovered_url).origin;
+              } catch {
+                return null;
+              }
+            })(),
+            status: 'draft',
+            source_id: item.source_id,
+            source_reference: item.discovered_url,
+            auto_collected: true,
+          })
+          .select('id')
+          .single();
+
+        if (insertError || !newJob) {
+          throw new Error(
+            'Could not create draft government job: ' +
+              (insertError?.message || 'No record returned.')
+          );
+        }
+
+        const { error: discoveryError } = await client
+          .from('government_job_discoveries')
+          .update({
+            status: 'imported',
+            imported_job_id: newJob.id,
+            imported_update_id: null,
+            processed_at: new Date().toISOString(),
+            error_message: null,
+          })
+          .eq('id', item.id);
+
+        if (discoveryError) {
+          throw new Error(
+            'Government job draft created, but discovery tracking failed: ' +
+              discoveryError.message
+          );
+        }
+
+        setMessage(
+          'Draft government job created with extracted information. Verify all details before publishing.'
+        );
+      } else {
+        let updateCategory:
+          | 'recruitment_notice'
+          | 'admit_card'
+          | 'result_answer_key'
+          | 'syllabus'
+          | 'other_update' = 'other_update';
+
+        if (isCancellation) {
+          updateCategory = 'recruitment_notice';
+        } else if (isAdmitCard || item.notice_category === 'admit_card') {
+          updateCategory = 'admit_card';
+        } else if (isResult || item.notice_category === 'result_answer_key') {
+          updateCategory = 'result_answer_key';
+        } else if (isSyllabus || item.notice_category === 'syllabus') {
+          updateCategory = 'syllabus';
+        } else if (item.notice_category === 'recruitment_notice') {
+          updateCategory = 'recruitment_notice';
+        }
+
+        const extractedInformation = [
+          details.department ? `Department: ${details.department}` : null,
+          details.vacancies ? `Vacancies: ${details.vacancies}` : null,
+          details.qualification
+            ? `Educational Qualification: ${details.qualification}`
+            : null,
+          details.age_limit ? `Age Limit: ${details.age_limit}` : null,
+          details.application_fee
+            ? `Application Fee: ${details.application_fee}`
+            : null,
+          details.application_start_date
+            ? `Application Start Date: ${details.application_start_date}`
+            : null,
+          details.last_date ? `Last Date to Apply: ${details.last_date}` : null,
+          details.examination_date
+            ? `Examination Date: ${details.examination_date}`
+            : null,
+          details.apply_url ? `Application Link: ${details.apply_url}` : null,
+          details.extraction_note || null,
+        ].filter((line): line is string => Boolean(line));
+
+        const description = [
+          'Automatically collected notice. Verify all details against the official source.',
+          ...extractedInformation,
+        ].join('\\n');
+
+        const { data: newUpdate, error: insertError } = await client
+          .from('career_updates')
+          .insert({
+            category: updateCategory,
+            title,
+            organization: details.department || sourceName,
+            exam_name: null,
+            state: 'All India',
+            description,
+            notice_date: toISODate(item.discovered_at),
+            event_date: toISODate(details.examination_date),
+            last_date: toISODate(details.last_date),
+            official_url: item.discovered_url,
+            download_url: item.pdf_url || null,
+            status: 'draft',
+          })
+          .select('id')
+          .single();
+
+        if (insertError || !newUpdate) {
+          throw new Error(
+            'Could not create draft career update: ' +
+              (insertError?.message || 'No record returned.')
+          );
+        }
+
+        const { error: discoveryError } = await client
+          .from('government_job_discoveries')
+          .update({
+            status: 'imported',
+            imported_job_id: null,
+            imported_update_id: newUpdate.id,
+            processed_at: new Date().toISOString(),
+            error_message: null,
+          })
+          .eq('id', item.id);
+
+        if (discoveryError) {
+          throw new Error(
+            'Career update created, but discovery tracking failed: ' +
+              discoveryError.message
+          );
+        }
+
+        setMessage(
+          'Draft career update created with extracted information. Verify its category and details before publishing.'
+        );
+      }
+
+      await loadDiscoveries();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'An unexpected error occurred while creating the draft.'
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   // Change the category of a discovered notice.
   async function updateCategory(
