@@ -876,7 +876,22 @@ export default function DiscoveredGovernmentJobsPage() {
             <h2 style={{ margin: 0 }}>
               Notices ({visibleItems.length})
             </h2>
-
+<button
+  type="button"
+  onClick={processNextPdf}
+  disabled={collecting || busyId !== null}
+  style={{
+    padding: '10px 15px',
+    border: 0,
+    borderRadius: 8,
+    background: collecting ? '#647b91' : '#087443',
+    color: '#fff',
+    fontWeight: 700,
+    cursor: collecting ? 'not-allowed' : 'pointer',
+  }}
+>
+  {collecting ? 'Processing...' : 'Process One PDF'}
+</button>
             <button
               type="button"
               onClick={runCollection}
