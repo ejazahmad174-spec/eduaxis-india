@@ -112,6 +112,7 @@ const sections: { value: Section; label: string }[] = [
   { value: 'admit_card', label: 'Admit Cards' },
   { value: 'result_answer_key', label: 'Results & Answer Keys' },
   { value: 'syllabus', label: 'Syllabus' },
+  { value: 'admission', label: 'Admission' },
   { value: 'other_update', label: 'Other Updates' },
 ];
 
