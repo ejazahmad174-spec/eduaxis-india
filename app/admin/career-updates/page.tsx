@@ -103,6 +103,7 @@ type Section =
   | 'admit_card'
   | 'result_answer_key'
   | 'syllabus'
+  | 'admission'
   | 'other_update';
 
 const sections: { value: Section; label: string }[] = [
