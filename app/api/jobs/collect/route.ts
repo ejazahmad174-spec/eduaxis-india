@@ -1,7 +1,6 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { readJobPDF } from "@/lib/job-pdf-reader";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -471,9 +470,11 @@ export async function GET(request: Request) {
   }
 
   const { data: sources, error: sourceError } = await supabase
-    .from("government_job_sources")
-    .select("id, source_name, source_url")
-    .eq("is_active", true);
+  .from("government_job_sources")
+  .select("id, source_name, source_url")
+  .eq("is_active", true)
+  .order("last_checked_at", { ascending: true, nullsFirst: true })
+  .limit(1);
 
   if (sourceError) {
     console.error("Could not load job sources:", sourceError);
@@ -567,114 +568,7 @@ export async function GET(request: Request) {
         discovered += links.length;
       }
 
-      let sourcePdfsRead = 0;
-
-      const { data: pendingDiscoveries, error: pendingError } =
-        await supabase
-          .from("government_job_discoveries")
-          .select("id, pdf_url, discovered_url, extraction_status")
-          .eq("source_id", source.id)
-          .in("extraction_status", ["pending", "needs_ocr", "failed"])
-          .order("discovered_at", { ascending: true })
-          .limit(50);
-
-      if (pendingError) {
-        throw new Error(
-          `Could not load pending PDF notices: ${pendingError.message}`
-        );
-      }
-
-      for (const discovery of pendingDiscoveries || []) {
-        if (pdfsProcessed >= MAX_PDFS_PER_RUN) {
-          break;
-        }
-
-        const pdfUrl = isPdfUrl(discovery.discovered_url)
-  ? discovery.discovered_url
-  : null;
-
-        if (!pdfUrl || !isPdfUrl(pdfUrl)) {
-          continue;
-        }
-
-        pdfsProcessed++;
-
-        const { error: processingError } = await supabase
-  .from("government_job_discoveries")
-  .update({
-    pdf_url: pdfUrl,
-    extraction_status: "processing",
-    extraction_error: null,
-  })
-  .eq("id", discovery.id)
-  .eq("extraction_status", "pending");
-
-        if (processingError) {
-          console.error(
-            "Could not mark PDF as processing:",
-            processingError
-          );
-          continue;
-        }
-
-        const pdfResult = await readJobPDF(pdfUrl);
-
-        if (!pdfResult.success) {
-          const needsOcr =
-            pdfResult.error?.toLowerCase().includes("very little text") ||
-            false;
-
-          const { error: failureUpdateError } = await supabase
-            .from("government_job_discoveries")
-            .update({
-              pdf_url: pdfUrl,
-              extraction_status: needsOcr ? "needs_ocr" : "failed",
-              extraction_error:
-                pdfResult.error || "PDF reading failed.",
-              extracted_at: new Date().toISOString(),
-            })
-            .eq("id", discovery.id);
-
-          if (failureUpdateError) {
-            console.error(
-              "Could not save PDF extraction failure:",
-              failureUpdateError
-            );
-          }
-
-          continue;
-        }
-
-        const extractedDetails = extractJobDetails(
-          pdfResult.text,
-          pdfUrl
-        );
-
-        const { error: updateError } = await supabase
-          .from("government_job_discoveries")
-          .update({
-            pdf_url: pdfUrl,
-            extracted_details: {
-              ...extractedDetails,
-              pdf_pages: pdfResult.pages,
-            },
-            extraction_status: "completed",
-            extraction_error: null,
-            extracted_at: new Date().toISOString(),
-          })
-          .eq("id", discovery.id);
-
-        if (updateError) {
-          console.error(
-            "Could not save extracted PDF details:",
-            updateError
-          );
-        } else {
-          pdfsSuccessful++;
-          sourcePdfsRead++;
-        }
-      }
-
+      const sourcePdfsRead = 0;
       const now = new Date().toISOString();
 
       await supabase
