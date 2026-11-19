@@ -107,8 +107,10 @@ function downloadButtonLabel(category: string) {
       return 'Download Admit Card';
     case 'result_answer_key':
       return 'View Result / Answer Key';
-    case 'syllabus':
-      return 'Download Syllabus';
+      case 'syllabus':
+  return 'Download Syllabus';
+case 'admission':
+  return 'View Admission Details';
     default:
       return 'View / Download Details';
   }
