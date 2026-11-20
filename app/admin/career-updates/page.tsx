@@ -1189,7 +1189,109 @@ const values = {
                       </select>
                     </div>
                   </div>
+<div style={{
+  marginTop: '20px',
+  padding: '16px',
+  border: '1px solid #dbe4ed',
+  borderRadius: '10px',
+}}>
+  <h3 style={{ color: '#17324d', marginTop: 0 }}>
+    Additional Details (Fill as Applicable)
+  </h3>
 
+  <div style={{
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
+    gap: '16px',
+  }}>
+    <div>
+      <label style={labelStyle}>Post Details</label>
+      <textarea style={{ ...inputStyle, minHeight: '90px', resize: 'vertical' }}
+        value={updateForm.post_details}
+        onChange={e => setUpdateForm({ ...updateForm, post_details: e.target.value })}
+        placeholder="Post names, number of posts, etc." />
+    </div>
+
+    <div>
+      <label style={labelStyle}>Vacancy Details</label>
+      <textarea style={{ ...inputStyle, minHeight: '90px', resize: 'vertical' }}
+        value={updateForm.vacancy_details}
+        onChange={e => setUpdateForm({ ...updateForm, vacancy_details: e.target.value })}
+        placeholder="Total vacancies, UR, EWS, OBC, SC, ST, etc." />
+    </div>
+
+    <div>
+      <label style={labelStyle}>Age Limit Details</label>
+      <textarea style={{ ...inputStyle, minHeight: '90px', resize: 'vertical' }}
+        value={updateForm.age_limit_details}
+        onChange={e => setUpdateForm({ ...updateForm, age_limit_details: e.target.value })}
+        placeholder="Minimum/maximum age and category-wise relaxation" />
+    </div>
+
+    <div>
+      <label style={labelStyle}>Educational Qualification</label>
+      <textarea style={{ ...inputStyle, minHeight: '90px', resize: 'vertical' }}
+        value={updateForm.educational_qualification}
+        onChange={e => setUpdateForm({ ...updateForm, educational_qualification: e.target.value })}
+        placeholder="Required educational qualifications" />
+    </div>
+
+    <div>
+      <label style={labelStyle}>Eligibility Details</label>
+      <textarea style={{ ...inputStyle, minHeight: '90px', resize: 'vertical' }}
+        value={updateForm.eligibility_details}
+        onChange={e => setUpdateForm({ ...updateForm, eligibility_details: e.target.value })}
+        placeholder="Other eligibility conditions" />
+    </div>
+
+    <div>
+      <label style={labelStyle}>Application Fee</label>
+      <textarea style={{ ...inputStyle, minHeight: '90px', resize: 'vertical' }}
+        value={updateForm.application_fee}
+        onChange={e => setUpdateForm({ ...updateForm, application_fee: e.target.value })}
+        placeholder="General, OBC, SC/ST, Female, etc." />
+    </div>
+
+    <div>
+      <label style={labelStyle}>Application Start Date</label>
+      <input type="date" style={inputStyle}
+        value={updateForm.application_start_date}
+        onChange={e => setUpdateForm({ ...updateForm, application_start_date: e.target.value })} />
+    </div>
+
+    <div>
+      <label style={labelStyle}>Important Dates</label>
+      <textarea style={{ ...inputStyle, minHeight: '90px', resize: 'vertical' }}
+        value={updateForm.important_dates}
+        onChange={e => setUpdateForm({ ...updateForm, important_dates: e.target.value })}
+        placeholder="Application, fee payment, exam, correction dates, etc." />
+    </div>
+
+    <div>
+      <label style={labelStyle}>Apply Online URL</label>
+      <input type="url" style={inputStyle}
+        value={updateForm.apply_url}
+        onChange={e => setUpdateForm({ ...updateForm, apply_url: e.target.value })}
+        placeholder="https://..." />
+    </div>
+
+    <div>
+      <label style={labelStyle}>Admit Card URL</label>
+      <input type="url" style={inputStyle}
+        value={updateForm.admit_card_url}
+        onChange={e => setUpdateForm({ ...updateForm, admit_card_url: e.target.value })}
+        placeholder="https://..." />
+    </div>
+
+    <div>
+      <label style={labelStyle}>Result / Answer Key URL</label>
+      <input type="url" style={inputStyle}
+        value={updateForm.result_url}
+        onChange={e => setUpdateForm({ ...updateForm, result_url: e.target.value })}
+        placeholder="https://..." />
+    </div>
+  </div>
+</div>
                   <div style={{ marginTop: '16px' }}>
                     <label style={labelStyle}>Description / Important Details</label>
                     <textarea style={{ ...inputStyle, minHeight: '110px', resize: 'vertical' }}
