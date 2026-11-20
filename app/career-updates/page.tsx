@@ -775,18 +775,19 @@ export default function CareerUpdatesPage() {
               </p>
             )}
 
-            {item.state && (
-              <p style={{
-                margin: '0 0 8px',
-                fontSize: '12px',
-                color: '#64748b',
-              }}>
-                Region: {item.state}
-              </p>
-            )}
+{item.description && (
+  <p style={{
+    fontSize: '13px',
+    color: '#52677d',
+    lineHeight: 1.7,
+    margin: '10px 0',
+    whiteSpace: 'pre-line',
+  }}>
+    {item.description}
+  </p>
+)}
 
-            {item.description && (
-              {(
+{(
   item.post_details ||
   item.vacancy_details ||
   item.age_limit_details ||
@@ -838,8 +839,10 @@ export default function CareerUpdatesPage() {
     )}
   </div>
 )}
-            {(item.event_date || item.last_date) && (
-              <div style={{
+
+{(item.event_date || item.last_date) && (
+
+                        <div style={{
                 background: '#f5f8fc',
                 borderRadius: '7px',
                 padding: '10px',
