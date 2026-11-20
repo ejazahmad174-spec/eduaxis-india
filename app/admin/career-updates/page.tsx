@@ -96,6 +96,7 @@ const emptyJob = {
   status: 'draft',
 };
 
+
 const emptyUpdate = {
   category: 'recruitment_notice',
   title: '',
@@ -108,8 +109,22 @@ const emptyUpdate = {
   last_date: '',
   official_url: '',
   download_url: '',
+
+  post_details: '',
+  vacancy_details: '',
+  age_limit_details: '',
+  educational_qualification: '',
+  eligibility_details: '',
+  application_fee: '',
+  application_start_date: '',
+  important_dates: '',
+  apply_url: '',
+  admit_card_url: '',
+  result_url: '',
+
   status: 'draft',
 };
+
 
 type Section =
   | 'jobs'
