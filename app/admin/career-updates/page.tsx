@@ -302,19 +302,33 @@ export default function CareerManagementPage() {
   }
 
   function editUpdate(item: CareerUpdate) {
-    setUpdateForm({
-      category: item.category,
-      title: item.title || '',
-      organization: item.organization || '',
-      exam_name: item.exam_name || '',
-      state: item.state || 'All India',
-      description: item.description || '',
-      notice_date: item.notice_date || '',
-      event_date: item.event_date || '',
-      last_date: item.last_date || '',
-      official_url: item.official_url || '',
-      download_url: item.download_url || '',
-      status: item.status || 'draft',
+   
+setUpdateForm({
+  category: item.category,
+  title: item.title || '',
+  organization: item.organization || '',
+  exam_name: item.exam_name || '',
+  state: item.state || 'All India',
+  description: item.description || '',
+  notice_date: item.notice_date || '',
+  event_date: item.event_date || '',
+  last_date: item.last_date || '',
+  official_url: item.official_url || '',
+  download_url: item.download_url || '',
+
+  post_details: item.post_details || '',
+  vacancy_details: item.vacancy_details || '',
+  age_limit_details: item.age_limit_details || '',
+  educational_qualification: item.educational_qualification || '',
+  eligibility_details: item.eligibility_details || '',
+  application_fee: item.application_fee || '',
+  application_start_date: item.application_start_date || '',
+  important_dates: item.important_dates || '',
+  apply_url: item.apply_url || '',
+  admit_card_url: item.admit_card_url || '',
+  result_url: item.result_url || '',
+
+  status: item.status || 'draft',
     });
 
     setEditingUpdateId(item.id);
