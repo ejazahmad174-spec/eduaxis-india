@@ -786,17 +786,58 @@ export default function CareerUpdatesPage() {
             )}
 
             {item.description && (
-              <p style={{
-                fontSize: '13px',
-                color: '#52677d',
-                lineHeight: 1.7,
-                margin: '10px 0',
-                whiteSpace: 'pre-line',
-              }}>
-                {item.description}
-              </p>
-            )}
+              {(
+  item.post_details ||
+  item.vacancy_details ||
+  item.age_limit_details ||
+  item.educational_qualification ||
+  item.eligibility_details ||
+  item.application_fee ||
+  item.application_start_date ||
+  item.important_dates
+) && (
+  <div style={{
+    background: '#f5f8fc',
+    borderRadius: '8px',
+    padding: '12px',
+    marginTop: '10px',
+    fontSize: '13px',
+    lineHeight: 1.8,
+    color: '#52677d',
+  }}>
+    {item.post_details && (
+      <div><b>Post Details:</b> <span style={{ whiteSpace: 'pre-line' }}>{item.post_details}</span></div>
+    )}
 
+    {item.vacancy_details && (
+      <div><b>Vacancy Details:</b> <span style={{ whiteSpace: 'pre-line' }}>{item.vacancy_details}</span></div>
+    )}
+
+    {item.age_limit_details && (
+      <div><b>Age Limit:</b> <span style={{ whiteSpace: 'pre-line' }}>{item.age_limit_details}</span></div>
+    )}
+
+    {item.educational_qualification && (
+      <div><b>Educational Qualification:</b> <span style={{ whiteSpace: 'pre-line' }}>{item.educational_qualification}</span></div>
+    )}
+
+    {item.eligibility_details && (
+      <div><b>Eligibility:</b> <span style={{ whiteSpace: 'pre-line' }}>{item.eligibility_details}</span></div>
+    )}
+
+    {item.application_fee && (
+      <div><b>Application Fee:</b> <span style={{ whiteSpace: 'pre-line' }}>{item.application_fee}</span></div>
+    )}
+
+    {item.application_start_date && (
+      <div><b>Application Start Date:</b> {formatDate(item.application_start_date)}</div>
+    )}
+
+    {item.important_dates && (
+      <div><b>Important Dates:</b> <span style={{ whiteSpace: 'pre-line' }}>{item.important_dates}</span></div>
+    )}
+  </div>
+)}
             {(item.event_date || item.last_date) && (
               <div style={{
                 background: '#f5f8fc',
