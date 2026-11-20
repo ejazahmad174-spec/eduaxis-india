@@ -182,7 +182,21 @@ export default function AdminDashboardPage() {
     Manage recruitment →
   </small>
 </a>
-
+<Link
+  className="admin-side-link"
+  href="/admin/career-updates"
+  style={{
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: '5px',
+  }}
+>
+  <span>📢 &nbsp; Career Updates</span>
+  <small style={{ marginLeft: '24px' }}>
+    Manage admissions & updates →
+  </small>
+</Link>
         <Link
           className="admin-side-link"
           href="/admin/courses"
