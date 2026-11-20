@@ -39,6 +39,19 @@ type CareerUpdate = {
   last_date: string | null;
   official_url: string | null;
   download_url: string | null;
+
+  post_details: string | null;
+  vacancy_details: string | null;
+  age_limit_details: string | null;
+  educational_qualification: string | null;
+  eligibility_details: string | null;
+  application_fee: string | null;
+  application_start_date: string | null;
+  important_dates: string | null;
+  apply_url: string | null;
+  admit_card_url: string | null;
+  result_url: string | null;
+
   status: string;
   created_at: string;
 };
