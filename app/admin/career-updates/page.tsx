@@ -451,21 +451,36 @@ setUpdateForm({
     try {
       const { data: { user } } = await client.auth.getUser();
 
-      const values = {
-        category: updateForm.category,
-        title: updateForm.title.trim(),
-        organization: updateForm.organization.trim() || null,
-        exam_name: updateForm.exam_name.trim() || null,
-        state: updateForm.state.trim() || 'All India',
-        description: updateForm.description.trim() || null,
-        notice_date: updateForm.notice_date || null,
-        event_date: updateForm.event_date || null,
-        last_date: updateForm.last_date || null,
-        official_url: updateForm.official_url.trim() || null,
-        download_url: updateForm.download_url.trim() || null,
-        status: updateForm.status,
-        updated_at: new Date().toISOString(),
-      };
+      
+const values = {
+  category: updateForm.category,
+  title: updateForm.title.trim(),
+  organization: updateForm.organization.trim() || null,
+  exam_name: updateForm.exam_name.trim() || null,
+  state: updateForm.state.trim() || 'All India',
+  description: updateForm.description.trim() || null,
+  notice_date: updateForm.notice_date || null,
+  event_date: updateForm.event_date || null,
+  last_date: updateForm.last_date || null,
+  official_url: updateForm.official_url.trim() || null,
+  download_url: updateForm.download_url.trim() || null,
+
+  post_details: updateForm.post_details.trim() || null,
+  vacancy_details: updateForm.vacancy_details.trim() || null,
+  age_limit_details: updateForm.age_limit_details.trim() || null,
+  educational_qualification: updateForm.educational_qualification.trim() || null,
+  eligibility_details: updateForm.eligibility_details.trim() || null,
+  application_fee: updateForm.application_fee.trim() || null,
+  application_start_date: updateForm.application_start_date || null,
+  important_dates: updateForm.important_dates.trim() || null,
+  apply_url: updateForm.apply_url.trim() || null,
+  admit_card_url: updateForm.admit_card_url.trim() || null,
+  result_url: updateForm.result_url.trim() || null,
+
+  status: updateForm.status,
+  updated_at: new Date().toISOString(),
+};
+
 
       if (editingUpdateId) {
         const { error } = await client
