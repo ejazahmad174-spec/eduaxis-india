@@ -870,43 +870,62 @@ export default function CareerUpdatesPage() {
               gap: '8px',
               marginTop: '15px',
             }}>
-              {item.official_url && (
-                <a
-                  href={item.official_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    background: '#126b45',
-                    color: '#fff',
-                    textDecoration: 'none',
-                    padding: '9px 12px',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                  }}
-                >
-                  Official Website ↗
-                </a>
-              )}
+             
+{item.official_url && (
+  <a href={item.official_url} target="_blank" rel="noopener noreferrer"
+    style={{
+      background: '#126b45', color: '#fff', textDecoration: 'none',
+      padding: '9px 12px', borderRadius: '6px',
+      fontSize: '12px', fontWeight: 700,
+    }}>
+    Official Website ↗
+  </a>
+)}
 
-              {item.download_url && (
-                <a
-                  href={item.download_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    background: '#eaf1fb',
-                    color: '#2457a6',
-                    textDecoration: 'none',
-                    padding: '9px 12px',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                  }}
-                >
-                  {downloadButtonLabel(item.category)} ↗
-                </a>
-              )}
+{item.download_url && (
+  <a href={item.download_url} target="_blank" rel="noopener noreferrer"
+    style={{
+      background: '#eaf1fb', color: '#2457a6', textDecoration: 'none',
+      padding: '9px 12px', borderRadius: '6px',
+      fontSize: '12px', fontWeight: 700,
+    }}>
+    {downloadButtonLabel(item.category)} ↗
+  </a>
+)}
+
+{item.apply_url && (
+  <a href={item.apply_url} target="_blank" rel="noopener noreferrer"
+    style={{
+      background: '#126b45', color: '#fff', textDecoration: 'none',
+      padding: '9px 12px', borderRadius: '6px',
+      fontSize: '12px', fontWeight: 700,
+    }}>
+    Apply Online ↗
+  </a>
+)}
+
+{item.admit_card_url && (
+  <a href={item.admit_card_url} target="_blank" rel="noopener noreferrer"
+    style={{
+      background: '#eaf1fb', color: '#2457a6', textDecoration: 'none',
+      padding: '9px 12px', borderRadius: '6px',
+      fontSize: '12px', fontWeight: 700,
+    }}>
+    Download Admit Card ↗
+  </a>
+)}
+
+{item.result_url && (
+  <a href={item.result_url} target="_blank" rel="noopener noreferrer"
+    style={{
+      background: '#fff3e0', color: '#9a5b00', textDecoration: 'none',
+      padding: '9px 12px', borderRadius: '6px',
+      fontSize: '12px', fontWeight: 700,
+    }}>
+    View Result / Answer Key ↗
+  </a>
+)}
+
             </div>
           </article>
         ))}
