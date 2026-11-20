@@ -437,12 +437,17 @@ setUpdateForm({
     }
 
     if (
-      ![updateForm.official_url, updateForm.download_url]
-        .every(validOptionalUrl)
-    ) {
-      showError('Please enter valid website links.');
-      return;
-    }
+  ![
+    updateForm.official_url,
+    updateForm.download_url,
+    updateForm.apply_url,
+    updateForm.admit_card_url,
+    updateForm.result_url,
+  ].every(validOptionalUrl)
+) {
+  showError('Please enter valid website links.');
+  return;
+}
 
     setBusy(true);
     setMessage('');
