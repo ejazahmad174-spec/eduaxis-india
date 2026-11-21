@@ -134,7 +134,6 @@ export default function AdminDashboardPage() {
     ['💼', 'Jobs & Career Updates', counts.jobs, 'Jobs, recruitment & career notifications'],
     ['🎓', 'Online courses', counts.courses, 'Courses and lessons'],
     ['📝', 'Mock tests', counts.tests, 'Practice tests'],
-    ['📰', 'Education news', counts.news, 'News and announcements'],
     ['✍️', 'Author applications', counts.authors, 'Registered contributors'],
     ['📖', 'Article submissions', counts.submissions, 'Articles awaiting review'],
   ];
