@@ -1,5 +1,4 @@
-      <style jsx global>{`
-        .ea-home {
+` .ea-home {
           --ea-navy: #102b46;
           --ea-teal: #129b98;
           --ea-ink: #172b3d;
@@ -349,4 +348,3 @@
           .ea-footer-grid { grid-template-columns: 1fr; }
           .ea-hero h1 { font-size: 34px; }
         }
-      `}</style>
