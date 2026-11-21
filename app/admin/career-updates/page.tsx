@@ -764,6 +764,12 @@ const values = {
                   type="button"
                   onClick={() => {
                     setActiveSection(section.value);
+                    if (!editingUpdateId) {
+  setUpdateForm((prev) => ({
+    ...prev,
+    category: section.value,
+  }));
+}
                     setMessage('');
                     setErrorMessage('');
                   }}
