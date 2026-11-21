@@ -247,11 +247,19 @@ export default function CareerUpdatesPage() {
     });
   }, [updates, selectedSection, search]);
 
+  
   const counts = useMemo(() => {
+    const activeGovernmentJobs = jobs.filter(
+      job => showClosed || job.status !== 'closed'
+    ).length;
+
+    const manualJobs = updates.filter(
+      item => item.category === 'jobs'
+    ).length;
+
     const result: Record<string, number> = {
-      all: jobs.filter(job => showClosed || job.status !== 'closed').length +
-        updates.length,
-      jobs: jobs.filter(job => showClosed || job.status !== 'closed').length,
+      all: activeGovernmentJobs + updates.length,
+      jobs: activeGovernmentJobs + manualJobs,
     };
 
     sections.forEach(section => {
@@ -264,6 +272,7 @@ export default function CareerUpdatesPage() {
 
     return result;
   }, [jobs, updates, showClosed]);
+
 
   const showJobs =
     selectedSection === 'all' || selectedSection === 'jobs';
