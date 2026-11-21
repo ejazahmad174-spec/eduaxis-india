@@ -216,13 +216,13 @@ export default function CareerUpdatesPage() {
     });
   }, [jobs, search, jobCategory, showClosed]);
 
+  
   const visibleUpdates = useMemo(() => {
     const term = search.trim().toLowerCase();
 
     return updates.filter(item => {
       const matchesSection =
         selectedSection === 'all' ||
-        selectedSection === 'jobs' ||
         item.category === selectedSection;
 
       const searchableText = [
@@ -231,6 +231,13 @@ export default function CareerUpdatesPage() {
         item.exam_name,
         item.state,
         item.description,
+        item.post_details,
+        item.vacancy_details,
+        item.age_limit_details,
+        item.educational_qualification,
+        item.eligibility_details,
+        item.application_fee,
+        item.important_dates,
       ]
         .filter(Boolean)
         .join(' ')
