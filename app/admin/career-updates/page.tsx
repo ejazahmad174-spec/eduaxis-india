@@ -806,7 +806,7 @@ const values = {
           </section>
 
           {/* Government Jobs form */}
-          {isJobSection && (
+          {false && (
             <>
               <section style={{
                 background: '#fff',
@@ -1098,7 +1098,7 @@ const values = {
           )}
 
           {/* Other five category forms */}
-          {!isJobSection && (
+          {true && (
             <>
               <section style={{
                 background: '#fff',
