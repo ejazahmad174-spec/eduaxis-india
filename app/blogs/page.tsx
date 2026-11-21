@@ -409,6 +409,16 @@ export default function BlogsPage() {
       </footer>
 
       <style jsx global>{`
+      .blogPage {
+  font-family: 'DM Sans', Arial, sans-serif !important;
+}
+
+.blogPage h1,
+.blogPage h2,
+.blogPage h3,
+.blogPage h4 {
+  font-family: 'Manrope', 'DM Sans', sans-serif !important;
+}
         .blogPage {
           width: 100%;
           min-height: 100vh;
