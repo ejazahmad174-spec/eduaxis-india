@@ -800,11 +800,11 @@ export default function DiscoveredGovernmentJobsPage() {
           </div>
 
           <a
-            className="admin-logout"
-            href="/admin/government-jobs"
-          >
-            Back to Government Jobs
-          </a>
+  className="admin-logout"
+  href="/admin/career-updates"
+>
+  Back to Jobs & Career Updates
+</a>
         </header>
 
         <div style={{ padding: '25px 0' }}>
