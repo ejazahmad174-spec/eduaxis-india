@@ -131,7 +131,7 @@ export default function AdminDashboardPage() {
 
   const cards = [
     ['📚', 'Study materials', counts.materials, 'PDFs and learning resources'],
-    ['💼', 'Government jobs', counts.jobs, 'Recruitment notifications'],
+    ['💼', 'Jobs & Career Updates', counts.jobs, 'Jobs, recruitment & career notifications'],
     ['🎓', 'Online courses', counts.courses, 'Courses and lessons'],
     ['📝', 'Mock tests', counts.tests, 'Practice tests'],
     ['📰', 'Education news', counts.news, 'News and announcements'],
