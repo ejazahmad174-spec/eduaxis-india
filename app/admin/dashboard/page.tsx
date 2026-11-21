@@ -173,15 +173,7 @@ export default function AdminDashboardPage() {
         </a>
 
         
-<a
-  className="admin-side-link"
-  href="/admin/government-jobs"
->
-  ▤ &nbsp; Government Jobs
-  <small style={{ marginLeft: '24px' }}>
-    Manage recruitment →
-  </small>
-</a>
+
 <Link
   className="admin-side-link"
   href="/admin/career-updates"
@@ -192,11 +184,12 @@ export default function AdminDashboardPage() {
     gap: '5px',
   }}
 >
-  <span>📢 &nbsp; Career Updates</span>
+  <span>💼 &nbsp; Jobs & Career Updates</span>
   <small style={{ marginLeft: '24px' }}>
-    Manage admissions & updates →
+    Manage jobs, recruitment & updates →
   </small>
 </Link>
+
         <Link
           className="admin-side-link"
           href="/admin/courses"
