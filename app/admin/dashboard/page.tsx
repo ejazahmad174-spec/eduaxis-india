@@ -335,9 +335,9 @@ export default function AdminDashboardPage() {
 
             <p>
               Manage Study Materials, Online Courses, Mock Tests,
-              Government Jobs and educational content from your
-              administrator account. You can also manage author
-              applications and article submissions.
+Jobs & Career Updates and educational content from your
+administrator account. You can also manage author
+applications and article submissions.
             </p>
           </div>
 
