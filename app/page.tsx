@@ -1,6 +1,6 @@
 
 "use client";
-
+import './home.css';
 import { useState } from "react";
 const examCategories = [
   { name: "BPSC TRE", detail: "Bihar teacher recruitment", icon: "🎓" },
