@@ -800,8 +800,8 @@ const values = {
               fontSize: '12px',
               marginBottom: 0,
             }}>
-              Government Jobs use the detailed recruitment form.
-              Other categories use the career update form.
+              All seven categories use the same Universal Form.
+Select a category above and enter only the relevant information.
             </p>
           </section>
 
