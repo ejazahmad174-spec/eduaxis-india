@@ -268,7 +268,7 @@ export default function CareerUpdatesPage() {
   const showJobs =
     selectedSection === 'all' || selectedSection === 'jobs';
 
-  const showUpdates = selectedSection !== 'jobs';
+  const showUpdates = true;
 
   const totalVisible =
     (showJobs ? visibleJobs.length : 0) +
