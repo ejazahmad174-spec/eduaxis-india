@@ -59,6 +59,7 @@ type CareerUpdate = {
 };
 
 const careerCategories = [
+  { value: 'jobs', label: 'Latest Government Jobs' },
   { value: 'recruitment_notice', label: 'Recruitment Notices & Updates' },
   { value: 'admit_card', label: 'Admit Cards' },
   { value: 'result_answer_key', label: 'Results & Answer Keys' },
