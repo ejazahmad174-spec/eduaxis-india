@@ -767,11 +767,11 @@ export default function DiscoveredGovernmentJobsPage() {
         </a>
 
         <a
-          className="admin-side-link"
-          href="/admin/government-jobs"
-        >
-          ▤ &nbsp; Government Jobs
-        </a>
+  className="admin-side-link"
+  href="/admin/career-updates"
+>
+  💼 &nbsp; Jobs & Career Updates
+</a>
 
         <a
           className="admin-side-link active"
