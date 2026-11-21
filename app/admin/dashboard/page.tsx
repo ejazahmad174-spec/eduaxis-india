@@ -221,10 +221,6 @@ export default function AdminDashboardPage() {
           </small>
         </a>
 
-        <div className="admin-side-link muted">
-          ▤ &nbsp; Education News
-          <small>Coming next</small>
-        </div>
 
         <div className="admin-side-label">
           BLOG MANAGEMENT
