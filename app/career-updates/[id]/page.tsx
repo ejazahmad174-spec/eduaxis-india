@@ -45,19 +45,28 @@ export async function generateMetadata({
         .filter(Boolean)
         .join(" - ");
 
+      
+  const cleanDescription = description.replace(/\s+/g, " ").trim().slice(0, 160);
+
+  return {
+    title: update.title,
+    description: cleanDescription,
+    alternates: {
+      canonical: `${baseUrl}/career-updates/${id}`,
+    },
+    openGraph: {
       title: update.title,
-      description: description.replace(/\s+/g, " ").trim().slice(0, 160),
-      alternates: {
-        const cleanDescription = description.replace(/\s+/g, " ").trim().slice(0, 160);
-      },
-      openGraph: {
-        title: update.title,
-        description: description.slice(0, 160),
-        url: `${baseUrl}/career-updates/${id}`,
-        type: "article",
-        siteName: "EduAxis India",
-      },
-    };
+      description: cleanDescription,
+      url: `${baseUrl}/career-updates/${id}`,
+      type: "article",
+      siteName: "EduAxis India",
+    },
+    twitter: {
+      card: "summary",
+      title: update.title,
+      description: cleanDescription,
+    },
+  };
   }
 
   // Check published government jobs
