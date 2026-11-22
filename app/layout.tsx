@@ -75,7 +75,7 @@ export default function RootLayout({
             "url": "https://eduaxisindia.com",
             "description":
               "EduAxis India is an educational platform offering quality study materials, competitive exam preparation, online courses, mock tests, career guidance and government job updates.",
-            "email": "eduax​​isindiateam@gmail.com"
+            "email": "eduaxisindiateam@gmail.com"
           },
           {
             "@type": "WebSite",
