@@ -181,7 +181,7 @@ type NewsItem = {
   title: string;
   summary: string | null;
   source_url: string;
-  original_published_at: string;
+  original_published_at: string | null;
 };
 
 function parseRss(xml: string, baseUrl: string): NewsItem[] {
