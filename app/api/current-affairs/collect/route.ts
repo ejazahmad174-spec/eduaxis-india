@@ -26,10 +26,11 @@ const ALLOWED_HOSTS = [
   "prsindia.org",
   "www.prsindia.org",
   "betastate.bihar.gov.in",
+  "www.rbi.org.in",
 ];
 
 const USER_AGENT =
-  "EduAxisIndia-CurrentAffairsBot/1.0 (+https://eduaxisindia.com)";
+  "EduAxisIndia-CurrentAffairsBot/1.0 (+https://www.eduaxisindia.com)";
 
 const MAX_RESPONSE_SIZE = 3 * 1024 * 1024;
 const MAX_ITEMS_PER_SOURCE = 20;
@@ -41,7 +42,7 @@ function isAllowedUrl(value: string): boolean {
 
     return (
       url.protocol === "https:" &&
-      ALLOWED_HOSTS.includes(url.hostname)
+      ALLOWED_HOSTS.includes(url.hostname.toLowerCase())
     );
   } catch {
     return false;
@@ -94,8 +95,8 @@ function absoluteUrl(link: string, base: string): string | null {
   }
 }
 
-function getCategory(title: string): string {
-  const text = title.toLowerCase();
+function getCategory(title: string, sourceName: string): string {
+  const text = `${title} ${sourceName}`.toLowerCase();
 
   if (/bihar|patna|nalanda/.test(text)) return "bihar";
 
@@ -113,7 +114,11 @@ function getCategory(title: string): string {
     return "polity";
   }
 
-  if (/economy|budget|rbi|inflation|gdp|finance/.test(text)) {
+  if (
+    /rbi|reserve bank|banking|monetary|repo rate|inflation|gdp|finance|securities|currency|interest rate|financial/.test(
+      text
+    )
+  ) {
     return "economy";
   }
 
@@ -124,20 +129,53 @@ function getCategory(title: string): string {
   return "general";
 }
 
-async function fetchPage(url: string): Promise<string> {
+type FetchResult = {
+  body: string | null;
+  etag: string | null;
+  lastModified: string | null;
+  notModified: boolean;
+};
+
+async function fetchPage(
+  url: string,
+  previousEtag: string | null,
+  previousLastModified: string | null
+): Promise<FetchResult> {
   if (!isAllowedUrl(url)) {
     throw new Error("Source URL is not approved");
   }
 
+  const headers: Record<string, string> = {
+    "User-Agent": USER_AGENT,
+    Accept: "application/rss+xml, application/xml, text/xml",
+  };
+
+  if (previousEtag) {
+    headers["If-None-Match"] = previousEtag;
+  }
+
+  if (previousLastModified) {
+    headers["If-Modified-Since"] = previousLastModified;
+  }
+
   const response = await fetch(url, {
-    headers: {
-      "User-Agent": USER_AGENT,
-      Accept: "application/rss+xml, application/xml, text/xml",
-    },
+    headers,
     signal: AbortSignal.timeout(20000),
     cache: "no-store",
     redirect: "manual",
   });
+
+  const etag = response.headers.get("etag");
+  const lastModified = response.headers.get("last-modified");
+
+  if (response.status === 304) {
+    return {
+      body: null,
+      etag,
+      lastModified,
+      notModified: true,
+    };
+  }
 
   if (response.status >= 300 && response.status < 400) {
     throw new Error("Redirect blocked for security");
@@ -171,10 +209,17 @@ async function fetchPage(url: string): Promise<string> {
   }
 
   if (!/<rss\b|<feed\b|<rdf:rdf\b/i.test(body)) {
-    throw new Error("The source did not return a recognised RSS or Atom feed");
+    throw new Error(
+      "The source did not return a recognised RSS or Atom feed"
+    );
   }
 
-  return body;
+  return {
+    body,
+    etag,
+    lastModified,
+    notModified: false,
+  };
 }
 
 type NewsItem = {
@@ -191,7 +236,9 @@ function parseRss(xml: string, baseUrl: string): NewsItem[] {
   const atomBlocks = xml.match(/<entry\b[\s\S]*?<\/entry>/gi) || [];
   const blocks = rssBlocks.length > 0 ? rssBlocks : atomBlocks;
 
-  const cutoff = Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+  const cutoff =
+    Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+
   const seenUrls = new Set<string>();
 
   for (const block of blocks) {
@@ -226,12 +273,15 @@ function parseRss(xml: string, baseUrl: string): NewsItem[] {
 
     const parsedDate = date ? new Date(date) : null;
 
-    // Skip entries with an invalid date, but accept missing dates.
-// The PIB feed does not currently provide publication dates.
-if (date && (!parsedDate || isNaN(parsedDate.getTime()))) continue;
+    // Accept missing dates, but reject invalid dates.
+    if (date && (!parsedDate || isNaN(parsedDate.getTime()))) {
+      continue;
+    }
 
-// Skip old entries only when a valid publication date exists.
-if (parsedDate && parsedDate.getTime() < cutoff) continue;
+    // Ignore old entries when a valid date is available.
+    if (parsedDate && parsedDate.getTime() < cutoff) {
+      continue;
+    }
 
     seenUrls.add(link);
 
@@ -240,25 +290,71 @@ if (parsedDate && parsedDate.getTime() < cutoff) continue;
       summary: summary ? summary.slice(0, 3000) : null,
       source_url: link,
       original_published_at:
-  parsedDate && !isNaN(parsedDate.getTime())
-    ? parsedDate.toISOString()
-    : null,
+        parsedDate && !isNaN(parsedDate.getTime())
+          ? parsedDate.toISOString()
+          : null,
     });
   }
 
   return items;
 }
 
+async function updateSourceSuccess(
+  sourceId: string,
+  now: string,
+  etag: string | null,
+  lastModified: string | null
+) {
+  const { error } = await supabase!
+    .from("current_affairs_sources")
+    .update({
+      last_checked_at: now,
+      last_success_at: now,
+      last_error: null,
+      etag,
+      last_modified: lastModified,
+      updated_at: now,
+    })
+    .eq("id", sourceId);
+
+  if (error) throw error;
+}
+
 async function collectSource(source: {
   id: string;
   source_name: string;
   source_url: string;
+  etag: string | null;
+  last_modified: string | null;
 }) {
   const now = new Date().toISOString();
 
   try {
-    const body = await fetchPage(source.source_url);
-    const items = parseRss(body, source.source_url);
+    const fetched = await fetchPage(
+      source.source_url,
+      source.etag,
+      source.last_modified
+    );
+
+    // The server confirms that the cached feed has not changed.
+    if (fetched.notModified) {
+      await updateSourceSuccess(
+        source.id,
+        now,
+        fetched.etag || source.etag,
+        fetched.lastModified || source.last_modified
+      );
+
+      return {
+        source: source.source_name,
+        success: true,
+        not_modified: true,
+        discovered: 0,
+        inserted: 0,
+      };
+    }
+
+    const items = parseRss(fetched.body || "", source.source_url);
 
     const records = items.map((item) => ({
       source_id: source.id,
@@ -266,7 +362,7 @@ async function collectSource(source: {
       title: item.title,
       summary: item.summary,
       source_url: item.source_url,
-      category: getCategory(item.title),
+      category: getCategory(item.title, source.source_name),
       original_published_at: item.original_published_at,
       fetched_at: now,
       status: "pending",
@@ -288,23 +384,19 @@ async function collectSource(source: {
       inserted = data?.length || 0;
     }
 
-    const { error: updateError } = await supabase!
-      .from("current_affairs_sources")
-      .update({
-        last_checked_at: now,
-        last_success_at: now,
-        last_error: null,
-        updated_at: now,
-      })
-      .eq("id", source.id);
-
-    if (updateError) throw updateError;
+    await updateSourceSuccess(
+      source.id,
+      now,
+      fetched.etag || source.etag,
+      fetched.lastModified || source.last_modified
+    );
 
     return {
       source: source.source_name,
+      success: true,
+      not_modified: false,
       discovered: items.length,
       inserted,
-      success: true,
     };
   } catch (error) {
     const message =
@@ -312,7 +404,7 @@ async function collectSource(source: {
         ? error.message
         : "Unknown collection error";
 
-    await supabase!
+    const { error: updateError } = await supabase!
       .from("current_affairs_sources")
       .update({
         last_checked_at: now,
@@ -320,6 +412,14 @@ async function collectSource(source: {
         updated_at: now,
       })
       .eq("id", source.id);
+
+    if (updateError) {
+      return {
+        source: source.source_name,
+        success: false,
+        error: `${message}; source status update also failed`,
+      };
+    }
 
     return {
       source: source.source_name,
@@ -348,7 +448,9 @@ async function handleCollection(request: NextRequest) {
 
   const { data: sources, error } = await supabase
     .from("current_affairs_sources")
-    .select("id, source_name, source_url")
+    .select(
+      "id, source_name, source_url, etag, last_modified"
+    )
     .eq("is_active", true);
 
   if (error) {
