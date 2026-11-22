@@ -310,28 +310,6 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="ea-section ea-muted-section">
-        <div className="ea-wrap">
-          <div className="ea-section-heading">
-            <div>
-              <div className="ea-eyebrow">Your learning ecosystem</div>
-              <h2>Everything you need to move forward</h2>
-              <p className="ea-section-intro">Explore the EduAxis India platform and choose the resources that support your goals.</p>
-            </div>
-          </div>
-          <div className="ea-card-grid">
-            {services.map((service) => (
-              <a className="ea-card" href={service.href} key={service.title}>
-                <div className="ea-card-icon">{service.icon}</div>
-                <h3>{service.title}</h3>
-                <p>{service.description}</p>
-                <span className="ea-card-link">{service.link} →</span>
-              </a>
-            ))}
-          </div>
-        </div>
-      </section>
-
       <section className="ea-contact-section" id="contact">
         <div className="ea-wrap ea-contact-grid">
           <div className="ea-contact-copy">
