@@ -47,7 +47,7 @@ export async function generateMetadata({
 
     return {
       title: update.title,
-      description: description.slice(0, 160),
+      description: description.replace(/\s+/g, " ").trim().slice(0, 160)
       alternates: {
         canonical: `${baseUrl}/career-updates/${id}`,
       },
