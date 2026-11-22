@@ -90,13 +90,13 @@ export async function generateMetadata({
 
   return {
     title: job.title,
-    description: jobDescription.slice(0, 160),
+    description: jobDescription.replace(/\s+/g, " ").trim().slice(0, 160),
     alternates: {
       canonical: `${baseUrl}/career-updates/${id}`,
     },
     openGraph: {
       title: job.title,
-      description: jobDescription.slice(0, 160),
+      description: jobDescription.replace(/\s+/g, " ").trim().slice(0, 160),
       url: `${baseUrl}/career-updates/${id}`,
       type: "article",
       siteName: "EduAxis India",
