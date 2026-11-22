@@ -8,50 +8,98 @@ type Props = {
   params: Promise<{ id: string }>;
 };
 
+
 export async function generateMetadata({
   params,
 }: Props): Promise<Metadata> {
   const { id } = await params;
 
+  const baseUrl = "https://eduaxisindia.com";
+
   if (!supabase) {
-    return { title: "Career Update | EduAxis India" };
+    return {
+      title: "Career Update",
+      description:
+        "Latest government jobs, recruitment notices, admit cards, results and education updates from EduAxis India.",
+    };
   }
 
+  // Check published career updates
   const { data: update } = await supabase
     .from("career_updates")
-    .select("title, description")
+    .select("title, description, category, organization, exam_name")
     .eq("id", id)
     .eq("status", "published")
     .maybeSingle();
 
   if (update) {
+    const description =
+      update.description ||
+      [
+        update.title,
+        update.organization,
+        update.exam_name,
+        update.category?.replaceAll("_", " "),
+        "Check eligibility, important details and official links on EduAxis India.",
+      ]
+        .filter(Boolean)
+        .join(" - ");
+
     return {
       title: update.title,
-      description:
-        update.description ||
-        `Read ${update.title} on EduAxis India.`,
+      description: description.slice(0, 160),
       alternates: {
-        canonical: `https://eduaxisindia.com/career-updates/${id}`,
+        canonical: `${baseUrl}/career-updates/${id}`,
+      },
+      openGraph: {
+        title: update.title,
+        description: description.slice(0, 160),
+        url: `${baseUrl}/career-updates/${id}`,
+        type: "article",
+        siteName: "EduAxis India",
       },
     };
   }
 
+  // Check published government jobs
   const { data: job } = await supabase
     .from("government_jobs")
-    .select("title, organization, qualification")
+    .select("title, organization, qualification, post_name, state")
     .eq("id", id)
     .eq("status", "published")
     .maybeSingle();
 
   if (!job) {
-    return { title: "Career Update | EduAxis India" };
+    return {
+      title: "Career Update",
+      description:
+        "Explore the latest government jobs and recruitment updates on EduAxis India.",
+    };
   }
+
+  const jobDescription = [
+    job.title,
+    job.organization,
+    job.post_name,
+    job.qualification,
+    job.state,
+    "Check eligibility and application details on EduAxis India.",
+  ]
+    .filter(Boolean)
+    .join(" - ");
 
   return {
     title: job.title,
-    description: `${job.title} - ${job.organization || "Government recruitment"} information, eligibility and application details.`,
+    description: jobDescription.slice(0, 160),
     alternates: {
-      canonical: `https://eduaxisindia.com/career-updates/${id}`,
+      canonical: `${baseUrl}/career-updates/${id}`,
+    },
+    openGraph: {
+      title: job.title,
+      description: jobDescription.slice(0, 160),
+      url: `${baseUrl}/career-updates/${id}`,
+      type: "article",
+      siteName: "EduAxis India",
     },
   };
 }
