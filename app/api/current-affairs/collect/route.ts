@@ -31,6 +31,23 @@ const ALLOWED_HOSTS = [
 const USER_AGENT =
   "EduAxisIndia-CurrentAffairsBot/1.0 (+https://eduaxisindia.com)";
 
+const MAX_RESPONSE_SIZE = 3 * 1024 * 1024;
+const MAX_ITEMS_PER_SOURCE = 30;
+const MAX_AGE_DAYS = 14;
+
+function isAllowedUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+
+    return (
+      url.protocol === "https:" &&
+      ALLOWED_HOSTS.includes(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function cleanText(value: string): string {
   return value
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
@@ -40,97 +57,146 @@ function cleanText(value: string): string {
     .replace(/&#39;|&apos;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/&#(\d+);/g, (_, n) =>
-      String.fromCodePoint(Number(n))
-    )
-    .replace(/&#x([0-9a-f]+);/gi, (_, n) =>
-      String.fromCodePoint(parseInt(n, 16))
-    )
+    .replace(/&#(\d+);/g, (_, n) => {
+      const code = Number(n);
+      return code <= 0x10ffff ? String.fromCodePoint(code) : "";
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => {
+      const code = parseInt(n, 16);
+      return code <= 0x10ffff ? String.fromCodePoint(code) : "";
+    })
     .replace(/\s+/g, " ")
     .trim();
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function getTag(block: string, tag: string): string {
+  const safeTag = escapeRegExp(tag);
+
   const expression = new RegExp(
-    `<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`,
+    `<${safeTag}\\b[^>]*>([\\s\\S]*?)<\\/${safeTag}\\s*>`,
     "i"
   );
+
   return cleanText(block.match(expression)?.[1] || "");
-}
-
-function getCategory(title: string): string {
-  const text = title.toLowerCase();
-
-  if (/bihar|patna|nalanda/.test(text)) return "bihar";
-  if (/education|school|university|ugc|teacher|exam|education policy/.test(text))
-    return "education";
-  if (/international|united nations|world|global|foreign/.test(text))
-    return "international";
-  if (/bill|parliament|lok sabha|rajya sabha|act|supreme court/.test(text))
-    return "polity";
-  if (/economy|budget|rbi|inflation|gdp|finance/.test(text))
-    return "economy";
-  if (/scheme|ministry|government|cabinet|policy/.test(text))
-    return "national";
-
-  return "general";
-}
-
-function isAllowedUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return (
-      parsed.protocol === "https:" &&
-      ALLOWED_HOSTS.includes(parsed.hostname)
-    );
-  } catch {
-    return false;
-  }
 }
 
 function absoluteUrl(link: string, base: string): string | null {
   try {
-    const url = new URL(link, base);
+    const url = new URL(link.trim(), base);
+
     return isAllowedUrl(url.toString()) ? url.toString() : null;
   } catch {
     return null;
   }
 }
 
+function getCategory(title: string): string {
+  const text = title.toLowerCase();
+
+  if (/bihar|patna|nalanda/.test(text)) return "bihar";
+
+  if (
+    /education|school|university|ugc|teacher|exam|education policy/.test(text)
+  ) {
+    return "education";
+  }
+
+  if (/international|united nations|world|global|foreign/.test(text)) {
+    return "international";
+  }
+
+  if (/bill|parliament|lok sabha|rajya sabha|act|supreme court/.test(text)) {
+    return "polity";
+  }
+
+  if (/economy|budget|rbi|inflation|gdp|finance/.test(text)) {
+    return "economy";
+  }
+
+  if (/scheme|ministry|government|cabinet|policy/.test(text)) {
+    return "national";
+  }
+
+  return "general";
+}
+
 async function fetchPage(url: string): Promise<string> {
+  if (!isAllowedUrl(url)) {
+    throw new Error("Source URL is not approved");
+  }
+
   const response = await fetch(url, {
     headers: {
       "User-Agent": USER_AGENT,
-      Accept: "application/rss+xml, application/xml, text/xml, text/html",
+      Accept: "application/rss+xml, application/xml, text/xml",
     },
     signal: AbortSignal.timeout(20000),
     cache: "no-store",
+    redirect: "manual",
   });
+
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error("Redirect blocked for security");
+  }
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
   }
 
-  return response.text();
+  const contentType = response.headers.get("content-type") || "";
+
+  if (
+    !/xml|rss|atom/i.test(contentType) &&
+    !/text\/plain/i.test(contentType)
+  ) {
+    throw new Error(`Unexpected feed content type: ${contentType}`);
+  }
+
+  const contentLength = Number(
+    response.headers.get("content-length") || 0
+  );
+
+  if (contentLength > MAX_RESPONSE_SIZE) {
+    throw new Error("Feed response exceeds the size limit");
+  }
+
+  const body = await response.text();
+
+  if (body.length > MAX_RESPONSE_SIZE) {
+    throw new Error("Feed response exceeds the size limit");
+  }
+
+  if (!/<rss\b|<feed\b|<rdf:rdf\b/i.test(body)) {
+    throw new Error("The source did not return a recognised RSS or Atom feed");
+  }
+
+  return body;
 }
 
 type NewsItem = {
   title: string;
   summary: string | null;
   source_url: string;
-  original_published_at: string | null;
+  original_published_at: string;
 };
 
 function parseRss(xml: string, baseUrl: string): NewsItem[] {
   const items: NewsItem[] = [];
-  const blocks = xml.match(/<item\b[\s\S]*?<\/item>/gi) || [];
 
-  const entries =
-    blocks.length > 0
-      ? blocks
-      : xml.match(/<entry\b[\s\S]*?<\/entry>/gi) || [];
+  const rssBlocks = xml.match(/<item\b[\s\S]*?<\/item>/gi) || [];
+  const atomBlocks = xml.match(/<entry\b[\s\S]*?<\/entry>/gi) || [];
+  const blocks = rssBlocks.length > 0 ? rssBlocks : atomBlocks;
 
-  for (const block of entries) {
+  const cutoff = Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+  const seenUrls = new Set<string>();
+
+  for (const block of blocks) {
+    if (items.length >= MAX_ITEMS_PER_SOURCE) break;
+
     const title = getTag(block, "title");
 
     const linkTag = block.match(/<link\b[^>]*>/i)?.[0] || "";
@@ -145,6 +211,7 @@ function parseRss(xml: string, baseUrl: string): NewsItem[] {
     const link = absoluteUrl(rawLink, baseUrl);
 
     if (!title || title.length < 10 || !link) continue;
+    if (seenUrls.has(link)) continue;
 
     const summary =
       getTag(block, "description") ||
@@ -159,41 +226,19 @@ function parseRss(xml: string, baseUrl: string): NewsItem[] {
 
     const parsedDate = date ? new Date(date) : null;
 
+    // Skip entries without a valid publication date.
+    if (!parsedDate || isNaN(parsedDate.getTime())) continue;
+
+    // Skip old entries.
+    if (parsedDate.getTime() < cutoff) continue;
+
+    seenUrls.add(link);
+
     items.push({
       title: title.slice(0, 500),
       summary: summary ? summary.slice(0, 3000) : null,
       source_url: link,
-      original_published_at:
-        parsedDate && !isNaN(parsedDate.getTime())
-          ? parsedDate.toISOString()
-          : null,
-    });
-  }
-
-  return items;
-}
-
-function parseHtml(html: string, baseUrl: string): NewsItem[] {
-  const items: NewsItem[] = [];
-  const anchors = html.match(/<a\b[^>]*>[\s\S]*?<\/a>/gi) || [];
-
-  for (const anchor of anchors) {
-    const href = anchor.match(/href=["']([^"']+)["']/i)?.[1];
-    const title = cleanText(anchor.replace(/<a\b[^>]*>|<\/a>/gi, ""));
-
-    if (!href || title.length < 25 || title.length > 250) continue;
-
-    const link = absoluteUrl(href, baseUrl);
-    if (!link || link === baseUrl) continue;
-
-    if (/javascript:|mailto:|#|\/(login|contact|about|privacy|terms)/i.test(href))
-      continue;
-
-    items.push({
-      title: title.slice(0, 500),
-      summary: null,
-      source_url: link,
-      original_published_at: null,
+      original_published_at: parsedDate.toISOString(),
     });
   }
 
@@ -208,17 +253,8 @@ async function collectSource(source: {
   const now = new Date().toISOString();
 
   try {
-    if (!isAllowedUrl(source.source_url)) {
-      throw new Error("Source host is not in the approved domain list");
-    }
-
     const body = await fetchPage(source.source_url);
-    const isXml =
-      /<rss\b|<feed\b|<rdf:rdf\b/i.test(body);
-
-    const items = isXml
-      ? parseRss(body, source.source_url)
-      : parseHtml(body, source.source_url);
+    const items = parseRss(body, source.source_url);
 
     const records = items.map((item) => ({
       source_id: source.id,
@@ -244,10 +280,11 @@ async function collectSource(source: {
         .select("id");
 
       if (error) throw error;
+
       inserted = data?.length || 0;
     }
 
-    await supabase!
+    const { error: updateError } = await supabase!
       .from("current_affairs_sources")
       .update({
         last_checked_at: now,
@@ -257,6 +294,8 @@ async function collectSource(source: {
       })
       .eq("id", source.id);
 
+    if (updateError) throw updateError;
+
     return {
       source: source.source_name,
       discovered: items.length,
@@ -265,7 +304,9 @@ async function collectSource(source: {
     };
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Unknown collection error";
+      error instanceof Error
+        ? error.message
+        : "Unknown collection error";
 
     await supabase!
       .from("current_affairs_sources")
@@ -308,7 +349,7 @@ async function handleCollection(request: NextRequest) {
 
   if (error) {
     return NextResponse.json(
-      { error: "Could not load news sources", details: error.message },
+      { error: "Could not load news sources" },
       { status: 500 }
     );
   }
@@ -319,16 +360,19 @@ async function handleCollection(request: NextRequest) {
     results.push(await collectSource(source));
   }
 
+  const inserted = results.reduce(
+    (total, result) =>
+      total +
+      ("inserted" in result && typeof result.inserted === "number"
+        ? result.inserted
+        : 0),
+    0
+  );
+
   return NextResponse.json({
     success: true,
     checked: results.length,
-    inserted: results.reduce(
-  (total, result) =>
-    total + (result && typeof result.inserted === "number"
-      ? result.inserted
-      : 0),
-  0
-),
+    inserted,
     results,
     collected_at: new Date().toISOString(),
   });
