@@ -45,12 +45,10 @@ export async function generateMetadata({
         .filter(Boolean)
         .join(" - ");
 
-    return {
       title: update.title,
       description: description.replace(/\s+/g, " ").trim().slice(0, 160),
-      const cleanDescription = description.replace(/\s+/g, " ").trim().slice(0, 160);
       alternates: {
-        canonical: `${baseUrl}/career-updates/${id}`,
+        const cleanDescription = description.replace(/\s+/g, " ").trim().slice(0, 160);
       },
       openGraph: {
         title: update.title,
