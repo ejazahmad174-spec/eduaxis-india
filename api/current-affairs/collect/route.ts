@@ -323,9 +323,12 @@ async function handleCollection(request: NextRequest) {
     success: true,
     checked: results.length,
     inserted: results.reduce(
-      (total, result) => total + ("inserted" in result ? result.inserted : 0),
-      0
-    ),
+  (total, result) =>
+    total + (result && typeof result.inserted === "number"
+      ? result.inserted
+      : 0),
+  0
+),
     results,
     collected_at: new Date().toISOString(),
   });
