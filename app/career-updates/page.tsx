@@ -771,14 +771,19 @@ export default function CareerUpdatesPage() {
             </div>
 
             <h3 style={{
-              fontSize: '18px',
-              lineHeight: 1.45,
-              margin: '12px 0 8px',
-              color: '#17324d',
-            }}>
-              {item.title}
-            </h3>
-
+  fontSize: '18px',
+  lineHeight: 1.45,
+  margin: '12px 0 8px',
+  color: '#17324d',
+}}>
+  <Link
+    href={`/career-updates/${item.id}`}
+    style={{ color: '#17324d', textDecoration: 'none' }}
+  >
+    {item.title}
+  </Link>
+</h3>
+    
             {(item.organization || item.exam_name) && (
               <p style={{
                 margin: '0 0 8px',
