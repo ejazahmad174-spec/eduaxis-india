@@ -32,7 +32,7 @@ const USER_AGENT =
   "EduAxisIndia-CurrentAffairsBot/1.0 (+https://eduaxisindia.com)";
 
 const MAX_RESPONSE_SIZE = 3 * 1024 * 1024;
-const MAX_ITEMS_PER_SOURCE = 30;
+const MAX_ITEMS_PER_SOURCE = 20;
 const MAX_AGE_DAYS = 14;
 
 function isAllowedUrl(value: string): boolean {
@@ -226,11 +226,12 @@ function parseRss(xml: string, baseUrl: string): NewsItem[] {
 
     const parsedDate = date ? new Date(date) : null;
 
-    // Skip entries without a valid publication date.
-    if (!parsedDate || isNaN(parsedDate.getTime())) continue;
+    // Skip entries with an invalid date, but accept missing dates.
+// The PIB feed does not currently provide publication dates.
+if (date && (!parsedDate || isNaN(parsedDate.getTime()))) continue;
 
-    // Skip old entries.
-    if (parsedDate.getTime() < cutoff) continue;
+// Skip old entries only when a valid publication date exists.
+if (parsedDate && parsedDate.getTime() < cutoff) continue;
 
     seenUrls.add(link);
 
