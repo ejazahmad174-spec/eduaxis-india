@@ -239,7 +239,10 @@ if (parsedDate && parsedDate.getTime() < cutoff) continue;
       title: title.slice(0, 500),
       summary: summary ? summary.slice(0, 3000) : null,
       source_url: link,
-      original_published_at: parsedDate.toISOString(),
+      original_published_at:
+  parsedDate && !isNaN(parsedDate.getTime())
+    ? parsedDate.toISOString()
+    : null,
     });
   }
 
