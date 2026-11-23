@@ -107,53 +107,30 @@ export default function Home() {
               <span>✓ Academic and career updates</span>
             </div>
           </div>
-          <div className="ea-hero-art ea-hero-showcase">
+          <a className="ea-hero-art ea-current-affairs-board" href="/current-affairs" aria-label="Explore EduAxis Daily Current Affairs">
             <div className="ea-art-head">
               <div>
-                <span className="ea-showcase-kicker">WELCOME TO EDUAXIS INDIA</span>
-                <strong>One platform. Many possibilities.</strong>
+                <span className="ea-showcase-kicker">EDUAXIS INDIA · DAILY KNOWLEDGE UPDATE</span>
+                <strong>Daily Current Affairs</strong>
               </div>
-              <span className="ea-art-label">LEARN · PREPARE · PROGRESS</span>
+              <span className="ea-art-label">DAILY UPDATE</span>
             </div>
-            <p className="ea-showcase-copy">Choose where you want to begin. Explore learning, practise for exams and stay connected with opportunities.</p>
-            <div className="ea-showcase-grid">
-              <a className="ea-showcase-item" href="/courses">
-                <span className="ea-showcase-icon">🎓</span>
-                <span><b>Online Courses</b><small>Structured learning</small></span>
-                <span className="ea-showcase-arrow">↗</span>
-              </a>
-              <a className="ea-showcase-item" href="/mock-tests">
-                <span className="ea-showcase-icon">📝</span>
-                <span><b>Mock Tests</b><small>Practise & evaluate</small></span>
-                <span className="ea-showcase-arrow">↗</span>
-              </a>
-              <a className="ea-showcase-item" href="/government-jobs">
-                <span className="ea-showcase-icon">💼</span>
-                <span><b>Jobs & Updates</b><small>Career opportunities</small></span>
-                <span className="ea-showcase-arrow">↗</span>
-              </a>
-              <a className="ea-showcase-item" href="/blogs">
-                <span className="ea-showcase-icon">📚</span>
-                <span><b>Educational Blogs</b><small>Ideas & guidance</small></span>
-                <span className="ea-showcase-arrow">↗</span>
-              </a>
+            <div className="ea-affairs-date">National · International · Education · Bihar</div>
+            <div className="ea-affairs-grid">
+              <div className="ea-affairs-tile"><span>▤</span><b>National Affairs</b><small>Government, policies and important decisions</small></div>
+              <div className="ea-affairs-tile"><span>◎</span><b>International Affairs</b><small>World events and global developments</small></div>
+              <div className="ea-affairs-tile"><span>⌂</span><b>Education & Exams</b><small>Education policies, examinations and schemes</small></div>
+              <div className="ea-affairs-tile"><span>⌖</span><b>Bihar Special</b><small>State government and regional developments</small></div>
             </div>
-            <div className="ea-showcase-foot"><span className="ea-showcase-pulse"></span> Explore at your own pace · Open learning resources</div>
-          </div>
+            <div className="ea-affairs-bottom">
+              <span><b>Daily updates</b><small>Read verified updates and exam-relevant facts</small></span>
+              <span className="ea-affairs-read">Explore updates →</span>
+            </div>
+          </a>
         </div>
       </section>
 
-      <section className="ea-current-affairs">
-        <div className="ea-wrap ea-current-affairs-inner">
-          <div className="ea-current-affairs-icon">📰</div>
-          <div className="ea-current-affairs-copy">
-            <span className="ea-eyebrow">Stay informed · Learn every day</span>
-            <h2>Daily Current Affairs & Learning Updates</h2>
-            <p>Explore educational insights, exam-related explainers and important updates through our open-access articles.</p>
-          </div>
-          <a className="ea-button ea-current-affairs-link" href="/blogs">Explore Latest Articles →</a>
-        </div>
-      </section>
+
 
       <section className="ea-section">
         <div className="ea-wrap">
