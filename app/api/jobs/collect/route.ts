@@ -140,12 +140,19 @@ function findRecruitmentLinks(
     try {
       const url = new URL(href, baseUrl);
 
+      const isSameOfficialHost =
+        url.hostname === baseUrl.hostname ||
+        url.hostname.endsWith("." + baseUrl.hostname);
+
+      // CTET's official document pages publish PDFs on this NIC-managed CDN.
+      // Permit this exact host only for links discovered on ctet.nic.in.
+      const isOfficialCtetDocumentCdn =
+        baseUrl.hostname === "ctet.nic.in" &&
+        url.hostname === "cdnbbsr.s3waas.gov.in";
+
       if (
-        !["http:", "https:"].includes(url.protocol) ||
-        !(
-          url.hostname === baseUrl.hostname ||
-          url.hostname.endsWith("." + baseUrl.hostname)
-        )
+        url.protocol !== "https:" ||
+        (!isSameOfficialHost && !isOfficialCtetDocumentCdn)
       ) {
         continue;
       }
