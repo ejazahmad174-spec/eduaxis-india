@@ -239,20 +239,19 @@ export default function Home() {
           <div className="ea-pyq-panel">
             <div>
               <div className="ea-eyebrow">Learn from previous examinations</div>
-              <h2>Previous Year Questions (PYQs)</h2>
+              <h2>Examination Preparation Resources</h2>
               <p className="ea-section-intro">
-                Strengthen your preparation with examination-oriented previous-year
-                questions, practice resources and subject-wise learning material.
+                Explore organised preparation resources for school and board exams, competitive examinations, entrance tests and model questions.
               </p>
               <div className="ea-hero-actions">
                 <a className="ea-button ea-button-dark" href="/study-materials">Explore Study Materials →</a>
               </div>
             </div>
             <div className="ea-pyq-list">
-              <div className="ea-pyq-item"><span className="ea-pyq-number">01</span><span>Examination-wise questions</span></div>
-              <div className="ea-pyq-item"><span className="ea-pyq-number">02</span><span>Subject-wise practice</span></div>
-              <div className="ea-pyq-item"><span className="ea-pyq-number">03</span><span>Previous exam papers</span></div>
-              <div className="ea-pyq-item"><span className="ea-pyq-number">04</span><span>Preparation resources</span></div>
+              <div className="ea-pyq-item"><span className="ea-pyq-number">01</span><span>School &amp; Board Examinations</span></div>
+              <div className="ea-pyq-item"><span className="ea-pyq-number">02</span><span>Competitive Examinations</span></div>
+              <div className="ea-pyq-item"><span className="ea-pyq-number">03</span><span>Entrance Examinations</span></div>
+              <div className="ea-pyq-item"><span className="ea-pyq-number">04</span><span>Model Questions</span></div>
             </div>
           </div>
         </div>
