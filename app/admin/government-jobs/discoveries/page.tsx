@@ -123,6 +123,7 @@ export default function DiscoveredGovernmentJobsPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [collectionResults, setCollectionResults] = useState<Array<{ source: string; pages_checked: number; found: number; pdfs_read: number; error?: string }>>([]);
 
   // Load existing discoveries and source names.
   const loadDiscoveries = useCallback(async () => {
@@ -176,6 +177,7 @@ export default function DiscoveredGovernmentJobsPage() {
     setCollecting(true);
     setMessage('Collection is running. Please wait...');
     setErrorMessage('');
+    setCollectionResults([]);
 
     try {
       const {
@@ -206,6 +208,7 @@ export default function DiscoveredGovernmentJobsPage() {
       }
 
       await loadDiscoveries();
+      setCollectionResults(Array.isArray(result.results) ? result.results : []);
 
       setMessage(
         `Collection completed successfully. Sources checked: ${
@@ -842,6 +845,43 @@ export default function DiscoveredGovernmentJobsPage() {
               }}
             >
               {errorMessage}
+            </div>
+          )}
+
+          {collectionResults.length > 0 && (
+            <div
+              style={{
+                padding: 14,
+                margin: '12px 0',
+                background: '#f1f6fa',
+                border: '1px solid #dce5ec',
+                borderRadius: 8,
+                color: '#17324d',
+              }}
+            >
+              <strong>Source scan details</strong>
+              {collectionResults.map((item, index) => (
+                <div
+                  key={`${item.source}-${index}`}
+                  style={{
+                    paddingTop: 10,
+                    marginTop: 10,
+                    borderTop: '1px solid #dce5ec',
+                    fontSize: 13,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  <div><b>Source:</b> {item.source}</div>
+                  <div><b>Pages checked:</b> {item.pages_checked}</div>
+                  <div><b>Candidate links:</b> {item.found}</div>
+                  <div><b>PDFs read:</b> {item.pdfs_read}</div>
+                  {item.error && (
+                    <div style={{ color: '#bd2525' }}>
+                      <b>Source error:</b> {item.error}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 
