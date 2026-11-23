@@ -564,12 +564,14 @@ export default function Home() {
       <footer className="ea-footer">
         <div className="ea-wrap">
           <div className="ea-footer-grid">
-            <div>
+            <div className="ea-footer-brand">
+              <div className="ea-footer-kicker">LEARN · PREPARE · PROGRESS</div>
               <a href="/" className="ea-brand" style={{ color: "#fff" }}>
                 <span className="ea-brand-mark">E</span>
                 <span>EduAxis India<small style={{ color: "#aabac4" }}>LEARN. PREPARE. PROGRESS.</small></span>
               </a>
               <p>Empowering learners with knowledge, examination preparation and career opportunities through accessible educational resources.</p>
+              <a className="ea-footer-email" href="mailto:eduaxisindiateam@gmail.com">eduaxisindiateam@gmail.com</a>
             </div>
             <div>
               <h3>Learning</h3>
@@ -597,7 +599,8 @@ export default function Home() {
             </div>
           </div>
           <div className="ea-footer-bottom">
-            © {new Date().getFullYear()} EduAxis India. All rights reserved.
+            <span>© {new Date().getFullYear()} EduAxis India. All rights reserved.</span>
+            <span>Learn. Prepare. Progress.</span>
           </div>
         </div>
       </footer>
