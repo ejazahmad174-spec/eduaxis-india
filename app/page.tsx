@@ -376,15 +376,20 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="ea-section">
+      <section className="ea-section ea-blog-feature-section" id="educational-blogs">
         <div className="ea-wrap">
-          <div className="ea-promo">
-            <div>
+          <div className="ea-blog-feature">
+            <div className="ea-blog-feature-copy">
               <div className="ea-eyebrow">Knowledge · Guidance · Growth</div>
               <h2>Stay informed with EduAxis India</h2>
               <p>Read educational articles, academic updates, career guidance and useful information for students, teachers and lifelong learners.</p>
+              <a className="ea-blog-feature-button" href="/blogs">Explore Educational Blogs →</a>
             </div>
-            <a className="ea-button" href="/blogs">Explore Educational Blogs →</a>
+            <div className="ea-blog-feature-side" aria-hidden="true">
+              <span className="ea-blog-feature-icon">✦</span>
+              <strong>Ideas that inform.<br/>Knowledge that empowers.</strong>
+              <span>EDUCATION · CAREER · GUIDANCE</span>
+            </div>
           </div>
         </div>
       </section>
