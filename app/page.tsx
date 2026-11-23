@@ -3,19 +3,69 @@
 import './home.css';
 import { useState } from "react";
 const examCategories = [
-  { name: "BPSC TRE", detail: "Bihar teacher recruitment", icon: "🎓" },
-  { name: "CTET", detail: "Central teacher eligibility", icon: "📚" },
-  { name: "Bihar STET", detail: "State teacher eligibility", icon: "✍️" },
-  { name: "UGC NET", detail: "Assistant professor & JRF", icon: "🏛️" },
-  { name: "SSC", detail: "Staff selection examinations", icon: "📝" },
-  { name: "UPSC", detail: "Civil services preparation", icon: "🇮🇳" },
+  {
+    name: "BPSC TRE",
+    detail: "Bihar teacher recruitment",
+    authority: "Bihar Public Service Commission",
+    logo: "https://www.jobyaari.com/public/notification/organisation_logo/Bihar%20Public%20Service%20Commission%20%28BPSC%29.png",
+  },
+  {
+    name: "CTET",
+    detail: "Central teacher eligibility",
+    authority: "Central Board of Secondary Education",
+    logo: "https://akm-img-a-in.tosshub.com/indiatoday/images/story/201501/cbse-logo_650_010915114139.jpg?VersionId=iqYgwltD4gqPhE13hiEs8ijCpp1FtjgU&size=690%3A388",
+  },
+  {
+    name: "Bihar STET",
+    detail: "State teacher eligibility",
+    authority: "Bihar School Examination Board",
+    logo: "https://img.collegedunia.com/public/college_data/images/logos/BSEB_LOGO.png",
+  },
+  {
+    name: "UGC NET",
+    detail: "Assistant professor & JRF",
+    authority: "University Grants Commission · NTA",
+    logo: "https://img.mathrubhumi.com/view/acePublic/alias/contentid/1r4mbzqrx4pwya9tdl5/1/nta-logo.jpeg?f=16%3A9&q=0.75&w=1200",
+  },
+  {
+    name: "SSC",
+    detail: "Staff selection examinations",
+    authority: "Staff Selection Commission",
+    logo: "https://commons.wikimedia.org/wiki/Special:FilePath/Staff_Selection_Commission_Logo.jpg",
+  },
+  {
+    name: "UPSC",
+    detail: "Civil services preparation",
+    authority: "Union Public Service Commission",
+    logo: "https://commons.wikimedia.org/wiki/Special:FilePath/Union_Public_Service_Commission_Logo.png",
+  },
 ];
 
 const mockTests = [
-  { name: "BPSC TRE", detail: "Teacher recruitment examination", icon: "🎓" },
-  { name: "CTET", detail: "Paper I and Paper II preparation", icon: "📘" },
-  { name: "UGC NET", detail: "Paper I and subject preparation", icon: "🏛️" },
-  { name: "Bihar SLET", detail: "Library Science and General Studies", icon: "📖" },
+  {
+    name: "BPSC TRE",
+    detail: "Teacher recruitment examination",
+    authority: "Bihar Public Service Commission",
+    logo: "https://www.jobyaari.com/public/notification/organisation_logo/Bihar%20Public%20Service%20Commission%20%28BPSC%29.png",
+  },
+  {
+    name: "CTET",
+    detail: "Paper I and Paper II preparation",
+    authority: "Central Board of Secondary Education",
+    logo: "https://akm-img-a-in.tosshub.com/indiatoday/images/story/201501/cbse-logo_650_010915114139.jpg?VersionId=iqYgwltD4gqPhE13hiEs8ijCpp1FtjgU&size=690%3A388",
+  },
+  {
+    name: "UGC NET",
+    detail: "Paper I and subject preparation",
+    authority: "University Grants Commission · NTA",
+    logo: "https://img.mathrubhumi.com/view/acePublic/alias/contentid/1r4mbzqrx4pwya9tdl5/1/nta-logo.jpeg?f=16%3A9&q=0.75&w=1200",
+  },
+  {
+    name: "Bihar SLET",
+    detail: "School Librarian Eligibility Test",
+    authority: "Bihar School Examination Board, Patna",
+    logo: "https://img.collegedunia.com/public/college_data/images/logos/BSEB_LOGO.png",
+  },
 ];
 
 const services = [
@@ -57,6 +107,7 @@ const jobCategories = [
 ];
 
 export default function Home() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [feedbackStatus, setFeedbackStatus] = useState("");
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
 
@@ -76,14 +127,36 @@ export default function Home() {
             <span className="ea-brand-mark">E</span>
             <span>EduAxis India<small>LEARN. PREPARE. PROGRESS.</small></span>
           </a>
-          <nav className="ea-nav-links" aria-label="Main navigation">
-  <a href="/courses">Courses</a>
-  <a href="/mock-tests">Mock Tests</a>
-  <a href="/study-materials">Study Materials</a>
-  <a href="/career-updates">Government Jobs & Updates</a>
-  <a href="/blogs">Blogs</a>
-</nav>
-          <a className="ea-login" href="/student/login">Student Login</a>
+          <button
+            type="button"
+            className="ea-mobile-menu-toggle"
+            aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="ea-mobile-navigation"
+            onClick={() => setMobileMenuOpen((open) => !open)}
+          >
+            <span></span><span></span><span></span>
+          </button>
+          <div id="ea-mobile-navigation" className={`ea-mobile-panel ${mobileMenuOpen ? "is-open" : ""}`}>
+            <nav className="ea-nav-links" aria-label="Main navigation">
+              <a href="/" onClick={() => setMobileMenuOpen(false)}>Home</a>
+              <a href="/courses" onClick={() => setMobileMenuOpen(false)}>Courses</a>
+              <a href="/mock-tests" onClick={() => setMobileMenuOpen(false)}>Mock Tests</a>
+              <a href="/study-materials" onClick={() => setMobileMenuOpen(false)}>Study Materials</a>
+              <a href="/career-updates" onClick={() => setMobileMenuOpen(false)}>Government Jobs & Updates</a>
+              <a href="/blogs" onClick={() => setMobileMenuOpen(false)}>Blogs</a>
+              <a href="/current-affairs" onClick={() => setMobileMenuOpen(false)}>Current Affairs</a>
+            </nav>
+            <div className="ea-nav-actions">
+              <div className="ea-header-social" aria-label="Connect with EduAxis India">
+                <a href="https://whatsapp.com/channel/0029Vb9hfdC9Gv7TbpnRxM3g" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India WhatsApp Channel">W</a>
+                <a href="https://www.instagram.com/eduaxisindiateam/" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India Instagram">◎</a>
+                <a href="https://www.facebook.com/eduaxisindia/" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India Facebook">f</a>
+                <a href="https://t.me/eduaxisindia" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India Telegram">➤</a>
+              </div>
+              <a className="ea-login" href="/student/login" onClick={() => setMobileMenuOpen(false)}>Student Login</a>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -107,25 +180,30 @@ export default function Home() {
               <span>✓ Academic and career updates</span>
             </div>
           </div>
-          <div className="ea-hero-art">
+          <a className="ea-hero-art ea-current-affairs-board" href="/current-affairs" aria-label="Explore EduAxis Daily Current Affairs">
             <div className="ea-art-head">
-              <strong>EduAxis Learning Hub</strong>
-              <span className="ea-art-label">LEARN · PREPARE · PROGRESS</span>
+              <div>
+                <span className="ea-showcase-kicker">EDUAXIS INDIA · DAILY KNOWLEDGE UPDATE</span>
+                <strong>Daily Current Affairs</strong>
+              </div>
+              <span className="ea-art-label">DAILY UPDATE</span>
             </div>
-            <div className="ea-art-center">
-              <strong>E</strong>
-              <span className="ea-art-icon one">📚</span>
-              <span className="ea-art-icon two">🎯</span>
-              <span className="ea-art-icon three">🎓</span>
-              <span className="ea-art-icon four">📈</span>
+            <div className="ea-affairs-date">National · International · Education · Bihar</div>
+            <div className="ea-affairs-grid">
+              <div className="ea-affairs-tile"><span>▤</span><b>National Affairs</b><small>Government, policies and important decisions</small></div>
+              <div className="ea-affairs-tile"><span>◎</span><b>International Affairs</b><small>World events and global developments</small></div>
+              <div className="ea-affairs-tile"><span>⌂</span><b>Education & Exams</b><small>Education policies, examinations and schemes</small></div>
+              <div className="ea-affairs-tile"><span>⌖</span><b>Bihar Special</b><small>State government and regional developments</small></div>
             </div>
-            <div className="ea-art-bottom">
-              <b>One platform. Many possibilities.</b>
-              <p>Build knowledge, practise with purpose and stay informed about opportunities.</p>
+            <div className="ea-affairs-bottom">
+              <span><b>Daily updates</b><small>Read verified updates and exam-relevant facts</small></span>
+              <span className="ea-affairs-read">Explore updates →</span>
             </div>
-          </div>
+          </a>
         </div>
       </section>
+
+
 
       <section className="ea-section">
         <div className="ea-wrap">
@@ -140,7 +218,9 @@ export default function Home() {
           <div className="ea-category-grid">
             {examCategories.map((exam) => (
               <a className="ea-category" href="/mock-tests" key={exam.name}>
-                <div className="ea-category-icon">{exam.icon}</div>
+                <div className="ea-category-logo">
+                  <img src={exam.logo} alt={`${exam.authority} emblem`} loading="lazy" />
+                </div>
                 <b>{exam.name}</b>
                 <small>{exam.detail}</small>
               </a>
@@ -149,7 +229,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="ea-section ea-muted-section">
+      <section className="ea-section ea-muted-section ea-mock-test-section">
         <div className="ea-wrap">
           <div className="ea-section-heading">
             <div>
@@ -159,10 +239,15 @@ export default function Home() {
             </div>
             <a className="ea-text-link" href="/mock-tests">View all mock tests →</a>
           </div>
-          <div className="ea-card-grid">
+          <div className="ea-mock-test-grid">
             {mockTests.map((test) => (
-              <a className="ea-card" href="/mock-tests" key={test.name}>
-                <div className="ea-card-icon">{test.icon}</div>
+              <a className="ea-card ea-test-series-card" href="/mock-tests" key={test.name}>
+                <div className="ea-test-series-identity">
+                  <div className="ea-test-series-logo">
+                    <img src={test.logo} alt={`${test.authority} emblem`} loading="lazy" />
+                  </div>
+                  <span className="ea-test-series-authority">{test.authority}</span>
+                </div>
                 <h3>{test.name} Mock Tests</h3>
                 <p>{test.detail}. Explore available practice and test-series options.</p>
                 <span className="ea-card-link">Explore test series →</span>
@@ -177,26 +262,25 @@ export default function Home() {
           <div className="ea-pyq-panel">
             <div>
               <div className="ea-eyebrow">Learn from previous examinations</div>
-              <h2>Previous Year Questions (PYQs)</h2>
+              <h2>Examination Preparation Resources</h2>
               <p className="ea-section-intro">
-                Strengthen your preparation with examination-oriented previous-year
-                questions, practice resources and subject-wise learning material.
+                Explore organised preparation resources for school and board exams, competitive examinations, entrance tests and model questions.
               </p>
               <div className="ea-hero-actions">
                 <a className="ea-button ea-button-dark" href="/study-materials">Explore Study Materials →</a>
               </div>
             </div>
             <div className="ea-pyq-list">
-              <div className="ea-pyq-item">📘 Examination-wise questions</div>
-              <div className="ea-pyq-item">📝 Subject-wise practice</div>
-              <div className="ea-pyq-item">📅 Previous exam papers</div>
-              <div className="ea-pyq-item">🎯 Preparation resources</div>
+              <div className="ea-pyq-item"><span className="ea-pyq-number">01</span><span>School &amp; Board Examinations</span></div>
+              <div className="ea-pyq-item"><span className="ea-pyq-number">02</span><span>Competitive Examinations</span></div>
+              <div className="ea-pyq-item"><span className="ea-pyq-number">03</span><span>Entrance Examinations</span></div>
+              <div className="ea-pyq-item"><span className="ea-pyq-number">04</span><span>Model Questions</span></div>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="ea-section ea-muted-section">
+      <section className="ea-section ea-muted-section ea-featured-courses-section">
         <div className="ea-wrap">
           <div className="ea-section-heading">
             <div>
@@ -206,27 +290,27 @@ export default function Home() {
             </div>
             <a className="ea-text-link" href="/courses">View all courses →</a>
           </div>
-          <div className="ea-card-grid">
-            <a className="ea-card" href="/courses">
-              <div className="ea-card-icon">📒</div>
+          <div className="ea-featured-courses-grid">
+            <a className="ea-card ea-course-card" href="/courses">
+              <div className="ea-course-card-top"><div className="ea-card-icon">📒</div><span>SUBJECT LEARNING</span></div>
               <h3>Commerce Courses</h3>
               <p>Explore Accountancy, Business Studies and Economics learning opportunities.</p>
               <span className="ea-card-link">Explore courses →</span>
             </a>
-            <a className="ea-card" href="/courses">
-              <div className="ea-card-icon">🏫</div>
+            <a className="ea-card ea-course-card" href="/courses">
+              <div className="ea-course-card-top"><div className="ea-card-icon">🏫</div><span>SCHOOL LEARNING</span></div>
               <h3>School Education</h3>
               <p>Discover class-wise academic courses and structured learning resources.</p>
               <span className="ea-card-link">Explore courses →</span>
             </a>
-            <a className="ea-card" href="/courses">
-              <div className="ea-card-icon">🎯</div>
+            <a className="ea-card ea-course-card" href="/courses">
+              <div className="ea-course-card-top"><div className="ea-card-icon">🎯</div><span>EXAM PREPARATION</span></div>
               <h3>Competitive Exams</h3>
               <p>Explore preparation programmes for competitive examinations.</p>
               <span className="ea-card-link">Explore courses →</span>
             </a>
-            <a className="ea-card" href="/courses">
-              <div className="ea-card-icon">💡</div>
+            <a className="ea-card ea-course-card" href="/courses">
+              <div className="ea-course-card-top"><div className="ea-card-icon">💡</div><span>CAREER SKILLS</span></div>
               <h3>Skill Development</h3>
               <p>Discover practical learning and career-oriented skill development.</p>
               <span className="ea-card-link">Explore courses →</span>
@@ -245,17 +329,23 @@ export default function Home() {
             </div>
             <a className="ea-text-link" href="/study-materials">Browse materials →</a>
           </div>
-          <div className="ea-card-grid">
+          <div className="ea-resource-grid">
             {services.slice(0, 3).map((service) => (
-              <a className="ea-card" href={service.href} key={service.title}>
-                <div className="ea-card-icon">{service.icon}</div>
+              <a className="ea-card ea-resource-card" href={service.href} key={service.title}>
+                <div className="ea-resource-card-top">
+                  <div className="ea-card-icon">{service.icon}</div>
+                  <span>LEARNING RESOURCE</span>
+                </div>
                 <h3>{service.title}</h3>
                 <p>{service.description}</p>
                 <span className="ea-card-link">{service.link} →</span>
               </a>
             ))}
-            <a className="ea-card" href="/blogs">
-              <div className="ea-card-icon">📰</div>
+            <a className="ea-card ea-resource-card" href="/blogs">
+              <div className="ea-resource-card-top">
+                <div className="ea-card-icon">📰</div>
+                <span>KNOWLEDGE & INSIGHTS</span>
+              </div>
               <h3>Educational Blogs</h3>
               <p>Read educational articles, career guidance and important academic updates.</p>
               <span className="ea-card-link">Read articles →</span>
@@ -281,9 +371,13 @@ export default function Home() {
           <div className="ea-job-grid">
             {jobCategories.map((category) => (
               <a className="ea-job-card" href="/government-jobs" key={category.name}>
-                <div className="ea-card-icon">{category.icon}</div>
+                <div className="ea-job-card-top">
+                  <div className="ea-card-icon">{category.icon}</div>
+                  <span>GOVERNMENT UPDATES</span>
+                </div>
                 <b>{category.name}</b>
                 <small>{category.detail}</small>
+                <span className="ea-job-card-link">Explore updates →</span>
               </a>
             ))}
           </div>
@@ -297,15 +391,58 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="ea-section">
+      <section className="ea-section ea-blog-feature-section" id="educational-blogs">
         <div className="ea-wrap">
-          <div className="ea-promo">
-            <div>
+          <div className="ea-blog-feature">
+            <div className="ea-blog-feature-copy">
               <div className="ea-eyebrow">Knowledge · Guidance · Growth</div>
               <h2>Stay informed with EduAxis India</h2>
               <p>Read educational articles, academic updates, career guidance and useful information for students, teachers and lifelong learners.</p>
+              <a className="ea-blog-feature-button" href="/blogs">Explore Educational Blogs →</a>
             </div>
-            <a className="ea-button" href="/blogs">Explore Educational Blogs →</a>
+            <div className="ea-blog-feature-side" aria-hidden="true">
+              <span className="ea-blog-feature-icon">✦</span>
+              <strong>Ideas that inform.<br/>Knowledge that empowers.</strong>
+              <span>EDUCATION · CAREER · GUIDANCE</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="ea-section ea-social-section" id="community">
+        <div className="ea-wrap">
+          <div className="ea-section-heading">
+            <div>
+              <div className="ea-eyebrow">Stay connected · Learn together</div>
+              <h2>Connect with Our Social Media Community</h2>
+              <p className="ea-section-intro">Follow EduAxis India for daily updates, learning content, community news and important announcements.</p>
+            </div>
+          </div>
+          <div className="ea-social-grid">
+            <a className="ea-social-card ea-social-whatsapp" href="https://whatsapp.com/channel/0029Vb9hfdC9Gv7TbpnRxM3g" target="_blank" rel="noopener noreferrer">
+              <div className="ea-social-card-top"><span className="ea-social-icon">W</span><span className="ea-social-kicker">SOCIAL COMMUNITY</span></div>
+              <h3>WhatsApp Channel</h3>
+              <p>Daily updates and important announcements</p>
+              <span className="ea-social-link">Follow Channel →</span>
+            </a>
+            <a className="ea-social-card ea-social-telegram" href="https://t.me/eduaxisindia" target="_blank" rel="noopener noreferrer">
+              <div className="ea-social-card-top"><span className="ea-social-icon">➤</span><span className="ea-social-kicker">SOCIAL COMMUNITY</span></div>
+              <h3>Telegram</h3>
+              <p>Education, examination and career updates</p>
+              <span className="ea-social-link">Join Channel →</span>
+            </a>
+            <a className="ea-social-card ea-social-instagram" href="https://www.instagram.com/eduaxisindiateam/" target="_blank" rel="noopener noreferrer">
+              <div className="ea-social-card-top"><span className="ea-social-icon">◎</span><span className="ea-social-kicker">SOCIAL COMMUNITY</span></div>
+              <h3>Instagram</h3>
+              <p>Reels, learning content and visual updates</p>
+              <span className="ea-social-link">Follow Us →</span>
+            </a>
+            <a className="ea-social-card ea-social-facebook" href="https://www.facebook.com/eduaxisindia/" target="_blank" rel="noopener noreferrer">
+              <div className="ea-social-card-top"><span className="ea-social-icon">f</span><span className="ea-social-kicker">SOCIAL COMMUNITY</span></div>
+              <h3>Facebook</h3>
+              <p>Community updates and announcements</p>
+              <span className="ea-social-link">Visit Page →</span>
+            </a>
           </div>
         </div>
       </section>
@@ -442,12 +579,14 @@ export default function Home() {
       <footer className="ea-footer">
         <div className="ea-wrap">
           <div className="ea-footer-grid">
-            <div>
+            <div className="ea-footer-brand">
+              <div className="ea-footer-kicker">LEARN · PREPARE · PROGRESS</div>
               <a href="/" className="ea-brand" style={{ color: "#fff" }}>
                 <span className="ea-brand-mark">E</span>
                 <span>EduAxis India<small style={{ color: "#aabac4" }}>LEARN. PREPARE. PROGRESS.</small></span>
               </a>
               <p>Empowering learners with knowledge, examination preparation and career opportunities through accessible educational resources.</p>
+              <a className="ea-footer-email" href="mailto:eduaxisindiateam@gmail.com">eduaxisindiateam@gmail.com</a>
             </div>
             <div>
               <h3>Learning</h3>
@@ -457,8 +596,10 @@ export default function Home() {
             </div>
             <div>
               <h3>Information</h3>
+              <a href="/about">About Us</a>
               <a href="/government-jobs">Government Jobs</a>
               <a href="/blogs">Educational Blogs</a>
+              <a href="/current-affairs">Current Affairs</a>
             </div>
             <div>
               <h3>Student Area</h3>
@@ -466,9 +607,23 @@ export default function Home() {
               <a href="/student/register">Create Account</a>
               <a href="/student/dashboard">My Dashboard</a>
             </div>
+            <div>
+              <h3>Policies & Support</h3>
+              <a href="/privacy-policy">Privacy Policy</a>
+              <a href="/terms-and-conditions">Terms & Conditions</a>
+              <a href="/contact">Contact Us</a>
+            </div>
+            <div className="ea-footer-social">
+              <h3>Connect With Us</h3>
+              <a href="https://whatsapp.com/channel/0029Vb9hfdC9Gv7TbpnRxM3g" target="_blank" rel="noopener noreferrer">WhatsApp Channel</a>
+              <a href="https://t.me/eduaxisindia" target="_blank" rel="noopener noreferrer">Telegram</a>
+              <a href="https://www.instagram.com/eduaxisindiateam/" target="_blank" rel="noopener noreferrer">Instagram</a>
+              <a href="https://www.facebook.com/eduaxisindia/" target="_blank" rel="noopener noreferrer">Facebook</a>
+            </div>
           </div>
           <div className="ea-footer-bottom">
-            © {new Date().getFullYear()} EduAxis India. All rights reserved.
+            <span>© {new Date().getFullYear()} EduAxis India. All rights reserved.</span>
+            <span>Learn. Prepare. Progress.</span>
           </div>
         </div>
       </footer>

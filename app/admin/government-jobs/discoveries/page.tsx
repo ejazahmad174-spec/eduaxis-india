@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import '../../admin.css';
+import AdminSidebar from '@/components/admin/AdminSidebar';
 
 type NoticeCategory =
   | 'government_job'
@@ -123,6 +124,7 @@ export default function DiscoveredGovernmentJobsPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [collectionResults, setCollectionResults] = useState<Array<{ source: string; pages_checked: number; found: number; pdfs_read: number; error?: string }>>([]);
 
   // Load existing discoveries and source names.
   const loadDiscoveries = useCallback(async () => {
@@ -176,6 +178,7 @@ export default function DiscoveredGovernmentJobsPage() {
     setCollecting(true);
     setMessage('Collection is running. Please wait...');
     setErrorMessage('');
+    setCollectionResults([]);
 
     try {
       const {
@@ -206,6 +209,7 @@ export default function DiscoveredGovernmentJobsPage() {
       }
 
       await loadDiscoveries();
+      setCollectionResults(Array.isArray(result.results) ? result.results : []);
 
       setMessage(
         `Collection completed successfully. Sources checked: ${
@@ -740,54 +744,7 @@ export default function DiscoveredGovernmentJobsPage() {
 
   return (
     <main className="admin-shell">
-      <aside className="admin-sidebar">
-        <a href="/" className="admin-brand">
-          <span className="admin-brand-mark">E</span>
-          <span>
-            EduAxis <b>India</b>
-            <small>ADMINISTRATION</small>
-          </span>
-        </a>
-
-        <div className="admin-side-label">WORKSPACE</div>
-
-        <a className="admin-side-link" href="/admin/dashboard">
-          ▦ &nbsp; Dashboard
-        </a>
-
-        <div className="admin-side-label">
-          CONTENT MANAGEMENT
-        </div>
-
-        <a
-          className="admin-side-link"
-          href="/admin/study-materials"
-        >
-          ▤ &nbsp; Study Materials
-        </a>
-
-        <a
-  className="admin-side-link"
-  href="/admin/career-updates"
->
-  💼 &nbsp; Jobs & Career Updates
-</a>
-
-        <a
-          className="admin-side-link active"
-          href="/admin/government-jobs/discoveries"
-        >
-          ↳ &nbsp; Discovered Jobs
-        </a>
-
-        <a className="admin-side-link" href="/admin/dashboard">
-          ▤ &nbsp; Mock Tests
-        </a>
-
-        <div className="admin-sidebar-bottom">
-          <a href="/">← View public website</a>
-        </div>
-      </aside>
+      <AdminSidebar />
 
       <section className="admin-main">
         <header className="admin-topbar">
@@ -842,6 +799,43 @@ export default function DiscoveredGovernmentJobsPage() {
               }}
             >
               {errorMessage}
+            </div>
+          )}
+
+          {collectionResults.length > 0 && (
+            <div
+              style={{
+                padding: 14,
+                margin: '12px 0',
+                background: '#f1f6fa',
+                border: '1px solid #dce5ec',
+                borderRadius: 8,
+                color: '#17324d',
+              }}
+            >
+              <strong>Source scan details</strong>
+              {collectionResults.map((item, index) => (
+                <div
+                  key={`${item.source}-${index}`}
+                  style={{
+                    paddingTop: 10,
+                    marginTop: 10,
+                    borderTop: '1px solid #dce5ec',
+                    fontSize: 13,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  <div><b>Source:</b> {item.source}</div>
+                  <div><b>Pages checked:</b> {item.pages_checked}</div>
+                  <div><b>Candidate links:</b> {item.found}</div>
+                  <div><b>PDFs read:</b> {item.pdfs_read}</div>
+                  {item.error && (
+                    <div style={{ color: '#bd2525' }}>
+                      <b>Source error:</b> {item.error}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 

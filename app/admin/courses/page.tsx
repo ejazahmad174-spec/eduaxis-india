@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import '../admin.css';
+import AdminSidebar from '@/components/admin/AdminSidebar';
 
 type Course = {
   id: string;
@@ -855,24 +856,7 @@ export default function AdminCoursesPage() {
 
   return (
     <main className="admin-shell">
-      <aside className="admin-sidebar">
-        <a href="/" className="admin-brand">
-          <span className="admin-brand-mark">E</span>
-          <span>EduAxis <b>India</b><small>ADMINISTRATION</small></span>
-        </a>
-        <div className="admin-side-label">WORKSPACE</div>
-        <Link className="admin-side-link" href="/admin/dashboard">▦ &nbsp; Dashboard</Link>
-        <div className="admin-side-label">CONTENT MANAGEMENT</div>
-        <Link className="admin-side-link" href="/admin/study-materials">▤ &nbsp; Study Materials</Link>
-        <div className="admin-side-link muted">▤ &nbsp; Government Jobs<small>Coming next</small></div>
-        <Link className="admin-side-link active" href="/admin/courses">🎓 &nbsp; Online Courses</Link>
-        <Link className="admin-side-link" href="/admin/mock-tests">▤ &nbsp; Mock Tests</Link>
-        <div className="admin-side-link muted">▤ &nbsp; Education News<small>Coming next</small></div>
-        <div className="admin-side-label">BLOG MANAGEMENT</div>
-        <Link className="admin-side-link" href="/admin/author-management">✍️ &nbsp; Author Management</Link>
-        <Link className="admin-side-link" href="/admin/blogs">▤ &nbsp; Blog Management</Link>
-        <div className="admin-sidebar-bottom"><a href="/">← View public website</a></div>
-      </aside>
+      <AdminSidebar />
 
       <section className="admin-main">
         <header className="admin-topbar">

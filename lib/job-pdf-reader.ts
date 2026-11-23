@@ -1,5 +1,5 @@
-
 import pdfParse from "pdf-parse";
+import { fetchOfficialUrl } from "@/lib/job-source-fetch";
 
 const MAX_PDF_SIZE = 10 * 1024 * 1024;
 const MAX_OCR_PDF_SIZE = 1 * 1024 * 1024;
@@ -43,11 +43,9 @@ async function readWithOCR(buffer: Buffer): Promise<string> {
   }
 
   const formData = new FormData();
-
-  const pdfBlob = new Blob(
-    [new Uint8Array(buffer)],
-    { type: "application/pdf" }
-  );
+  const pdfBlob = new Blob([new Uint8Array(buffer)], {
+    type: "application/pdf",
+  });
 
   formData.append("file", pdfBlob, "government-notice.pdf");
   formData.append("language", "auto");
@@ -55,18 +53,15 @@ async function readWithOCR(buffer: Buffer): Promise<string> {
   formData.append("isOverlayRequired", "false");
   formData.append("OCREngine", "2");
 
-  const response = await fetch(
-    "https://api.ocr.space/parse/image",
-    {
-      method: "POST",
-      headers: {
-        apikey: apiKey,
-      },
-      body: formData,
-      signal: AbortSignal.timeout(45000),
-      cache: "no-store",
-    }
-  );
+  const response = await fetch("https://api.ocr.space/parse/image", {
+    method: "POST",
+    headers: {
+      apikey: apiKey,
+    },
+    body: formData,
+    signal: AbortSignal.timeout(45_000),
+    cache: "no-store",
+  });
 
   if (!response.ok) {
     throw new Error(`OCR service failed: HTTP ${response.status}`);
@@ -103,42 +98,20 @@ export async function readJobPDF(
   let normalExtractionError = "";
 
   try {
-    const url = new URL(pdfUrl);
-
-    if (!["http:", "https:"].includes(url.protocol)) {
-      throw new Error("Invalid PDF URL.");
-    }
-
-    const response = await fetch(url.toString(), {
-      method: "GET",
-      headers: {
-        "User-Agent": "EduAxisIndiaJobCollector/3.0",
-        Accept: "application/pdf,application/octet-stream",
-      },
-      redirect: "follow",
-      signal: AbortSignal.timeout(20000),
-      cache: "no-store",
+    const response = await fetchOfficialUrl(pdfUrl, {
+      maxBytes: MAX_PDF_SIZE,
+      timeoutMs: 20_000,
+      accept: "application/pdf,application/octet-stream",
+      userAgent: "EduAxisIndiaJobCollector/4.0",
     });
 
-    if (!response.ok) {
+    if (response.status < 200 || response.status >= 300) {
       throw new Error(`PDF download failed: HTTP ${response.status}`);
     }
 
-    const contentLength = Number(
-      response.headers.get("content-length") || 0
-    );
-
-    if (contentLength > MAX_PDF_SIZE) {
-      throw new Error("PDF is larger than the permitted 10 MB limit.");
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-
-    if (arrayBuffer.byteLength > MAX_PDF_SIZE) {
-      throw new Error("Downloaded PDF exceeds the 10 MB limit.");
-    }
-
-    buffer = Buffer.from(arrayBuffer);
+    // The shared downloader enforces the limit while receiving bytes,
+    // before the complete response can be accumulated in memory.
+    buffer = response.body;
 
     if (
       buffer.length < 5 ||

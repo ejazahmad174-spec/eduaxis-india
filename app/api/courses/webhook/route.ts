@@ -11,12 +11,6 @@ const razorpayKeyId = process.env.RAZORPAY_KEY_ID!;
 const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET!;
 const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET!;
 
-const supabase = createClient(supabaseUrl, serviceRoleKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
-});
 
 function verifyWebhookSignature(
   body: string,
@@ -87,6 +81,14 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Create the service-role client only after runtime configuration is validated.
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
 
     // Read the original raw request body.
     const rawBody = await request.text();

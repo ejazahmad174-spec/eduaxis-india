@@ -1,6 +1,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { fetchOfficialUrl } from "@/lib/job-source-fetch";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -139,12 +140,19 @@ function findRecruitmentLinks(
     try {
       const url = new URL(href, baseUrl);
 
+      const isSameOfficialHost =
+        url.hostname === baseUrl.hostname ||
+        url.hostname.endsWith("." + baseUrl.hostname);
+
+      // CTET's official document pages publish PDFs on this NIC-managed CDN.
+      // Permit this exact host only for links discovered on ctet.nic.in.
+      const isOfficialCtetDocumentCdn =
+        baseUrl.hostname === "ctet.nic.in" &&
+        url.hostname === "cdnbbsr.s3waas.gov.in";
+
       if (
-        !["http:", "https:"].includes(url.protocol) ||
-        !(
-          url.hostname === baseUrl.hostname ||
-          url.hostname.endsWith("." + baseUrl.hostname)
-        )
+        url.protocol !== "https:" ||
+        (!isSameOfficialHost && !isOfficialCtetDocumentCdn)
       ) {
         continue;
       }
@@ -172,28 +180,28 @@ function findRecruitmentLinks(
 }
 
 async function fetchPage(url: string): Promise<string> {
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      "User-Agent": "EduAxisIndiaJobCollector/3.0",
-      Accept: "text/html,application/xhtml+xml",
-    },
-    signal: AbortSignal.timeout(15000),
-    redirect: "follow",
-    cache: "no-store",
+  const response = await fetchOfficialUrl(url, {
+    maxBytes: 2_000_000,
+    timeoutMs: 15_000,
+    accept: "text/html,application/xhtml+xml",
+    userAgent: "EduAxisIndiaJobCollector/4.0",
   });
 
-  if (!response.ok) {
+  if (response.status < 200 || response.status >= 300) {
     throw new Error(`Website returned HTTP ${response.status}`);
   }
 
-  const contentType = response.headers.get("content-type") || "";
+  const contentType = response.contentType.toLowerCase();
 
-  if (!contentType.includes("text/html")) {
+  if (
+    !contentType.includes("text/html") &&
+    !contentType.includes("application/xhtml+xml")
+  ) {
     throw new Error("Source did not return an HTML webpage.");
   }
 
-  return (await response.text()).slice(0, 2_000_000);
+  // The shared downloader stops at 2 MB while streaming the response.
+  return response.body.toString("utf8");
 }
 
 function findField(
@@ -535,6 +543,37 @@ export async function GET(request: Request) {
 
       if (pagesChecked === 0) {
         throw new Error("All configured pages failed to load.");
+      }
+
+      // Many official portals list a notice detail page first and place the
+      // actual PDF attachment on that page. Inspect a small, bounded number
+      // of same-source detail pages to discover those PDF links.
+      const detailPages = Array.from(allLinks.values())
+        .filter((link) => !isPdfUrl(link.url))
+        .slice(0, 10);
+
+      for (const detailPage of detailPages) {
+        try {
+          const detailHtml = await fetchPage(detailPage.url);
+          const attachmentLinks = findRecruitmentLinks(
+            detailHtml,
+            detailPage.url
+          );
+
+          for (const attachment of attachmentLinks) {
+            if (isPdfUrl(attachment.url) && !allLinks.has(attachment.url)) {
+              allLinks.set(attachment.url, attachment);
+            }
+          }
+        } catch (detailError) {
+          // A detail page may be unavailable or may not contain a PDF.
+          // Keep the original notice link; do not fail the whole source scan.
+          console.warn(
+            "Could not inspect notice detail page:",
+            detailPage.url,
+            detailError
+          );
+        }
       }
 
       const links = Array.from(allLinks.values());

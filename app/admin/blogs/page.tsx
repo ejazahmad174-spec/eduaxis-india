@@ -6,6 +6,7 @@ import type { ChangeEvent, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import '../admin.css';
+import AdminSidebar from '@/components/admin/AdminSidebar';
 
 type BlogArticle = {
   id: string;
@@ -383,43 +384,7 @@ export default function AdminBlogsPage() {
 
   return (
     <main className="admin-shell">
-      <aside className="admin-sidebar">
-        <a href="/" className="admin-brand">
-          <span className="admin-brand-mark">E</span>
-          <span>
-            EduAxis <b>India</b>
-            <small>ADMINISTRATION</small>
-          </span>
-        </a>
-
-        <div className="admin-side-label">WORKSPACE</div>
-
-        <a className="admin-side-link" href="/admin/dashboard">
-          ▦ &nbsp; Dashboard
-        </a>
-
-        <div className="admin-side-label">CONTENT MANAGEMENT</div>
-
-        <a className="admin-side-link" href="/admin/study-materials">
-          ▤ &nbsp; Study Materials
-        </a>
-
-        <a className="admin-side-link" href="/admin/government-jobs">
-          ▤ &nbsp; Government Jobs
-        </a>
-
-        <a className="admin-side-link" href="/admin/mock-tests">
-          ▤ &nbsp; Mock Tests
-        </a>
-
-        <a className="admin-side-link active" href="/admin/blogs">
-          ▤ &nbsp; Educational Blogs
-        </a>
-
-        <div className="admin-sidebar-bottom">
-          <a href="/">← View public website</a>
-        </div>
-      </aside>
+      <AdminSidebar />
 
       <section className="admin-main">
         <header className="admin-topbar">

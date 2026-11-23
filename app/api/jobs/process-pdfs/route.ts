@@ -246,6 +246,42 @@ export async function GET(request: Request) {
       );
     }
 
+    // A Vercel function is limited to 60 seconds. Five minutes is a
+    // conservative lease timeout for recovering interrupted processing jobs.
+    const staleBefore = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+    // Recover old records with a timestamp, using a conditional UPDATE so
+    // a row that has already changed state is not reset.
+    const { error: staleRecoveryError } = await supabase
+      .from("government_job_discoveries")
+      .update({
+        extraction_status: "pending",
+        processing_started_at: null,
+        extraction_error: "Recovered after an interrupted PDF processing attempt.",
+      })
+      .eq("extraction_status", "processing")
+      .lt("processing_started_at", staleBefore);
+
+    if (staleRecoveryError) {
+      throw new Error(staleRecoveryError.message);
+    }
+
+    // Also recover legacy processing rows created before the timestamp
+    // column was introduced.
+    const { error: legacyRecoveryError } = await supabase
+      .from("government_job_discoveries")
+      .update({
+        extraction_status: "pending",
+        processing_started_at: null,
+        extraction_error: "Recovered legacy processing record without a start timestamp.",
+      })
+      .eq("extraction_status", "processing")
+      .is("processing_started_at", null);
+
+    if (legacyRecoveryError) {
+      throw new Error(legacyRecoveryError.message);
+    }
+
     const { data: pending, error: pendingError } =
       await supabase
         .from("government_job_discoveries")
@@ -284,6 +320,7 @@ export async function GET(request: Request) {
         .from("government_job_discoveries")
         .update({
           extraction_status: "processing",
+          processing_started_at: new Date().toISOString(),
           extraction_error: null,
         })
         .eq("id", discovery.id)
@@ -315,11 +352,13 @@ export async function GET(request: Request) {
         .update({
           pdf_url: pdfUrl,
           extraction_status: needsOcr ? "needs_ocr" : "failed",
+          processing_started_at: null,
           extraction_error:
             pdfResult.error || "PDF reading failed.",
           extracted_at: new Date().toISOString(),
         })
-        .eq("id", discovery.id);
+        .eq("id", discovery.id)
+        .eq("extraction_status", "processing");
 
       if (failureError) {
         throw new Error(failureError.message);
@@ -347,10 +386,12 @@ export async function GET(request: Request) {
           pdf_pages: pdfResult.pages,
         },
         extraction_status: "completed",
+        processing_started_at: null,
         extraction_error: null,
         extracted_at: new Date().toISOString(),
       })
-      .eq("id", discovery.id);
+      .eq("id", discovery.id)
+      .eq("extraction_status", "processing");
 
     if (updateError) {
       throw new Error(updateError.message);
