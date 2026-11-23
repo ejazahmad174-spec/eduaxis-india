@@ -306,12 +306,12 @@ export default function Home() {
             </div>
             <a className="ea-text-link" href="/study-materials">Browse materials →</a>
           </div>
-          <div className="ea-card-grid">
-            {services.slice(0, 3).map((service, index) => (
+          <div className="ea-resource-grid">
+            {services.slice(0, 3).map((service) => (
               <a className="ea-card ea-resource-card" href={service.href} key={service.title}>
                 <div className="ea-resource-card-top">
                   <div className="ea-card-icon">{service.icon}</div>
-                  <span>{String(index + 1).padStart(2, "0")} · LEARNING RESOURCE</span>
+                  <span>LEARNING RESOURCE</span>
                 </div>
                 <h3>{service.title}</h3>
                 <p>{service.description}</p>
@@ -321,7 +321,7 @@ export default function Home() {
             <a className="ea-card ea-resource-card" href="/blogs">
               <div className="ea-resource-card-top">
                 <div className="ea-card-icon">📰</div>
-                <span>04 · KNOWLEDGE & INSIGHTS</span>
+                <span>KNOWLEDGE & INSIGHTS</span>
               </div>
               <h3>Educational Blogs</h3>
               <p>Read educational articles, career guidance and important academic updates.</p>
