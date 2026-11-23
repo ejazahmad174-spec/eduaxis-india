@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import '../admin.css';
+import AdminSidebar from '@/components/admin/AdminSidebar';
 
 type Counts = {
   materials: number;
@@ -141,113 +142,7 @@ export default function AdminDashboardPage() {
   return (
     <main className="admin-shell">
 
-      <aside className="admin-sidebar">
-
-        <a href="/" className="admin-brand">
-          <span className="admin-brand-mark">E</span>
-          <span>
-            EduAxis <b>India</b>
-            <small>ADMINISTRATION</small>
-          </span>
-        </a>
-
-        <div className="admin-side-label">WORKSPACE</div>
-
-        <a
-          className="admin-side-link active"
-          href="/admin/dashboard"
-        >
-          ▦ &nbsp; Dashboard
-        </a>
-
-        <div className="admin-side-label">
-          CONTENT MANAGEMENT
-        </div>
-
-        <a
-          className="admin-side-link"
-          href="/admin/study-materials"
-        >
-          ▤ &nbsp; Study Materials
-        </a>
-
-        
-
-<Link
-  className="admin-side-link"
-  href="/admin/career-updates"
-  style={{
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: '5px',
-  }}
->
-  <span>💼 &nbsp; Jobs & Career Updates</span>
-  <small style={{ marginLeft: '24px' }}>
-    Manage jobs, recruitment & updates →
-  </small>
-</Link>
-
-        <Link
-          className="admin-side-link"
-          href="/admin/courses"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-start',
-            gap: '5px',
-          }}
-        >
-          <span>🎓 &nbsp; Online Courses</span>
-          <small style={{ marginLeft: '24px' }}>
-            Manage courses →
-          </small>
-        </Link>
-
-        <a
-          className="admin-side-link"
-          href="/admin/mock-tests"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-start',
-            gap: '5px',
-          }}
-        >
-          <span>▤ &nbsp; Mock Tests</span>
-          <small style={{ marginLeft: '24px' }}>
-            Manage tests →
-          </small>
-        </a>
-
-
-        <div className="admin-side-label">
-          BLOG MANAGEMENT
-        </div>
-
-        <Link
-          className="admin-side-link"
-          href="/admin/author-management"
-        >
-          ✍️ &nbsp; Author Management
-          <small style={{ marginLeft: '24px' }}>
-            Approvals & articles →
-          </small>
-        </Link>
-
-        <Link
-          className="admin-side-link"
-          href="/admin/blogs"
-        >
-          ▤ &nbsp; Blog Management
-        </Link>
-
-        <div className="admin-sidebar-bottom">
-          <a href="/">← View public website</a>
-        </div>
-
-      </aside>
+      <AdminSidebar />
 
       <section className="admin-main">
 
