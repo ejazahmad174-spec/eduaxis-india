@@ -2019,7 +2019,7 @@
   gap: 18px;
 }
 .ea-mobile-panel .ea-nav-links { flex: 1; min-width: 0; }
-@media(max-width:900px) {
+@media(max-width:1200px) {
   .ea-nav-inner {
     min-height: 72px;
     flex-wrap: wrap;
@@ -2085,4 +2085,63 @@
 }
 @media(prefers-reduced-motion:reduce) {
   .ea-mobile-menu-toggle span { transition: none; }
+}
+
+
+/* Desktop navigation: keep all links and actions on one balanced row */
+@media(min-width:1201px) {
+  .ea-nav-inner {
+    flex-wrap: nowrap;
+    gap: 16px;
+  }
+  .ea-brand {
+    flex: 0 0 auto;
+    font-size: 19px;
+  }
+  .ea-brand small { font-size: 8px; letter-spacing: 1.1px; }
+  .ea-mobile-panel {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0;
+    margin: 0;
+    border: 0;
+  }
+  .ea-mobile-panel .ea-nav-links {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(8px, .8vw, 14px);
+    overflow: visible;
+    padding: 0;
+  }
+  .ea-mobile-panel .ea-nav-links a {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-size: clamp(10px, .72vw, 12px);
+    line-height: 1.3;
+  }
+  .ea-mobile-panel .ea-nav-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 9px;
+  }
+  .ea-mobile-panel .ea-header-social { gap: 5px; }
+  .ea-mobile-panel .ea-header-social a {
+    width: 27px;
+    height: 27px;
+    font-size: 12px;
+  }
+  .ea-mobile-panel .ea-login {
+    padding: 10px 12px;
+    font-size: 11px;
+  }
 }
