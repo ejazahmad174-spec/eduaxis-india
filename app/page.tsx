@@ -257,7 +257,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="ea-section ea-muted-section">
+      <section className="ea-section ea-muted-section ea-featured-courses-section">
         <div className="ea-wrap">
           <div className="ea-section-heading">
             <div>
@@ -267,27 +267,27 @@ export default function Home() {
             </div>
             <a className="ea-text-link" href="/courses">View all courses →</a>
           </div>
-          <div className="ea-card-grid">
+          <div className="ea-featured-courses-grid">
             <a className="ea-card ea-course-card" href="/courses">
-              <div className="ea-course-card-top"><div className="ea-card-icon">📒</div><span>01 · SUBJECT LEARNING</span></div>
+              <div className="ea-course-card-top"><div className="ea-card-icon">📒</div><span>SUBJECT LEARNING</span></div>
               <h3>Commerce Courses</h3>
               <p>Explore Accountancy, Business Studies and Economics learning opportunities.</p>
               <span className="ea-card-link">Explore courses →</span>
             </a>
             <a className="ea-card ea-course-card" href="/courses">
-              <div className="ea-course-card-top"><div className="ea-card-icon">🏫</div><span>02 · SCHOOL LEARNING</span></div>
+              <div className="ea-course-card-top"><div className="ea-card-icon">🏫</div><span>SCHOOL LEARNING</span></div>
               <h3>School Education</h3>
               <p>Discover class-wise academic courses and structured learning resources.</p>
               <span className="ea-card-link">Explore courses →</span>
             </a>
             <a className="ea-card ea-course-card" href="/courses">
-              <div className="ea-course-card-top"><div className="ea-card-icon">🎯</div><span>03 · EXAM PREPARATION</span></div>
+              <div className="ea-course-card-top"><div className="ea-card-icon">🎯</div><span>EXAM PREPARATION</span></div>
               <h3>Competitive Exams</h3>
               <p>Explore preparation programmes for competitive examinations.</p>
               <span className="ea-card-link">Explore courses →</span>
             </a>
             <a className="ea-card ea-course-card" href="/courses">
-              <div className="ea-course-card-top"><div className="ea-card-icon">💡</div><span>04 · CAREER SKILLS</span></div>
+              <div className="ea-course-card-top"><div className="ea-card-icon">💡</div><span>CAREER SKILLS</span></div>
               <h3>Skill Development</h3>
               <p>Discover practical learning and career-oriented skill development.</p>
               <span className="ea-card-link">Explore courses →</span>
