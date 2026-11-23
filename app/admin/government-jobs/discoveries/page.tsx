@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import '../../admin.css';
+import AdminSidebar from '@/components/admin/AdminSidebar';
 
 type NoticeCategory =
   | 'government_job'
@@ -743,54 +744,7 @@ export default function DiscoveredGovernmentJobsPage() {
 
   return (
     <main className="admin-shell">
-      <aside className="admin-sidebar">
-        <a href="/" className="admin-brand">
-          <span className="admin-brand-mark">E</span>
-          <span>
-            EduAxis <b>India</b>
-            <small>ADMINISTRATION</small>
-          </span>
-        </a>
-
-        <div className="admin-side-label">WORKSPACE</div>
-
-        <a className="admin-side-link" href="/admin/dashboard">
-          ▦ &nbsp; Dashboard
-        </a>
-
-        <div className="admin-side-label">
-          CONTENT MANAGEMENT
-        </div>
-
-        <a
-          className="admin-side-link"
-          href="/admin/study-materials"
-        >
-          ▤ &nbsp; Study Materials
-        </a>
-
-        <a
-  className="admin-side-link"
-  href="/admin/career-updates"
->
-  💼 &nbsp; Jobs & Career Updates
-</a>
-
-        <a
-          className="admin-side-link active"
-          href="/admin/government-jobs/discoveries"
-        >
-          ↳ &nbsp; Discovered Jobs
-        </a>
-
-        <a className="admin-side-link" href="/admin/dashboard">
-          ▤ &nbsp; Mock Tests
-        </a>
-
-        <div className="admin-sidebar-bottom">
-          <a href="/">← View public website</a>
-        </div>
-      </aside>
+      <AdminSidebar />
 
       <section className="admin-main">
         <header className="admin-topbar">
