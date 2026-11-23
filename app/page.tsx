@@ -596,14 +596,22 @@ export default function Home() {
             </div>
             <div>
               <h3>Information</h3>
+              <a href="/about">About Us</a>
               <a href="/government-jobs">Government Jobs</a>
               <a href="/blogs">Educational Blogs</a>
+              <a href="/current-affairs">Current Affairs</a>
             </div>
             <div>
               <h3>Student Area</h3>
               <a href="/student/login">Student Login</a>
               <a href="/student/register">Create Account</a>
               <a href="/student/dashboard">My Dashboard</a>
+            </div>
+            <div>
+              <h3>Policies & Support</h3>
+              <a href="/privacy-policy">Privacy Policy</a>
+              <a href="/terms-and-conditions">Terms & Conditions</a>
+              <a href="/contact">Contact Us</a>
             </div>
             <div className="ea-footer-social">
               <h3>Connect With Us</h3>
