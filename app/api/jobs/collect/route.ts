@@ -1,6 +1,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { fetchOfficialUrl } from "@/lib/job-source-fetch";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -172,28 +173,28 @@ function findRecruitmentLinks(
 }
 
 async function fetchPage(url: string): Promise<string> {
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      "User-Agent": "EduAxisIndiaJobCollector/3.0",
-      Accept: "text/html,application/xhtml+xml",
-    },
-    signal: AbortSignal.timeout(15000),
-    redirect: "follow",
-    cache: "no-store",
+  const response = await fetchOfficialUrl(url, {
+    maxBytes: 2_000_000,
+    timeoutMs: 15_000,
+    accept: "text/html,application/xhtml+xml",
+    userAgent: "EduAxisIndiaJobCollector/4.0",
   });
 
-  if (!response.ok) {
+  if (response.status < 200 || response.status >= 300) {
     throw new Error(`Website returned HTTP ${response.status}`);
   }
 
-  const contentType = response.headers.get("content-type") || "";
+  const contentType = response.contentType.toLowerCase();
 
-  if (!contentType.includes("text/html")) {
+  if (
+    !contentType.includes("text/html") &&
+    !contentType.includes("application/xhtml+xml")
+  ) {
     throw new Error("Source did not return an HTML webpage.");
   }
 
-  return (await response.text()).slice(0, 2_000_000);
+  // The shared downloader stops at 2 MB while streaming the response.
+  return response.body.toString("utf8");
 }
 
 function findField(
