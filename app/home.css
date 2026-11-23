@@ -1153,3 +1153,103 @@
 @media(prefers-reduced-motion:reduce) {
   .ea-featured-courses-grid .ea-course-card { transition: none; }
 }
+
+
+/* Explore Learning Resources — match the prominent mock-test banner design */
+.ea-resource-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+  align-items: stretch;
+}
+.ea-resource-grid .ea-resource-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 350px;
+  padding: 30px;
+  border-radius: 22px;
+  border-color: #d7e8eb;
+  background: linear-gradient(125deg, #f5fbfc 0%, #eaf5f7 58%, #e2f2f1 100%);
+  text-decoration: none;
+}
+.ea-resource-grid .ea-resource-card::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  width: 170px;
+  height: 170px;
+  right: -42px;
+  top: -50px;
+  border-radius: 50%;
+  border: 1px solid #129b9826;
+  box-shadow: 0 0 0 18px #129b9808, 0 0 0 38px #129b9806;
+  pointer-events: none;
+}
+.ea-resource-grid .ea-resource-card-top {
+  position: relative;
+  z-index: 1;
+  justify-content: flex-start;
+  min-height: 78px;
+  gap: 14px;
+  margin-bottom: 0;
+}
+.ea-resource-grid .ea-resource-card-top .ea-card-icon {
+  width: 78px;
+  height: 78px;
+  flex: 0 0 78px;
+  border: 1px solid #dce9ec;
+  border-radius: 17px;
+  background: #fff;
+  box-shadow: 0 5px 15px #102b4610;
+  font-size: 31px;
+}
+.ea-resource-grid .ea-resource-card-top > span {
+  max-width: 190px;
+  color: #587183;
+  font-size: 10px;
+  line-height: 1.55;
+  letter-spacing: .5px;
+  text-align: left;
+}
+.ea-resource-grid .ea-resource-card h3 {
+  position: relative;
+  z-index: 1;
+  margin: 22px 0 9px;
+  font: 800 21px/1.3 Manrope, sans-serif;
+}
+.ea-resource-grid .ea-resource-card p {
+  position: relative;
+  z-index: 1;
+  max-width: none;
+  min-height: 78px;
+  margin: 0 0 18px;
+  font-size: 13px;
+  line-height: 1.75;
+}
+.ea-resource-grid .ea-resource-card .ea-card-link {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  margin-top: auto;
+  padding: 0 15px;
+  border-radius: 10px;
+  background: #129b98;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+@media(max-width:1100px) {
+  .ea-resource-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media(max-width:700px) {
+  .ea-resource-grid { grid-template-columns: 1fr; gap: 14px; }
+  .ea-resource-grid .ea-resource-card { min-height: 310px; padding: 22px; }
+  .ea-resource-grid .ea-resource-card-top { min-height: 66px; gap: 12px; }
+  .ea-resource-grid .ea-resource-card-top .ea-card-icon { width: 66px; height: 66px; flex-basis: 66px; }
+  .ea-resource-grid .ea-resource-card h3 { font-size: 19px; margin-top: 18px; }
+  .ea-resource-grid .ea-resource-card p { min-height: auto; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .ea-resource-grid .ea-resource-card { transition: none; }
+}
