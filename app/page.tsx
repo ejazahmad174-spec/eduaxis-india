@@ -249,10 +249,10 @@ export default function Home() {
               </div>
             </div>
             <div className="ea-pyq-list">
-              <div className="ea-pyq-item">📘 Examination-wise questions</div>
-              <div className="ea-pyq-item">📝 Subject-wise practice</div>
-              <div className="ea-pyq-item">📅 Previous exam papers</div>
-              <div className="ea-pyq-item">🎯 Preparation resources</div>
+              <div className="ea-pyq-item"><span className="ea-pyq-number">01</span><span>Examination-wise questions</span></div>
+              <div className="ea-pyq-item"><span className="ea-pyq-number">02</span><span>Subject-wise practice</span></div>
+              <div className="ea-pyq-item"><span className="ea-pyq-number">03</span><span>Previous exam papers</span></div>
+              <div className="ea-pyq-item"><span className="ea-pyq-number">04</span><span>Preparation resources</span></div>
             </div>
           </div>
         </div>
