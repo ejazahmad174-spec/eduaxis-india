@@ -1253,3 +1253,126 @@
 @media(prefers-reduced-motion:reduce) {
   .ea-resource-grid .ea-resource-card { transition: none; }
 }
+
+
+/* Government Jobs & Recruitment Updates — prominent category banners */
+.ea-job-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 25px;
+  align-items: stretch;
+}
+.ea-job-grid .ea-job-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 300px;
+  padding: 26px;
+  border: 1px solid #d7e8eb;
+  border-radius: 22px;
+  background: linear-gradient(125deg, #f5fbfc 0%, #eaf5f7 58%, #e2f2f1 100%);
+  text-decoration: none;
+  transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+}
+.ea-job-grid .ea-job-card::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 170px;
+  height: 170px;
+  right: -42px;
+  top: -50px;
+  border-radius: 50%;
+  border: 1px solid #129b9826;
+  box-shadow: 0 0 0 18px #129b9808, 0 0 0 38px #129b9806;
+}
+.ea-job-grid .ea-job-card:hover {
+  transform: translateY(-4px);
+  border-color: #a8d5d1;
+  box-shadow: 0 16px 34px #102b4614;
+}
+.ea-job-card-top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-height: 66px;
+  margin-bottom: 16px;
+}
+.ea-job-card-top .ea-card-icon {
+  display: grid;
+  place-items: center;
+  width: 66px;
+  height: 66px;
+  flex: 0 0 66px;
+  border: 1px solid #dce9ec;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 5px 15px #102b4610;
+  font-size: 27px;
+}
+.ea-job-card-top > span {
+  max-width: 150px;
+  color: #587183;
+  font-size: 9px;
+  line-height: 1.5;
+  font-weight: 800;
+  letter-spacing: .65px;
+}
+.ea-job-grid .ea-job-card b {
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin: 5px 0 8px;
+  color: #102b46;
+  font: 800 20px/1.3 Manrope, sans-serif;
+}
+.ea-job-grid .ea-job-card small {
+  position: relative;
+  z-index: 1;
+  min-height: 48px;
+  color: var(--ea-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.ea-job-card-link {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  margin-top: auto;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: #129b98;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+.ea-jobs-banner {
+  margin-top: 24px;
+  padding: 24px 28px;
+  border-radius: 18px;
+  background: #e9f6f8;
+  border: 1px solid #cde7e9;
+}
+@media(max-width:1100px) {
+  .ea-job-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media(max-width:700px) {
+  .ea-job-grid { grid-template-columns: 1fr; gap: 14px; }
+  .ea-job-grid .ea-job-card { min-height: 270px; padding: 22px; }
+  .ea-job-card-top { min-height: 58px; }
+  .ea-job-card-top .ea-card-icon { width: 58px; height: 58px; flex-basis: 58px; }
+  .ea-job-grid .ea-job-card b { font-size: 19px; }
+  .ea-job-grid .ea-job-card small { min-height: auto; margin-bottom: 20px; }
+  .ea-jobs-banner { padding: 20px; flex-direction: column; align-items: flex-start; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .ea-job-grid .ea-job-card { transition: none; }
+}
