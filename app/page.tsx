@@ -400,25 +400,25 @@ export default function Home() {
           </div>
           <div className="ea-social-grid">
             <a className="ea-social-card ea-social-whatsapp" href="https://whatsapp.com/channel/0029Vb9hfdC9Gv7TbpnRxM3g" target="_blank" rel="noopener noreferrer">
-              <span className="ea-social-icon">W</span>
+              <div className="ea-social-card-top"><span className="ea-social-icon">W</span><span className="ea-social-kicker">SOCIAL COMMUNITY</span></div>
               <h3>WhatsApp Channel</h3>
               <p>Daily updates and important announcements</p>
               <span className="ea-social-link">Follow Channel →</span>
             </a>
             <a className="ea-social-card ea-social-telegram" href="https://t.me/eduaxisindia" target="_blank" rel="noopener noreferrer">
-              <span className="ea-social-icon">➤</span>
+              <div className="ea-social-card-top"><span className="ea-social-icon">➤</span><span className="ea-social-kicker">SOCIAL COMMUNITY</span></div>
               <h3>Telegram</h3>
               <p>Education, examination and career updates</p>
               <span className="ea-social-link">Join Channel →</span>
             </a>
             <a className="ea-social-card ea-social-instagram" href="https://www.instagram.com/eduaxisindiateam/" target="_blank" rel="noopener noreferrer">
-              <span className="ea-social-icon">◎</span>
+              <div className="ea-social-card-top"><span className="ea-social-icon">◎</span><span className="ea-social-kicker">SOCIAL COMMUNITY</span></div>
               <h3>Instagram</h3>
               <p>Reels, learning content and visual updates</p>
               <span className="ea-social-link">Follow Us →</span>
             </a>
             <a className="ea-social-card ea-social-facebook" href="https://www.facebook.com/eduaxisindia/" target="_blank" rel="noopener noreferrer">
-              <span className="ea-social-icon">f</span>
+              <div className="ea-social-card-top"><span className="ea-social-icon">f</span><span className="ea-social-kicker">SOCIAL COMMUNITY</span></div>
               <h3>Facebook</h3>
               <p>Community updates and announcements</p>
               <span className="ea-social-link">Visit Page →</span>
