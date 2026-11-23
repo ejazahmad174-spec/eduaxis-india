@@ -31,7 +31,7 @@ const examCategories = [
     name: "SSC",
     detail: "Staff selection examinations",
     authority: "Staff Selection Commission",
-    logo: "https://commons.wikimedia.org/wiki/Special:FilePath/Staff_Selection_Commission_Official_Emblem.png",
+    logo: "https://commons.wikimedia.org/wiki/Special:FilePath/Staff_Selection_Commission_Logo.jpg",
   },
   {
     name: "UPSC",
