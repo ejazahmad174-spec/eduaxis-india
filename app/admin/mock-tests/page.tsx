@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
+import AdminSidebar from '@/components/admin/AdminSidebar';
 
 type Test = {
   id: string;
@@ -517,7 +518,10 @@ export default function AdminMockTests() {
   const selectedTest = tests.find((t) => t.id === selected);
 
   return (
-    <main style={{ maxWidth: 1100, margin: "auto", padding: 24, color: "#172033" }}>
+    <div className="admin-shell">
+      <AdminSidebar />
+      <section className="admin-main">
+        <main style={{ maxWidth: 1100, margin: "auto", padding: 24, color: "#172033" }}>
       <style jsx>{`
         .card {
           background: white;
@@ -828,5 +832,7 @@ export default function AdminMockTests() {
         {selected && questions.length === 0 && <p>No questions uploaded yet.</p>}
       </section>
     </main>
+      </section>
+    </div>
   );
 }
