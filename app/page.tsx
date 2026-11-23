@@ -133,7 +133,15 @@ export default function Home() {
   <a href="/career-updates">Government Jobs & Updates</a>
   <a href="/blogs">Blogs</a>
 </nav>
-          <a className="ea-login" href="/student/login">Student Login</a>
+          <div className="ea-nav-actions">
+            <div className="ea-header-social" aria-label="Connect with EduAxis India">
+              <a href="https://whatsapp.com/channel/0029Vb9hfdC9Gv7TbpnRxM3g" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India WhatsApp Channel">W</a>
+              <a href="https://www.instagram.com/eduaxisindiateam/" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India Instagram">◎</a>
+              <a href="https://www.facebook.com/eduaxisindia/" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India Facebook">f</a>
+              <a href="https://t.me/eduaxisindia" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India Telegram">➤</a>
+            </div>
+            <a className="ea-login" href="/student/login">Student Login</a>
+          </div>
         </div>
       </header>
 
@@ -381,6 +389,44 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="ea-section ea-social-section" id="community">
+        <div className="ea-wrap">
+          <div className="ea-section-heading">
+            <div>
+              <div className="ea-eyebrow">Stay connected · Learn together</div>
+              <h2>Connect with Our Social Media Community</h2>
+              <p className="ea-section-intro">Follow EduAxis India for daily updates, learning content, community news and important announcements.</p>
+            </div>
+          </div>
+          <div className="ea-social-grid">
+            <a className="ea-social-card ea-social-whatsapp" href="https://whatsapp.com/channel/0029Vb9hfdC9Gv7TbpnRxM3g" target="_blank" rel="noopener noreferrer">
+              <span className="ea-social-icon">W</span>
+              <h3>WhatsApp Channel</h3>
+              <p>Daily updates and important announcements</p>
+              <span className="ea-social-link">Follow Channel →</span>
+            </a>
+            <a className="ea-social-card ea-social-telegram" href="https://t.me/eduaxisindia" target="_blank" rel="noopener noreferrer">
+              <span className="ea-social-icon">➤</span>
+              <h3>Telegram</h3>
+              <p>Education, examination and career updates</p>
+              <span className="ea-social-link">Join Channel →</span>
+            </a>
+            <a className="ea-social-card ea-social-instagram" href="https://www.instagram.com/eduaxisindiateam/" target="_blank" rel="noopener noreferrer">
+              <span className="ea-social-icon">◎</span>
+              <h3>Instagram</h3>
+              <p>Reels, learning content and visual updates</p>
+              <span className="ea-social-link">Follow Us →</span>
+            </a>
+            <a className="ea-social-card ea-social-facebook" href="https://www.facebook.com/eduaxisindia/" target="_blank" rel="noopener noreferrer">
+              <span className="ea-social-icon">f</span>
+              <h3>Facebook</h3>
+              <p>Community updates and announcements</p>
+              <span className="ea-social-link">Visit Page →</span>
+            </a>
+          </div>
+        </div>
+      </section>
+
       <section className="ea-contact-section" id="contact">
         <div className="ea-wrap ea-contact-grid">
           <div className="ea-contact-copy">
@@ -536,6 +582,13 @@ export default function Home() {
               <a href="/student/login">Student Login</a>
               <a href="/student/register">Create Account</a>
               <a href="/student/dashboard">My Dashboard</a>
+            </div>
+            <div className="ea-footer-social">
+              <h3>Connect With Us</h3>
+              <a href="https://whatsapp.com/channel/0029Vb9hfdC9Gv7TbpnRxM3g" target="_blank" rel="noopener noreferrer">WhatsApp Channel</a>
+              <a href="https://t.me/eduaxisindia" target="_blank" rel="noopener noreferrer">Telegram</a>
+              <a href="https://www.instagram.com/eduaxisindiateam/" target="_blank" rel="noopener noreferrer">Instagram</a>
+              <a href="https://www.facebook.com/eduaxisindia/" target="_blank" rel="noopener noreferrer">Facebook</a>
             </div>
           </div>
           <div className="ea-footer-bottom">
