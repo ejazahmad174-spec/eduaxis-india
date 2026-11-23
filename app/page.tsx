@@ -3,12 +3,42 @@
 import './home.css';
 import { useState } from "react";
 const examCategories = [
-  { name: "BPSC TRE", detail: "Bihar teacher recruitment", icon: "🎓" },
-  { name: "CTET", detail: "Central teacher eligibility", icon: "📚" },
-  { name: "Bihar STET", detail: "State teacher eligibility", icon: "✍️" },
-  { name: "UGC NET", detail: "Assistant professor & JRF", icon: "🏛️" },
-  { name: "SSC", detail: "Staff selection examinations", icon: "📝" },
-  { name: "UPSC", detail: "Civil services preparation", icon: "🇮🇳" },
+  {
+    name: "BPSC TRE",
+    detail: "Bihar teacher recruitment",
+    authority: "Bihar Public Service Commission",
+    logo: "https://www.jobyaari.com/public/notification/organisation_logo/Bihar%20Public%20Service%20Commission%20%28BPSC%29.png",
+  },
+  {
+    name: "CTET",
+    detail: "Central teacher eligibility",
+    authority: "Central Board of Secondary Education",
+    logo: "https://akm-img-a-in.tosshub.com/indiatoday/images/story/201501/cbse-logo_650_010915114139.jpg?VersionId=iqYgwltD4gqPhE13hiEs8ijCpp1FtjgU&size=690%3A388",
+  },
+  {
+    name: "Bihar STET",
+    detail: "State teacher eligibility",
+    authority: "Bihar School Examination Board",
+    logo: "https://img.collegedunia.com/public/college_data/images/logos/BSEB_LOGO.png",
+  },
+  {
+    name: "UGC NET",
+    detail: "Assistant professor & JRF",
+    authority: "University Grants Commission · NTA",
+    logo: "https://img.mathrubhumi.com/view/acePublic/alias/contentid/1r4mbzqrx4pwya9tdl5/1/nta-logo.jpeg?f=16%3A9&q=0.75&w=1200",
+  },
+  {
+    name: "SSC",
+    detail: "Staff selection examinations",
+    authority: "Staff Selection Commission",
+    logo: "https://commons.wikimedia.org/wiki/Special:FilePath/Staff_Selection_Commission_Official_Emblem.png",
+  },
+  {
+    name: "UPSC",
+    detail: "Civil services preparation",
+    authority: "Union Public Service Commission",
+    logo: "https://commons.wikimedia.org/wiki/Special:FilePath/Union_Public_Service_Commission_Logo.png",
+  },
 ];
 
 const mockTests = [
@@ -165,7 +195,9 @@ export default function Home() {
           <div className="ea-category-grid">
             {examCategories.map((exam) => (
               <a className="ea-category" href="/mock-tests" key={exam.name}>
-                <div className="ea-category-icon">{exam.icon}</div>
+                <div className="ea-category-logo">
+                  <img src={exam.logo} alt={`${exam.authority} emblem`} loading="lazy" />
+                </div>
                 <b>{exam.name}</b>
                 <small>{exam.detail}</small>
               </a>
