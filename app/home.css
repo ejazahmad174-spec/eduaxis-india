@@ -2170,3 +2170,74 @@
     font-size: 12px;
   }
 }
+
+
+/* Header brand masthead styled like the homepage aqua feature cards */
+@media(min-width:1201px) {
+  .ea-nav-inner > .ea-brand {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    flex: 0 0 100%;
+    min-height: 104px;
+    margin: 8px 0 0;
+    padding: 18px 26px;
+    gap: 18px;
+    border: 1px solid #d7e8eb;
+    border-radius: 20px;
+    background: linear-gradient(125deg, #f5fbfc 0%, #eaf5f7 58%, #e2f2f1 100%);
+    font-size: 32px;
+    line-height: 1.15;
+  }
+  .ea-nav-inner > .ea-brand::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    width: 190px;
+    height: 190px;
+    right: 7%;
+    top: -112px;
+    border: 1px solid #129b9826;
+    border-radius: 50%;
+    box-shadow: 0 0 0 18px #129b9808, 0 0 0 38px #129b9806;
+    pointer-events: none;
+  }
+  .ea-nav-inner > .ea-brand .ea-brand-mark {
+    width: 68px;
+    height: 68px;
+    flex: 0 0 68px;
+    border-radius: 18px;
+    font-size: 36px;
+    box-shadow: 0 7px 18px #102b4612;
+  }
+  .ea-nav-inner > .ea-brand small {
+    margin-top: 7px;
+    font-size: 11px;
+    letter-spacing: 2px;
+  }
+  .ea-mobile-panel {
+    padding: 16px 8px 18px;
+    gap: 20px;
+  }
+  .ea-mobile-panel .ea-nav-links {
+    justify-content: space-between;
+    gap: clamp(12px, 1.2vw, 22px);
+  }
+  .ea-mobile-panel .ea-nav-links a {
+    font-size: clamp(14px, .92vw, 16px);
+    font-weight: 700;
+    letter-spacing: -.1px;
+  }
+  .ea-mobile-panel .ea-nav-actions { gap: 12px; }
+  .ea-mobile-panel .ea-header-social { gap: 7px; }
+  .ea-mobile-panel .ea-header-social a {
+    width: 33px;
+    height: 33px;
+    font-size: 14px;
+  }
+  .ea-mobile-panel .ea-login {
+    padding: 12px 17px;
+    font-size: 13px;
+    font-weight: 800;
+  }
+}
