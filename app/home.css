@@ -731,3 +731,83 @@
 }
 .ea-category b { margin: 10px 0 5px; }
 .ea-category small { line-height: 1.5; }
+
+
+/* Previous Year Questions — premium feature panel, preserving EduAxis colours */
+.ea-pyq-panel {
+  position: relative;
+  overflow: hidden;
+  padding: 34px;
+  border: 1px solid #dce9ed;
+  border-radius: 20px;
+  background: linear-gradient(115deg, #ffffff 0%, #f8fbfc 100%);
+  box-shadow: 0 12px 32px #102b4609;
+}
+.ea-pyq-panel::after {
+  content: "PYQ";
+  position: absolute;
+  right: 34%;
+  top: -25px;
+  color: #102b4606;
+  font: 800 116px/1 Manrope, sans-serif;
+  letter-spacing: -8px;
+  pointer-events: none;
+}
+.ea-pyq-panel > div:first-child { position: relative; z-index: 1; }
+.ea-pyq-panel h2 {
+  color: var(--ea-navy);
+  font: 800 clamp(25px, 2.8vw, 34px)/1.2 Manrope, sans-serif;
+  letter-spacing: -1px;
+  margin: 10px 0 12px;
+}
+.ea-pyq-panel .ea-section-intro {
+  max-width: 510px;
+  line-height: 1.75;
+}
+.ea-pyq-list {
+  position: relative;
+  z-index: 1;
+  gap: 12px;
+}
+.ea-pyq-item {
+  min-height: 78px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid #e1ecef;
+  border-radius: 13px;
+  background: #fff;
+  color: var(--ea-navy);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+  box-shadow: 0 5px 14px #102b4607;
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.ea-pyq-item:hover {
+  transform: translateY(-3px);
+  border-color: #b8ddda;
+  box-shadow: 0 10px 22px #102b4610;
+}
+.ea-pyq-number {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: #eaf5f5;
+  color: var(--ea-teal);
+  font: 800 11px Manrope, sans-serif;
+}
+@media(max-width:700px) {
+  .ea-pyq-panel { padding: 22px; }
+  .ea-pyq-panel::after { right: 8px; top: 8px; font-size: 76px; }
+  .ea-pyq-list { gap: 9px; }
+  .ea-pyq-item { min-height: 72px; padding: 11px; gap: 9px; font-size: 10px; }
+  .ea-pyq-number { width: 30px; height: 30px; flex-basis: 30px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .ea-pyq-item { transition: none; }
+}
