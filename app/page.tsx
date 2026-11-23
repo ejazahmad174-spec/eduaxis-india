@@ -12,10 +12,30 @@ const examCategories = [
 ];
 
 const mockTests = [
-  { name: "BPSC TRE", detail: "Teacher recruitment examination", icon: "🎓" },
-  { name: "CTET", detail: "Paper I and Paper II preparation", icon: "📘" },
-  { name: "UGC NET", detail: "Paper I and subject preparation", icon: "🏛️" },
-  { name: "Bihar SLET", detail: "Library Science and General Studies", icon: "📖" },
+  {
+    name: "BPSC TRE",
+    detail: "Teacher recruitment examination",
+    authority: "Bihar Public Service Commission",
+    logo: "https://www.jobyaari.com/public/notification/organisation_logo/Bihar%20Public%20Service%20Commission%20%28BPSC%29.png",
+  },
+  {
+    name: "CTET",
+    detail: "Paper I and Paper II preparation",
+    authority: "Central Board of Secondary Education",
+    logo: "https://akm-img-a-in.tosshub.com/indiatoday/images/story/201501/cbse-logo_650_010915114139.jpg?VersionId=iqYgwltD4gqPhE13hiEs8ijCpp1FtjgU&size=690%3A388",
+  },
+  {
+    name: "UGC NET",
+    detail: "Paper I and subject preparation",
+    authority: "University Grants Commission · NTA",
+    logo: "https://img.mathrubhumi.com/view/acePublic/alias/contentid/1r4mbzqrx4pwya9tdl5/1/nta-logo.jpeg?f=16%3A9&q=0.75&w=1200",
+  },
+  {
+    name: "Bihar SLET",
+    detail: "School Librarian Eligibility Test",
+    authority: "Bihar School Examination Board, Patna",
+    logo: "https://img.collegedunia.com/public/college_data/images/logos/BSEB_LOGO.png",
+  },
 ];
 
 const services = [
@@ -167,7 +187,12 @@ export default function Home() {
           <div className="ea-card-grid">
             {mockTests.map((test) => (
               <a className="ea-card ea-test-series-card" href="/mock-tests" key={test.name}>
-                <div className="ea-card-icon">{test.icon}</div>
+                <div className="ea-test-series-identity">
+                  <div className="ea-test-series-logo">
+                    <img src={test.logo} alt={`${test.authority} emblem`} loading="lazy" />
+                  </div>
+                  <span className="ea-test-series-authority">{test.authority}</span>
+                </div>
                 <h3>{test.name} Mock Tests</h3>
                 <p>{test.detail}. Explore available practice and test-series options.</p>
                 <span className="ea-card-link">Explore test series →</span>
