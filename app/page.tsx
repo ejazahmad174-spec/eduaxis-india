@@ -348,9 +348,13 @@ export default function Home() {
           <div className="ea-job-grid">
             {jobCategories.map((category) => (
               <a className="ea-job-card" href="/government-jobs" key={category.name}>
-                <div className="ea-card-icon">{category.icon}</div>
+                <div className="ea-job-card-top">
+                  <div className="ea-card-icon">{category.icon}</div>
+                  <span>GOVERNMENT UPDATES</span>
+                </div>
                 <b>{category.name}</b>
                 <small>{category.detail}</small>
+                <span className="ea-job-card-link">Explore updates →</span>
               </a>
             ))}
           </div>
