@@ -107,23 +107,51 @@ export default function Home() {
               <span>✓ Academic and career updates</span>
             </div>
           </div>
-          <div className="ea-hero-art">
+          <div className="ea-hero-art ea-hero-showcase">
             <div className="ea-art-head">
-              <strong>EduAxis Learning Hub</strong>
+              <div>
+                <span className="ea-showcase-kicker">WELCOME TO EDUAXIS INDIA</span>
+                <strong>One platform. Many possibilities.</strong>
+              </div>
               <span className="ea-art-label">LEARN · PREPARE · PROGRESS</span>
             </div>
-            <div className="ea-art-center">
-              <strong>E</strong>
-              <span className="ea-art-icon one">📚</span>
-              <span className="ea-art-icon two">🎯</span>
-              <span className="ea-art-icon three">🎓</span>
-              <span className="ea-art-icon four">📈</span>
+            <p className="ea-showcase-copy">Choose where you want to begin. Explore learning, practise for exams and stay connected with opportunities.</p>
+            <div className="ea-showcase-grid">
+              <a className="ea-showcase-item" href="/courses">
+                <span className="ea-showcase-icon">🎓</span>
+                <span><b>Online Courses</b><small>Structured learning</small></span>
+                <span className="ea-showcase-arrow">↗</span>
+              </a>
+              <a className="ea-showcase-item" href="/mock-tests">
+                <span className="ea-showcase-icon">📝</span>
+                <span><b>Mock Tests</b><small>Practise & evaluate</small></span>
+                <span className="ea-showcase-arrow">↗</span>
+              </a>
+              <a className="ea-showcase-item" href="/government-jobs">
+                <span className="ea-showcase-icon">💼</span>
+                <span><b>Jobs & Updates</b><small>Career opportunities</small></span>
+                <span className="ea-showcase-arrow">↗</span>
+              </a>
+              <a className="ea-showcase-item" href="/blogs">
+                <span className="ea-showcase-icon">📚</span>
+                <span><b>Educational Blogs</b><small>Ideas & guidance</small></span>
+                <span className="ea-showcase-arrow">↗</span>
+              </a>
             </div>
-            <div className="ea-art-bottom">
-              <b>One platform. Many possibilities.</b>
-              <p>Build knowledge, practise with purpose and stay informed about opportunities.</p>
-            </div>
+            <div className="ea-showcase-foot"><span className="ea-showcase-pulse"></span> Explore at your own pace · Open learning resources</div>
           </div>
+        </div>
+      </section>
+
+      <section className="ea-current-affairs">
+        <div className="ea-wrap ea-current-affairs-inner">
+          <div className="ea-current-affairs-icon">📰</div>
+          <div className="ea-current-affairs-copy">
+            <span className="ea-eyebrow">Stay informed · Learn every day</span>
+            <h2>Daily Current Affairs & Learning Updates</h2>
+            <p>Explore educational insights, exam-related explainers and important updates through our open-access articles.</p>
+          </div>
+          <a className="ea-button ea-current-affairs-link" href="/blogs">Explore Latest Articles →</a>
         </div>
       </section>
 
