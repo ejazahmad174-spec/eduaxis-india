@@ -545,6 +545,37 @@ export async function GET(request: Request) {
         throw new Error("All configured pages failed to load.");
       }
 
+      // Many official portals list a notice detail page first and place the
+      // actual PDF attachment on that page. Inspect a small, bounded number
+      // of same-source detail pages to discover those PDF links.
+      const detailPages = Array.from(allLinks.values())
+        .filter((link) => !isPdfUrl(link.url))
+        .slice(0, 10);
+
+      for (const detailPage of detailPages) {
+        try {
+          const detailHtml = await fetchPage(detailPage.url);
+          const attachmentLinks = findRecruitmentLinks(
+            detailHtml,
+            detailPage.url
+          );
+
+          for (const attachment of attachmentLinks) {
+            if (isPdfUrl(attachment.url) && !allLinks.has(attachment.url)) {
+              allLinks.set(attachment.url, attachment);
+            }
+          }
+        } catch (detailError) {
+          // A detail page may be unavailable or may not contain a PDF.
+          // Keep the original notice link; do not fail the whole source scan.
+          console.warn(
+            "Could not inspect notice detail page:",
+            detailPage.url,
+            detailError
+          );
+        }
+      }
+
       const links = Array.from(allLinks.values());
 
       if (links.length > 0) {
