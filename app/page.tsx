@@ -166,7 +166,7 @@ export default function Home() {
           </div>
           <div className="ea-card-grid">
             {mockTests.map((test) => (
-              <a className="ea-card" href="/mock-tests" key={test.name}>
+              <a className="ea-card ea-test-series-card" href="/mock-tests" key={test.name}>
                 <div className="ea-card-icon">{test.icon}</div>
                 <h3>{test.name} Mock Tests</h3>
                 <p>{test.detail}. Explore available practice and test-series options.</p>
