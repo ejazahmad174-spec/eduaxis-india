@@ -1,5 +1,5 @@
 import Link from "next/link";
-import "./public-info.css";
+import "../app/public-info.css";
 
 type PublicInfoPageProps = {
   eyebrow: string;
