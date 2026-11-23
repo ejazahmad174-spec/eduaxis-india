@@ -352,6 +352,21 @@ export default function GovernmentJobsPage() {
         <div className="admin-side-label">CONTENT MANAGEMENT</div>
         <a className="admin-side-link" href="/admin/study-materials">▤ &nbsp; Study Materials</a>
         <a className="admin-side-link active" href="/admin/government-jobs">▤ &nbsp; Government Jobs</a>
+        <a
+          className="admin-side-link"
+          href="/admin/career-updates"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            gap: '5px',
+          }}
+        >
+          <span>💼 &nbsp; Career Updates</span>
+          <small style={{ marginLeft: '24px' }}>
+            Manage admissions & updates →
+          </small>
+        </a>
         <a className="admin-side-link" href="/admin/government-jobs/discoveries">↳ &nbsp; Discovered Jobs</a>
         <a className="admin-side-link" href="/admin/dashboard">▤ &nbsp; Online Courses</a>
         <a className="admin-side-link" href="/admin/dashboard">▤ &nbsp; Mock Tests</a>
