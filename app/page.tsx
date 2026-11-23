@@ -107,6 +107,7 @@ const jobCategories = [
 ];
 
 export default function Home() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [feedbackStatus, setFeedbackStatus] = useState("");
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
 
@@ -126,21 +127,35 @@ export default function Home() {
             <span className="ea-brand-mark">E</span>
             <span>EduAxis India<small>LEARN. PREPARE. PROGRESS.</small></span>
           </a>
-          <nav className="ea-nav-links" aria-label="Main navigation">
-  <a href="/courses">Courses</a>
-  <a href="/mock-tests">Mock Tests</a>
-  <a href="/study-materials">Study Materials</a>
-  <a href="/career-updates">Government Jobs & Updates</a>
-  <a href="/blogs">Blogs</a>
-</nav>
-          <div className="ea-nav-actions">
-            <div className="ea-header-social" aria-label="Connect with EduAxis India">
-              <a href="https://whatsapp.com/channel/0029Vb9hfdC9Gv7TbpnRxM3g" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India WhatsApp Channel">W</a>
-              <a href="https://www.instagram.com/eduaxisindiateam/" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India Instagram">◎</a>
-              <a href="https://www.facebook.com/eduaxisindia/" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India Facebook">f</a>
-              <a href="https://t.me/eduaxisindia" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India Telegram">➤</a>
+          <button
+            type="button"
+            className="ea-mobile-menu-toggle"
+            aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="ea-mobile-navigation"
+            onClick={() => setMobileMenuOpen((open) => !open)}
+          >
+            <span></span><span></span><span></span>
+          </button>
+          <div id="ea-mobile-navigation" className={`ea-mobile-panel ${mobileMenuOpen ? "is-open" : ""}`}>
+            <nav className="ea-nav-links" aria-label="Main navigation">
+              <a href="/" onClick={() => setMobileMenuOpen(false)}>Home</a>
+              <a href="/courses" onClick={() => setMobileMenuOpen(false)}>Courses</a>
+              <a href="/mock-tests" onClick={() => setMobileMenuOpen(false)}>Mock Tests</a>
+              <a href="/study-materials" onClick={() => setMobileMenuOpen(false)}>Study Materials</a>
+              <a href="/career-updates" onClick={() => setMobileMenuOpen(false)}>Government Jobs & Updates</a>
+              <a href="/blogs" onClick={() => setMobileMenuOpen(false)}>Blogs</a>
+              <a href="/current-affairs" onClick={() => setMobileMenuOpen(false)}>Current Affairs</a>
+            </nav>
+            <div className="ea-nav-actions">
+              <div className="ea-header-social" aria-label="Connect with EduAxis India">
+                <a href="https://whatsapp.com/channel/0029Vb9hfdC9Gv7TbpnRxM3g" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India WhatsApp Channel">W</a>
+                <a href="https://www.instagram.com/eduaxisindiateam/" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India Instagram">◎</a>
+                <a href="https://www.facebook.com/eduaxisindia/" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India Facebook">f</a>
+                <a href="https://t.me/eduaxisindia" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India Telegram">➤</a>
+              </div>
+              <a className="ea-login" href="/student/login" onClick={() => setMobileMenuOpen(false)}>Student Login</a>
             </div>
-            <a className="ea-login" href="/student/login">Student Login</a>
           </div>
         </div>
       </header>
