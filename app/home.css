@@ -1596,3 +1596,160 @@
 @media(prefers-reduced-motion:reduce) {
   .ea-social-grid .ea-social-card { transition: none; }
 }
+
+
+/* Contact Us — refreshed to match the homepage aqua banner-card system */
+.ea-contact-section {
+  position: relative;
+  overflow: hidden;
+  padding: 76px 0;
+  background: linear-gradient(180deg, #f4f8fa 0%, #edf6f7 100%);
+}
+.ea-contact-grid {
+  display: grid;
+  grid-template-columns: .9fr 1.1fr;
+  gap: 24px;
+  align-items: stretch;
+}
+.ea-contact-copy {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100%;
+  padding: 34px;
+  border: 1px solid #d7e8eb;
+  border-radius: 22px;
+  background: linear-gradient(125deg, #f5fbfc 0%, #eaf5f7 58%, #e2f2f1 100%);
+}
+.ea-contact-copy::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 220px;
+  height: 220px;
+  right: -70px;
+  top: -70px;
+  border-radius: 50%;
+  border: 1px solid #129b9826;
+  box-shadow: 0 0 0 20px #129b9808, 0 0 0 42px #129b9806;
+  pointer-events: none;
+}
+.ea-contact-copy h2 {
+  color: var(--ea-navy);
+  font: 800 clamp(28px, 3vw, 36px)/1.2 Manrope, sans-serif;
+  letter-spacing: -1px;
+  margin: 14px 0;
+}
+.ea-contact-copy > p {
+  max-width: 470px;
+  color: var(--ea-muted);
+  font-size: 14px;
+  line-height: 1.8;
+}
+.ea-contact-email {
+  margin-top: 28px;
+  padding: 20px;
+  border: 1px solid #d7e8eb;
+  border-radius: 15px;
+  background: #fff;
+  box-shadow: 0 8px 22px #102b4608;
+}
+.ea-contact-email span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--ea-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+.ea-contact-email a {
+  color: var(--ea-teal);
+  font-size: 15px;
+  font-weight: 800;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.ea-feedback-form {
+  position: relative;
+  overflow: hidden;
+  padding: 32px;
+  border: 1px solid #d7e8eb;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 15px 38px #183f550b;
+}
+.ea-feedback-form::before {
+  content: "CONTACT";
+  position: absolute;
+  right: 20px;
+  top: 15px;
+  color: #102b4608;
+  font: 800 55px/1 Manrope, sans-serif;
+  letter-spacing: -3px;
+  pointer-events: none;
+}
+.ea-feedback-form h3 {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 22px;
+  color: var(--ea-navy);
+  font: 800 22px/1.3 Manrope, sans-serif;
+}
+.ea-feedback-field { gap: 8px; margin-bottom: 17px; }
+.ea-feedback-field label {
+  color: #344b60;
+  font-size: 12px;
+  font-weight: 800;
+}
+.ea-feedback-field input,
+.ea-feedback-field select,
+.ea-feedback-field textarea {
+  padding: 13px 14px;
+  border: 1px solid #d8e5e9;
+  border-radius: 10px;
+  background: #f8fbfc;
+  color: var(--ea-ink);
+  font: 13px "DM Sans", sans-serif;
+  outline: none;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.ea-feedback-field input:focus,
+.ea-feedback-field select:focus,
+.ea-feedback-field textarea:focus {
+  border-color: var(--ea-teal);
+  background: #fff;
+  box-shadow: 0 0 0 3px #129b9818;
+}
+.ea-feedback-field textarea { min-height: 135px; }
+.ea-feedback-submit {
+  min-height: 44px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 10px;
+  background: #129b98;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background .18s ease, transform .18s ease;
+}
+.ea-feedback-submit:hover:not(:disabled) { background: #087d7a; transform: translateY(-2px); }
+.ea-feedback-submit:disabled { opacity: .65; cursor: wait; }
+@media(max-width:950px) {
+  .ea-contact-grid { grid-template-columns: 1fr; }
+  .ea-contact-copy { min-height: 300px; }
+}
+@media(max-width:700px) {
+  .ea-contact-section { padding: 48px 0; }
+  .ea-contact-copy, .ea-feedback-form { padding: 23px; border-radius: 19px; }
+  .ea-contact-copy { min-height: 260px; }
+  .ea-feedback-form::before { font-size: 38px; }
+  .ea-feedback-row { grid-template-columns: 1fr; gap: 0; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .ea-feedback-field input, .ea-feedback-field select, .ea-feedback-field textarea, .ea-feedback-submit { transition: none; }
+}
