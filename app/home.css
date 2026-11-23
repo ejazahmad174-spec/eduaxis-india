@@ -124,7 +124,7 @@
         .ea-art-bottom p { color: var(--ea-muted); font-size: 12px; line-height: 1.6; }
         .ea-section { padding: 68px 0; }
         .ea-section-heading {
-          display: flex; align-items: end; justify-content: space-between;
+          display: flex; align-items: flex-end; justify-content: space-between;
           gap: 20px; margin-bottom: 27px;
         }
         .ea-section h2 {
