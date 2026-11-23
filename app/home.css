@@ -504,3 +504,84 @@
   .ea-current-affairs-copy h2 { font-size: 18px; }
   .ea-current-affairs-link { margin-left: 73px; }
 }
+
+/* Daily Current Affairs now occupies the former Learning Hub hero panel */
+.ea-current-affairs-board {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.ea-current-affairs-board:hover {
+  border-color: #b8ddda;
+  box-shadow: 0 24px 62px #183f551c;
+  transform: translateY(-2px);
+}
+.ea-affairs-date {
+  color: var(--ea-muted);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 18px 0 14px;
+}
+.ea-affairs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.ea-affairs-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 112px;
+  padding: 14px;
+  border-radius: 13px;
+  background: #e5f4f3;
+}
+.ea-affairs-tile > span {
+  color: var(--ea-teal);
+  font-size: 21px;
+  line-height: 1;
+  font-weight: 700;
+}
+.ea-affairs-tile b {
+  color: var(--ea-navy);
+  font: 800 13px Manrope, sans-serif;
+  margin-top: 3px;
+}
+.ea-affairs-tile small {
+  color: var(--ea-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.ea-affairs-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--ea-line);
+  margin-top: 17px;
+  padding-top: 15px;
+}
+.ea-affairs-bottom b, .ea-affairs-bottom small { display: block; }
+.ea-affairs-bottom b {
+  color: var(--ea-navy);
+  font: 800 14px Manrope, sans-serif;
+}
+.ea-affairs-bottom small {
+  color: var(--ea-muted);
+  font-size: 10px;
+  margin-top: 4px;
+}
+.ea-affairs-read {
+  color: var(--ea-teal);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+@media(max-width:700px) {
+  .ea-affairs-grid { gap: 8px; }
+  .ea-affairs-tile { min-height: 105px; padding: 11px; }
+  .ea-affairs-tile b { font-size: 11px; }
+  .ea-affairs-tile small { font-size: 9px; }
+  .ea-affairs-bottom { align-items: flex-start; }
+}
