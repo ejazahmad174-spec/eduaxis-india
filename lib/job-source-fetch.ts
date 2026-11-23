@@ -196,10 +196,19 @@ async function requestPinned(
 ): Promise<SingleRequestResult> {
   return new Promise((resolve, reject) => {
     let settled = false;
+    let totalTimeout: ReturnType<typeof setTimeout> | undefined;
+
+    const clearTotalTimeout = () => {
+      if (totalTimeout) {
+        clearTimeout(totalTimeout);
+        totalTimeout = undefined;
+      }
+    };
 
     const fail = (error: Error) => {
       if (settled) return;
       settled = true;
+      clearTotalTimeout();
       reject(error);
     };
 
@@ -244,6 +253,7 @@ async function requestPinned(
         response.destroy();
         if (!settled) {
           settled = true;
+          clearTotalTimeout();
           resolve({
             status,
             location,
@@ -288,6 +298,7 @@ async function requestPinned(
       response.on("end", () => {
         if (settled) return;
         settled = true;
+        clearTotalTimeout();
         resolve({
           status,
           location,
@@ -300,8 +311,16 @@ async function requestPinned(
       response.on("error", (error) => fail(error));
     });
 
-    request.setTimeout(options.timeoutMs || DEFAULT_TIMEOUT_MS, () => {
-      request.destroy(new Error("The website request timed out."));
+    const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
+
+    // setTimeout on the socket is an inactivity timeout. This separate
+    // deadline also stops slow responses that keep sending occasional bytes.
+    totalTimeout = setTimeout(() => {
+      request.destroy(new Error("The website request exceeded its time limit."));
+    }, timeoutMs);
+
+    request.setTimeout(timeoutMs, () => {
+      request.destroy(new Error("The website connection became inactive."));
     });
 
     request.on("error", (error) => fail(error));
