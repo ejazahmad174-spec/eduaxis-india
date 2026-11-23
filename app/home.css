@@ -2088,26 +2088,51 @@
 }
 
 
-/* Desktop navigation: keep all links and actions on one balanced row */
+/* Desktop masthead: large brand row above a full navigation row */
 @media(min-width:1201px) {
   .ea-nav-inner {
-    flex-wrap: nowrap;
-    gap: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0;
+    padding-top: 17px;
+    padding-bottom: 0;
   }
-  .ea-brand {
-    flex: 0 0 auto;
-    font-size: 19px;
+  .ea-nav-inner > .ea-brand {
+    display: flex;
+    flex: 0 0 100%;
+    align-items: center;
+    gap: 15px;
+    min-height: 82px;
+    padding: 0 0 16px;
+    border-bottom: 1px solid #e5edf0;
+    font-size: 28px;
+    line-height: 1.15;
   }
-  .ea-brand small { font-size: 8px; letter-spacing: 1.1px; }
+  .ea-nav-inner > .ea-brand .ea-brand-mark {
+    width: 58px;
+    height: 58px;
+    flex: 0 0 58px;
+    border-radius: 15px;
+    font-size: 31px;
+  }
+  .ea-nav-inner > .ea-brand small {
+    margin-top: 5px;
+    font-size: 10px;
+    letter-spacing: 1.8px;
+  }
+  .ea-mobile-menu-toggle { display: none; }
   .ea-mobile-panel {
     display: flex;
-    flex: 1 1 auto;
+    flex: 0 0 100%;
+    width: 100%;
     min-width: 0;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 0;
+    gap: 18px;
+    padding: 13px 0 14px;
     margin: 0;
     border: 0;
   }
@@ -2117,31 +2142,31 @@
     min-width: 0;
     flex-wrap: nowrap;
     align-items: center;
-    justify-content: center;
-    gap: clamp(8px, .8vw, 14px);
+    justify-content: space-between;
+    gap: clamp(10px, 1.1vw, 20px);
     overflow: visible;
     padding: 0;
   }
   .ea-mobile-panel .ea-nav-links a {
     flex: 0 0 auto;
     white-space: nowrap;
-    font-size: clamp(10px, .72vw, 12px);
-    line-height: 1.3;
+    font-size: clamp(12px, .82vw, 14px);
+    line-height: 1.35;
   }
   .ea-mobile-panel .ea-nav-actions {
     display: flex;
     flex: 0 0 auto;
     align-items: center;
-    gap: 9px;
+    gap: 11px;
   }
-  .ea-mobile-panel .ea-header-social { gap: 5px; }
+  .ea-mobile-panel .ea-header-social { gap: 6px; }
   .ea-mobile-panel .ea-header-social a {
-    width: 27px;
-    height: 27px;
-    font-size: 12px;
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
   }
   .ea-mobile-panel .ea-login {
-    padding: 10px 12px;
-    font-size: 11px;
+    padding: 11px 15px;
+    font-size: 12px;
   }
 }
