@@ -811,3 +811,84 @@
 @media(prefers-reduced-motion:reduce) {
   .ea-pyq-item { transition: none; }
 }
+
+
+/* Featured course categories — clear, consistent learning pathways */
+.ea-course-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 252px;
+  padding: 22px;
+  border-color: #dfe9ed;
+  background: linear-gradient(150deg, #fff 0%, #f8fbfc 100%);
+  transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+}
+.ea-course-card::after {
+  content: "";
+  position: absolute;
+  width: 116px;
+  height: 116px;
+  right: -42px;
+  bottom: -48px;
+  border-radius: 50%;
+  background: #129b980d;
+  pointer-events: none;
+}
+.ea-course-card:hover {
+  transform: translateY(-4px);
+  border-color: #b8ddda;
+  box-shadow: 0 14px 28px #102b4610;
+}
+.ea-course-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 19px;
+}
+.ea-course-card-top .ea-card-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: #eaf5f5;
+  font-size: 23px;
+}
+.ea-course-card-top > span {
+  color: var(--ea-teal);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .8px;
+  text-align: right;
+}
+.ea-course-card h3 {
+  color: var(--ea-navy);
+  font: 800 17px/1.35 Manrope, sans-serif;
+  margin: 0 0 9px;
+}
+.ea-course-card p {
+  min-height: 58px;
+  color: var(--ea-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.ea-course-card .ea-card-link {
+  position: relative;
+  z-index: 1;
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--ea-teal);
+  font-size: 11px;
+  font-weight: 800;
+}
+@media(max-width:700px) {
+  .ea-course-card { min-height: 238px; padding: 16px; }
+  .ea-course-card-top { align-items: flex-start; flex-direction: column; margin-bottom: 14px; }
+  .ea-course-card-top > span { text-align: left; font-size: 8px; }
+  .ea-course-card h3 { font-size: 14px; }
+  .ea-course-card p { font-size: 10px; min-height: 68px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .ea-course-card { transition: none; }
+}
