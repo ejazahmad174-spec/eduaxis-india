@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import '../admin.css';
+import AdminSidebar from '@/components/admin/AdminSidebar';
 
 type Author = {
   id: string;
@@ -237,7 +238,10 @@ export default function AuthorManagementPage() {
   }
 
   return (
-    <main className="adminPage authorManagement">
+    <div className="admin-shell">
+      <AdminSidebar />
+      <section className="admin-main">
+        <main className="adminPage authorManagement">
       <div className="pageHeader">
         <div>
           <h1>Author Management</h1>
@@ -810,5 +814,7 @@ export default function AuthorManagementPage() {
         }
       `}</style>
     </main>
+      </section>
+    </div>
   );
 }
