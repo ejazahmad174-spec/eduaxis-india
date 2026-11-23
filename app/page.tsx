@@ -206,7 +206,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="ea-section ea-muted-section">
+      <section className="ea-section ea-muted-section ea-mock-test-section">
         <div className="ea-wrap">
           <div className="ea-section-heading">
             <div>
@@ -216,7 +216,7 @@ export default function Home() {
             </div>
             <a className="ea-text-link" href="/mock-tests">View all mock tests →</a>
           </div>
-          <div className="ea-card-grid">
+          <div className="ea-mock-test-grid">
             {mockTests.map((test) => (
               <a className="ea-card ea-test-series-card" href="/mock-tests" key={test.name}>
                 <div className="ea-test-series-identity">
