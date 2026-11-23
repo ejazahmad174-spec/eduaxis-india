@@ -12,6 +12,8 @@ const ALLOWED_ROOT_DOMAINS = [
   "upsc.gov.in",
 ] as const;
 
+const ALLOWED_EXACT_HOSTS = ["cdnbbsr.s3waas.gov.in"] as const;
+
 const MAX_REDIRECTS = 5;
 const DEFAULT_TIMEOUT_MS = 15_000;
 
@@ -45,8 +47,11 @@ function isAllowedHostname(hostname: string): boolean {
     return false;
   }
 
-  return ALLOWED_ROOT_DOMAINS.some(
-    (domain) => host === domain || host.endsWith(`.${domain}`)
+  return (
+    ALLOWED_EXACT_HOSTS.some((allowedHost) => host === allowedHost) ||
+    ALLOWED_ROOT_DOMAINS.some(
+      (domain) => host === domain || host.endsWith(`.${domain}`)
+    )
   );
 }
 
