@@ -656,3 +656,49 @@
 @media (prefers-reduced-motion: reduce) {
   .ea-test-series-card { transition: none; }
 }
+
+
+/* Official examination-authority emblems in mock-test banners */
+.ea-test-series-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  position: relative;
+  z-index: 1;
+}
+.ea-test-series-logo {
+  width: 62px;
+  height: 62px;
+  flex: 0 0 62px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 13px;
+  background: #fff;
+  border: 1px solid #dce9ec;
+  box-shadow: 0 5px 15px #102b4610;
+  padding: 5px;
+  box-sizing: border-box;
+}
+.ea-test-series-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.ea-test-series-authority {
+  max-width: 190px;
+  color: #587183;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.45;
+  letter-spacing: .35px;
+  text-transform: uppercase;
+}
+.ea-test-series-card h3 { margin-top: 15px; }
+@media(max-width:700px) {
+  .ea-test-series-identity { gap: 9px; min-height: 54px; }
+  .ea-test-series-logo { width: 54px; height: 54px; flex-basis: 54px; }
+  .ea-test-series-authority { font-size: 9px; }
+}
