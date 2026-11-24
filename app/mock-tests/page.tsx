@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import StudentNavigation from "@/components/student/StudentNavigation";
 
 type MockTest = {
   id: string;
@@ -345,6 +346,7 @@ export default function StudentMockTestsPage() {
 
   return (
     <main className="mock-page">
+      <StudentNavigation />
       <style>{`
         .mock-page {
           box-sizing: border-box;
