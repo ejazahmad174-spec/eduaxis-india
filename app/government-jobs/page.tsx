@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import StudentNavigation from '@/components/student/StudentNavigation';
 
 type Job = {
   id: number;
@@ -137,6 +138,7 @@ export default function GovernmentJobsPublicPage() {
 
   return (
     <main style={{ minHeight: '100vh', background: '#f4f7fa', color: '#102d49' }}>
+      <StudentNavigation />
       <header style={{
         background: '#102d49',
         color: '#fff',
