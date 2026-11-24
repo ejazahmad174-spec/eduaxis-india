@@ -122,7 +122,7 @@ export default function Home() {
       const { data } = await supabase.from('profiles').select('full_name').eq('id', authData.user.id).maybeSingle();
       if (!active) return;
       const name = data?.full_name || authData.user.user_metadata?.full_name || authData.user.email?.split('@')[0] || 'Student';
-      setStudentName(String(name).trim().split(/\\s+/)[0] || 'Student');
+      setStudentName(String(name).trim().split(/\s+/)[0] || 'Student');
     }
     checkStudentSession();
     return () => { active = false; };
