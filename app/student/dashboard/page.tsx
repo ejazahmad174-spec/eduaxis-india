@@ -73,6 +73,16 @@ type CareerUpdate = {
   created_at: string;
 };
 
+type StudentNotification = {
+  id: string;
+  title: string;
+  message: string;
+  notification_type: string;
+  link_url: string | null;
+  is_read: boolean;
+  created_at: string;
+};
+
 function resolveCourse(value: Course | Course[] | null): Course | null {
   if (Array.isArray(value)) return value[0] || null;
   return value;
@@ -105,6 +115,7 @@ export default function StudentDashboardPage() {
   const [materials, setMaterials] = useState<StudyMaterial[]>([]);
   const [materialCount, setMaterialCount] = useState(0);
   const [updates, setUpdates] = useState<CareerUpdate[]>([]);
+  const [notifications, setNotifications] = useState<StudentNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [loadWarnings, setLoadWarnings] = useState<string[]>([]);
@@ -160,6 +171,7 @@ export default function StudentDashboardPage() {
         testsResult,
         materialsResult,
         updatesResult,
+        notificationsResult,
       ] = await Promise.all([
         supabase
           .from('course_enrollments')
@@ -196,6 +208,13 @@ export default function StudentDashboardPage() {
           .eq('status', 'published')
           .order('created_at', { ascending: false })
           .limit(4),
+
+        supabase
+          .from('student_notifications')
+          .select('id, title, message, notification_type, link_url, is_read, created_at')
+          .eq('student_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(8),
       ]);
 
       if (!active) return;
@@ -226,6 +245,9 @@ export default function StudentDashboardPage() {
       if (updatesResult.error) warnings.push('Latest career updates could not be loaded.');
       else setUpdates((updatesResult.data || []) as CareerUpdate[]);
 
+      if (notificationsResult.error) warnings.push('Your notifications could not be loaded.');
+      else setNotifications((notificationsResult.data || []) as StudentNotification[]);
+
       setLoadWarnings(warnings);
       setLoading(false);
     }
@@ -236,6 +258,28 @@ export default function StudentDashboardPage() {
       active = false;
     };
   }, [router]);
+
+  async function markNotificationRead(id: string) {
+    if (!supabase) return;
+
+    const { error } = await supabase
+      .from('student_notifications')
+      .update({ is_read: true, read_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (error) {
+      setErrorMessage('We could not update that notification. Please try again.');
+      return;
+    }
+
+    setNotifications(current =>
+      current.map(notification =>
+        notification.id === id
+          ? { ...notification, is_read: true }
+          : notification
+      )
+    );
+  }
 
   const averageRecentScore = useMemo(() => {
     const scored = recentAttempts.filter(
@@ -323,6 +367,55 @@ export default function StudentDashboardPage() {
             <div><strong>{availableTestCount}</strong><span>Available Mock Tests</span></div>
             <Link href="/mock-tests">Browse tests</Link>
           </article>
+        </section>
+
+        <section className="dashboard-panel dashboard-notifications-panel">
+          <div className="dashboard-panel-heading">
+            <div>
+              <span className="dashboard-kicker">IMPORTANT UPDATES</span>
+              <h2>Notification Centre</h2>
+              <p className="dashboard-notification-summary">
+                {notifications.filter(notification => !notification.is_read).length} unread notification(s)
+              </p>
+            </div>
+          </div>
+          {notifications.length === 0 ? (
+            <div className="dashboard-empty">
+              <strong>You are all caught up</strong>
+              <p>Important course, test and platform announcements will appear here.</p>
+            </div>
+          ) : (
+            <div className="dashboard-notification-list">
+              {notifications.map(notification => (
+                <article
+                  className={'dashboard-notification-item' + (notification.is_read ? ' is-read' : '')}
+                  key={notification.id}
+                >
+                  <div className="dashboard-notification-copy">
+                    <div className="dashboard-notification-meta">
+                      <span>{notification.notification_type.replace(/_/g, ' ')}</span>
+                      <time>{formatDate(notification.created_at)}</time>
+                    </div>
+                    <strong>{notification.title}</strong>
+                    <p>{notification.message}</p>
+                    {notification.link_url && (
+                      <a href={notification.link_url} target="_blank" rel="noreferrer">
+                        Open related page →
+                      </a>
+                    )}
+                  </div>
+                  {!notification.is_read && (
+                    <button
+                      type="button"
+                      onClick={() => markNotificationRead(notification.id)}
+                    >
+                      Mark as read
+                    </button>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
         <div className="dashboard-content-grid">

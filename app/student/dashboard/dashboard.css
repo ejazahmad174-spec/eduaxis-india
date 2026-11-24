@@ -49,3 +49,19 @@
 @media(max-width:900px){.dashboard-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.dashboard-welcome{align-items:flex-start;flex-direction:column}.dashboard-welcome-side{width:calc(100% - 30px)}}
 @media(max-width:650px){.student-dashboard-container{padding:20px 13px 40px}.dashboard-welcome{padding:24px 20px}.dashboard-welcome-side{width:auto;max-width:100%;min-width:0}.dashboard-content-grid{grid-template-columns:1fr}.dashboard-updates-panel{grid-column:auto}.dashboard-panel{padding:17px}.dashboard-panel-heading{align-items:flex-start}.dashboard-panel-heading h2{font-size:17px}.dashboard-panel-heading>a{font-size:11px}.dashboard-course-item,.dashboard-list-item,.dashboard-result-item{gap:9px}.dashboard-tag{font-size:9px}.dashboard-stat-card{padding:14px}.dashboard-stat-card>div strong{font-size:23px}}
 @media(prefers-reduced-motion:reduce){.dashboard-spinner{animation:none}}
+.dashboard-notifications-panel{margin:0 0 17px}
+.dashboard-notification-summary{margin:7px 0 0;color:#718598;font-size:11px}
+.dashboard-notification-list{display:flex;flex-direction:column}
+.dashboard-notification-item{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:15px 0;border-bottom:1px solid #edf1f4}
+.dashboard-notification-item:first-child{padding-top:0}
+.dashboard-notification-item:last-child{border-bottom:0;padding-bottom:0}
+.dashboard-notification-copy{min-width:0;flex:1}
+.dashboard-notification-meta{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.dashboard-notification-meta span{color:#087f7b;font-size:9px;font-weight:850;text-transform:uppercase;letter-spacing:.7px}
+.dashboard-notification-meta time{color:#8a9aa7;font-size:10px}
+.dashboard-notification-copy strong{display:block;color:#223d56;font-size:13px;line-height:1.5}
+.dashboard-notification-copy p{margin:5px 0;color:#64798b;font-size:12px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
+.dashboard-notification-copy a{color:#087f7b;font-size:11px;font-weight:800;text-decoration:none}
+.dashboard-notification-item>button{flex:0 0 auto;border:1px solid #b8dedd;border-radius:7px;background:#fff;color:#087f7b;padding:8px 10px;font-size:10px;font-weight:800;cursor:pointer}
+.dashboard-notification-item.is-read .dashboard-notification-meta span{color:#8293a2}
+@media(max-width:650px){.dashboard-notification-item{align-items:flex-start;flex-direction:column;gap:9px}.dashboard-notification-item>button{align-self:flex-start}}

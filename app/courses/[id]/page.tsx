@@ -57,6 +57,11 @@ type Lesson = {
   sort_order: number;
 };
 
+type LessonProgress = {
+  lesson_id: string;
+  status: 'in_progress' | 'completed';
+};
+
 type Resource = {
   id: string;
   lesson_id: string;
@@ -117,6 +122,8 @@ export default function CourseDetailPage() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
+  const [lessonProgress, setLessonProgress] = useState<Record<string, 'in_progress' | 'completed'>>({});
+  const [progressSavingId, setProgressSavingId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -145,23 +152,27 @@ export default function CourseDetailPage() {
 
     try {
       const { data: authData } = await supabase.auth.getUser();
-      setUserId(authData.user?.id || null);
+      const studentId = authData.user?.id || null;
+      let hasActiveEnrollment = false;
+      setUserId(studentId);
 
-      if (authData.user?.id) {
+      if (studentId) {
         const { data: enrollmentData, error: enrollmentError } =
           await supabase
             .from('course_enrollments')
             .select('id, status')
-            .eq('user_id', authData.user.id)
+            .eq('user_id', studentId)
             .eq('course_id', courseId)
             .eq('status', 'active')
             .maybeSingle();
 
         if (enrollmentError) throw enrollmentError;
-        setIsEnrolled(Boolean(enrollmentData));
+        hasActiveEnrollment = Boolean(enrollmentData);
+        setIsEnrolled(hasActiveEnrollment);
       } else {
         setIsEnrolled(false);
       }
+      setLessonProgress({});
 
       const { data: courseData, error: courseError } = await supabase
         .from('courses')
@@ -253,8 +264,27 @@ export default function CourseDetailPage() {
 
       if (lessonList.length === 0) {
         setResources([]);
+        setLessonProgress({});
         setLoading(false);
         return;
+      }
+
+      if (studentId && hasActiveEnrollment) {
+        const { data: progressRows, error: progressError } = await supabase
+          .from('course_lesson_progress')
+          .select('lesson_id, status')
+          .eq('student_id', studentId)
+          .in('lesson_id', lessonList.map((lesson) => lesson.id));
+
+        if (progressError) throw progressError;
+
+        const progressMap: Record<string, 'in_progress' | 'completed'> = {};
+        (progressRows || []).forEach((row: LessonProgress) => {
+          progressMap[row.lesson_id] = row.status;
+        });
+        setLessonProgress(progressMap);
+      } else {
+        setLessonProgress({});
       }
 
       const { data: resourceData, error: resourceError } = await supabase
@@ -471,12 +501,78 @@ export default function CourseDetailPage() {
     );
   }
 
-  function toggleLesson(id: string) {
+  async function toggleLesson(id: string) {
+    const willOpen = !expandedLessons.includes(id);
+
     setExpandedLessons((previous) =>
       previous.includes(id)
         ? previous.filter((item) => item !== id)
         : [...previous, id]
     );
+
+    if (!willOpen || !supabase || !userId || !isEnrolled || lessonProgress[id]) return;
+
+    setProgressSavingId(id);
+    const { data, error } = await supabase
+      .from('course_lesson_progress')
+      .insert({ student_id: userId, lesson_id: id, status: 'in_progress' })
+      .select('status')
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        const { data: existing } = await supabase
+          .from('course_lesson_progress')
+          .select('status')
+          .eq('student_id', userId)
+          .eq('lesson_id', id)
+          .maybeSingle();
+        if (existing) {
+          setLessonProgress(current => ({ ...current, [id]: existing.status }));
+        }
+      } else {
+        setMessage('Your lesson progress could not be saved. Please try again.');
+      }
+    } else if (data) {
+      setLessonProgress(current => ({ ...current, [id]: data.status }));
+    }
+
+    setProgressSavingId(null);
+  }
+
+  async function completeLesson(id: string) {
+    if (!supabase || !userId || !isEnrolled || lessonProgress[id] === 'completed') return;
+
+    setProgressSavingId(id);
+    const completedAt = new Date().toISOString();
+    let saveError: { message: string } | null = null;
+
+    if (lessonProgress[id] === 'in_progress') {
+      const { error } = await supabase
+        .from('course_lesson_progress')
+        .update({ status: 'completed', completed_at: completedAt, updated_at: completedAt })
+        .eq('student_id', userId)
+        .eq('lesson_id', id);
+      saveError = error;
+    } else {
+      const { error } = await supabase
+        .from('course_lesson_progress')
+        .insert({
+          student_id: userId,
+          lesson_id: id,
+          status: 'completed',
+          completed_at: completedAt,
+        });
+      saveError = error;
+    }
+
+    if (saveError) {
+      setMessage('Lesson completion could not be saved. Please try again.');
+    } else {
+      setLessonProgress(current => ({ ...current, [id]: 'completed' }));
+    }
+
+    setProgressSavingId(null);
   }
 
   async function downloadResource(resource: Resource) {
@@ -555,6 +651,13 @@ export default function CourseDetailPage() {
 
     return `₹${Number(course.price).toLocaleString('en-IN')}`;
   }
+
+  const completedLessonCount = lessons.filter(
+    (lesson) => lessonProgress[lesson.id] === 'completed'
+  ).length;
+  const courseProgressPercent = lessons.length
+    ? Math.round((completedLessonCount / lessons.length) * 100)
+    : 0;
 
   return (
     <main className="studentCoursePage">
@@ -675,6 +778,31 @@ export default function CourseDetailPage() {
           font-size: 13px;
           font-weight: 700;
         }
+
+        .studentProgressCard {
+          margin-top: 16px;
+          max-width: 430px;
+          padding: 13px 15px;
+          border: 1px solid rgba(255,255,255,.25);
+          border-radius: 9px;
+          background: rgba(255,255,255,.1);
+        }
+        .studentProgressCard strong { display: block; margin-top: 4px; font-size: 12px; color: #fff; }
+        .studentProgressTrack { height: 7px; margin-top: 10px; border-radius: 20px; background: rgba(255,255,255,.24); overflow: hidden; }
+        .studentProgressTrack span { display: block; height: 100%; border-radius: inherit; background: #69dfca; }
+        .studentLessonStatus { background: #e3f6ee; color: #16734b; }
+        .studentCompleteLessonButton {
+          border: 0;
+          border-radius: 6px;
+          padding: 9px 13px;
+          background: #102b46;
+          color: white;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .studentCompleteLessonButton:disabled { opacity: .6; cursor: wait; }
+        .studentLessonDone { color: #16734b; font-size: 12px; font-weight: 800; }
 
         .studentCourseContainer {
           max-width: 1180px;
@@ -1001,6 +1129,18 @@ export default function CourseDetailPage() {
                 ) : (
                   <div className="studentEnrolledTag">Free Course</div>
                 )}
+
+                {isEnrolled && lessons.length > 0 && (
+                  <div className="studentProgressCard">
+                    <span>YOUR COURSE PROGRESS</span>
+                    <strong>
+                      {completedLessonCount} of {lessons.length} lessons completed · {courseProgressPercent}%
+                    </strong>
+                    <div className="studentProgressTrack">
+                      <span style={{ width: courseProgressPercent + '%' }} />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {course.thumbnail_url && (
@@ -1148,6 +1288,11 @@ export default function CourseDetailPage() {
                                                           ENROLMENT REQUIRED
                                                         </span>
                                                       )}
+                                                      {isEnrolled && lessonProgress[lesson.id] && (
+                                                        <span className="studentSmallTag studentLessonStatus">
+                                                          {lessonProgress[lesson.id] === 'completed' ? '✓ COMPLETED' : 'IN PROGRESS'}
+                                                        </span>
+                                                      )}
                                                     </div>
                                                   </div>
 
@@ -1165,6 +1310,22 @@ export default function CourseDetailPage() {
 
                                                 {isLessonOpen && (
                                                   <div className="studentLessonContent">
+                                                    {isEnrolled && (
+                                                      <div style={{ marginBottom: 14 }}>
+                                                        {lessonProgress[lesson.id] === 'completed' ? (
+                                                          <span className="studentLessonDone">✓ Lesson completed</span>
+                                                        ) : (
+                                                          <button
+                                                            type="button"
+                                                            className="studentCompleteLessonButton"
+                                                            disabled={progressSavingId === lesson.id}
+                                                            onClick={() => completeLesson(lesson.id)}
+                                                          >
+                                                            {progressSavingId === lesson.id ? 'Saving...' : 'Mark lesson as completed'}
+                                                          </button>
+                                                        )}
+                                                      </div>
+                                                    )}
                                                     {lesson.description && (
                                                       <p>{lesson.description}</p>
                                                     )}

@@ -8,6 +8,7 @@ const sections = [
     label: 'WORKSPACE',
     links: [
       { href: '/admin/dashboard', title: 'Dashboard', icon: '▦' },
+      { href: '/admin/notifications', title: 'Student Notifications', icon: '✉' },
     ],
   },
   {
