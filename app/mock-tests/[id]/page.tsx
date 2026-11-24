@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import StudentNavigation from "@/components/student/StudentNavigation";
 
 type Language = "en" | "hi";
 
@@ -322,6 +323,7 @@ export default function MockTestExamPage() {
   if (authChecking) {
     return (
       <main className="page">
+      <StudentNavigation />
         <style>{style}</style>
         <div className="card">Checking your login...</div>
       </main>
