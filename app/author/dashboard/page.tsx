@@ -74,12 +74,6 @@ export default function AuthorDashboard() {
       return;
     }
 
-    if (authData.user.user_metadata?.account_type !== 'author') {
-      await supabase.auth.signOut();
-      router.replace('/author/login');
-      return;
-    }
-
     const { data: author, error: profileError } = await supabase
       .from('author_profiles')
       .select('id, full_name, designation, status')
@@ -89,6 +83,13 @@ export default function AuthorDashboard() {
     if (profileError || !author) {
       setError('Your author profile could not be found. Please contact the administration team.');
       setLoading(false);
+      return;
+    }
+
+    // Approval is enforced by database RLS; this prevents unapproved accounts
+    // from entering the author dashboard UI as well.
+    if (author.status !== 'approved') {
+      router.replace('/author/login');
       return;
     }
 
