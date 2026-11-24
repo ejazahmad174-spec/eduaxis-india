@@ -1,7 +1,8 @@
 
 "use client";
 import './home.css';
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from '@/lib/supabase';
 const examCategories = [
   {
     name: "BPSC TRE",
@@ -110,6 +111,22 @@ export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [feedbackStatus, setFeedbackStatus] = useState("");
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [studentName, setStudentName] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    async function checkStudentSession() {
+      if (!supabase) return;
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user || !active) return;
+      const { data } = await supabase.from('profiles').select('full_name').eq('id', authData.user.id).maybeSingle();
+      if (!active) return;
+      const name = data?.full_name || authData.user.user_metadata?.full_name || authData.user.email?.split('@')[0] || 'Student';
+      setStudentName(String(name).trim().split(/\\s+/)[0] || 'Student');
+    }
+    checkStudentSession();
+    return () => { active = false; };
+  }, []);
 
   return (
     <main className="ea-home">
@@ -154,7 +171,7 @@ export default function Home() {
                 <a href="https://www.facebook.com/eduaxisindia/" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India Facebook">f</a>
                 <a href="https://t.me/eduaxisindia" target="_blank" rel="noopener noreferrer" aria-label="EduAxis India Telegram">➤</a>
               </div>
-              <a className="ea-login" href="/student/login" onClick={() => setMobileMenuOpen(false)}>Student Login</a>
+              {studentName ? <a className="ea-login" href="/student/dashboard" onClick={() => setMobileMenuOpen(false)}>Hi, {studentName} · Dashboard</a> : <a className="ea-login" href="/student/login" onClick={() => setMobileMenuOpen(false)}>Student Login</a>}
             </div>
           </div>
         </div>
