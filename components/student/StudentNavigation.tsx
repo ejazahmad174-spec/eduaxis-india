@@ -79,10 +79,10 @@ export default function StudentNavigation() {
         .student-shell-brand-name { color:#fff; font-size:19px; font-weight:850; text-decoration:none; }
         .student-shell-brand-name span { color:#55d2c6; }
         .student-shell-greeting { color:#c8d8e4; font-size:12px; margin-top:2px; }
-        .student-shell-links { display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; }
+        .student-shell-links { display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap; }
         .student-shell-links a { color:#e8f1f6; text-decoration:none; font-size:13px; font-weight:650; padding:10px 12px; border-radius:7px; white-space:nowrap; }
         .student-shell-links a:hover,.student-shell-links a.active { background:rgba(255,255,255,.14); color:#fff; }
-        .student-shell-links a + a { margin-left:2px; }
+        
         .student-shell-logout { border:1px solid rgba(255,255,255,.55); background:#fff; color:#102b46; border-radius:8px; padding:9px 13px; font-size:13px; font-weight:750; cursor:pointer; }
         .student-shell-logout:disabled { opacity:.65; cursor:wait; }
         @media(max-width:760px) { .student-shell-inner { align-items:flex-start; } .student-shell-links { order:3; width:100%; justify-content:flex-start; } .student-shell-links a { padding:8px; } .student-shell-logout { margin-left:auto; } }
