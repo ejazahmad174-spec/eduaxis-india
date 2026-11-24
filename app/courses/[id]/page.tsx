@@ -161,7 +161,7 @@ export default function CourseDetailPage() {
           await supabase
             .from('course_enrollments')
             .select('id, status')
-            .eq('user_id', authData.user.id)
+            .eq('user_id', studentId)
             .eq('course_id', courseId)
             .eq('status', 'active')
             .maybeSingle();
