@@ -42,13 +42,6 @@ export default function AuthorLoginPage() {
         throw new Error('Unable to verify your account.');
       }
 
-      if (user.user_metadata?.account_type !== 'author') {
-        await supabase.auth.signOut();
-        throw new Error(
-          'This login is for registered authors. Please use the correct account.'
-        );
-      }
-
       let { data: profile, error: profileError } = await supabase
         .from('author_profiles')
         .select('id, status')
