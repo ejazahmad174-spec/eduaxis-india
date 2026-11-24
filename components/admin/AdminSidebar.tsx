@@ -14,9 +14,8 @@ const sections = [
     label: 'CONTENT MANAGEMENT',
     links: [
       { href: '/admin/study-materials', title: 'Study Materials', icon: '▤' },
-      { href: '/admin/government-jobs', title: 'Government Jobs', icon: '💼' },
+      { href: '/admin/career-updates', title: 'Government Jobs & Updates', icon: '💼' },
       { href: '/admin/government-jobs/discoveries', title: 'Discovered Notices', icon: '↳', child: true },
-      { href: '/admin/career-updates', title: 'Career Updates', icon: '▤' },
       { href: '/admin/courses', title: 'Online Courses', icon: '🎓' },
       { href: '/admin/mock-tests', title: 'Mock Tests', icon: '📝' },
     ],
@@ -49,9 +48,7 @@ export default function AdminSidebar() {
           {section.links.map((link) => {
             const active =
               pathname === link.href ||
-              (link.href === '/admin/government-jobs' &&
-                pathname.startsWith('/admin/government-jobs/') &&
-                pathname !== '/admin/government-jobs/discoveries');
+              (link.href === '/admin/career-updates' && pathname === '/admin/career-updates');
 
             return (
               <Link
