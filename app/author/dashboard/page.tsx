@@ -74,12 +74,6 @@ export default function AuthorDashboard() {
       return;
     }
 
-    if (authData.user.user_metadata?.account_type !== 'author') {
-      await supabase.auth.signOut();
-      router.replace('/author/login');
-      return;
-    }
-
     const { data: author, error: profileError } = await supabase
       .from('author_profiles')
       .select('id, full_name, designation, status')
