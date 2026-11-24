@@ -293,7 +293,6 @@ export default function CareerUpdatesPage() {
 
       {/* Header */}
       <StudentNavigation />
-eader>
 
       {/* Hero */}
       <section style={{
