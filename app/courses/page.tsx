@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import StudentNavigation from '@/components/student/StudentNavigation';
 
 type Course = {
   id: string;
@@ -380,20 +381,8 @@ export default function CoursesPage() {
         }
       `}</style>
 
-      <header className="courseHeader">
-        <div className="courseHeaderInner">
-          <Link href="/" className="courseBrand">
-            EduAxis India
-          </Link>
+      <StudentNavigation />
 
-          <nav className="courseNav">
-            <Link href="/">Home</Link>
-            <Link href="/blogs">Blogs</Link>
-            <Link href="/government-jobs">Government Jobs</Link>
-            <Link href="/student/login">Student Login</Link>
-          </nav>
-        </div>
-      </header>
 
       <section className="courseHero">
         <h1>Explore Our Courses</h1>
