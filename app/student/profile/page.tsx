@@ -4,6 +4,7 @@ import { useEffect, useState, FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import StudentNavigation from '@/components/student/StudentNavigation';
 
 type Profile = {
   full_name: string;
@@ -163,14 +164,8 @@ export default function StudentProfilePage() {
 
   return (
     <main style={{ minHeight: '100vh', background: '#f3f7fa', color: '#102d49' }}>
-      <header style={{ background: '#102d49', color: '#fff', padding: '17px 22px' }}>
-        <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
-          <Link href="/student/dashboard" style={{ color: '#fff', textDecoration: 'none', fontWeight: 800, fontSize: 21 }}>
-            EduAxis <span style={{ color: '#55d2c6' }}>India</span>
-          </Link>
-          <Link href="/student/dashboard" style={{ color: '#102d49', background: '#fff', textDecoration: 'none', borderRadius: 8, padding: '10px 14px', fontWeight: 750, fontSize: 14 }}>Back to Dashboard</Link>
-        </div>
-      </header>
+      <StudentNavigation />
+
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '35px 20px 55px' }}>
         <div style={{ marginBottom: 22 }}>
@@ -181,6 +176,21 @@ export default function StudentProfilePage() {
 
         {message && <div role="status" style={{ padding: 13, borderRadius: 9, background: '#e5f8ef', color: '#087443', marginBottom: 18, lineHeight: 1.6 }}>{message}</div>}
         {errorMessage && <div role="alert" style={{ padding: 13, borderRadius: 9, background: '#fff0f0', color: '#bd2525', marginBottom: 18, lineHeight: 1.6 }}>{errorMessage}</div>}
+
+        <section style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap', background: '#fff', border: '1px solid #dce5ec', borderRadius: 16, padding: 22, marginBottom: 20 }}>
+          <div aria-hidden="true" style={{ width: 68, height: 68, borderRadius: '50%', display: 'grid', placeItems: 'center', background: '#e3f5f3', color: '#087f7b', fontSize: 25, fontWeight: 850 }}>
+            {(profile.full_name.trim().split(/\\s+/).map(part => part[0]).slice(0, 2).join('') || 'S').toUpperCase()}
+          </div>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <h2 style={{ margin: '0 0 5px', fontSize: 21 }}>{profile.full_name || 'Student profile'}</h2>
+            <p style={{ margin: 0, color: '#647b91', fontSize: 14 }}>{profile.email}</p>
+            <p style={{ margin: '7px 0 0', color: '#087f7b', fontSize: 13, fontWeight: 700 }}>Student account</p>
+          </div>
+          <div style={{ minWidth: 150, color: '#647b91', fontSize: 13, lineHeight: 1.7 }}>
+            <b style={{ color: '#102d49' }}>Profile details</b><br />
+            {[profile.full_name, profile.phone, profile.state, profile.district].filter(value => value.trim()).length} of 4 fields completed
+          </div>
+        </section>
 
         <section style={{ background: '#fff', border: '1px solid #dce5ec', borderRadius: 16, padding: 26, marginBottom: 20 }}>
           <h2 style={{ fontSize: 21, margin: '0 0 20px' }}>Personal Information</h2>
