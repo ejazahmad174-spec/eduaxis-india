@@ -12,6 +12,13 @@ type Student = {
   email: string | null;
 };
 
+type BlogAuthor = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  author_status: string | null;
+};
+
 type NotificationType =
   | 'announcement'
   | 'course'
@@ -34,7 +41,10 @@ export default function AdminNotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [blogAuthors, setBlogAuthors] = useState<BlogAuthor[]>([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [selectedAuthorIds, setSelectedAuthorIds] = useState<string[]>([]);
+  const [audience, setAudience] = useState<'students' | 'authors' | 'both'>('students');
   const [recipientMode, setRecipientMode] = useState<'all' | 'selected'>('all');
   const [search, setSearch] = useState('');
   const [title, setTitle] = useState('');
@@ -70,27 +80,68 @@ export default function AdminNotificationsPage() {
         return;
       }
 
-      const loadedStudents: Student[] = [];
-      for (let start = 0; ; start += 500) {
-        const { data, error } = await supabase
+      const [studentResult, authorProfilesResult] = await Promise.all([
+        supabase
           .from('profiles')
           .select('id, full_name, email')
           .eq('role', 'student')
-          .order('full_name', { ascending: true })
-          .range(start, start + 499);
+          .order('full_name', { ascending: true }),
+        supabase
+          .from('author_profiles')
+          .select('user_id, full_name, status')
+          .not('user_id', 'is', null)
+          .order('full_name', { ascending: true }),
+      ]);
 
-        if (error) {
-          if (active) setErrorMessage('Student list could not be loaded: ' + error.message);
-          break;
-        }
-
-        const page = (data || []) as Student[];
-        loadedStudents.push(...page);
-        if (page.length < 500) break;
+      if (studentResult.error) {
+        if (active) setErrorMessage('Student list could not be loaded: ' + studentResult.error.message);
       }
+
+      if (authorProfilesResult.error) {
+        if (active) setErrorMessage('Blog author list could not be loaded: ' + authorProfilesResult.error.message);
+      }
+
+      const authorRows = (authorProfilesResult.data || []) as {
+        user_id: string;
+        full_name: string | null;
+        status: string | null;
+      }[];
+
+      const authorUserIds = Array.from(new Set(authorRows.map(row => row.user_id).filter(Boolean)));
+      const authorProfileById = new Map<string, Student>();
+
+      if (authorUserIds.length) {
+        const { data: authorAccounts, error: authorAccountsError } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', authorUserIds);
+
+        if (authorAccountsError) {
+          if (active) setErrorMessage('Blog author account details could not be loaded: ' + authorAccountsError.message);
+        } else {
+          (authorAccounts || []).forEach(account => authorProfileById.set(account.id, account as Student));
+        }
+      }
+
+      const loadedAuthors: BlogAuthor[] = authorRows.map(author => {
+        const account = authorProfileById.get(author.user_id);
+        return {
+          id: author.user_id,
+          full_name: author.full_name || account?.full_name || 'Blog Author',
+          email: account?.email || null,
+          author_status: author.status,
+        };
+      });
+
+      // Accounts linked to an author profile are listed in the Blog Authors
+      // section, not duplicated in the ordinary Students list.
+      const authorIdSet = new Set(authorUserIds);
+      const loadedStudents = ((studentResult.data || []) as Student[])
+        .filter(student => !authorIdSet.has(student.id));
 
       if (!active) return;
       setStudents(loadedStudents);
+      setBlogAuthors(loadedAuthors);
       setLoading(false);
     }
 
@@ -109,8 +160,25 @@ export default function AdminNotificationsPage() {
     );
   }, [students, search]);
 
+  const filteredAuthors = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return blogAuthors;
+    return blogAuthors.filter(author =>
+      (author.full_name || '').toLowerCase().includes(term) ||
+      (author.email || '').toLowerCase().includes(term)
+    );
+  }, [blogAuthors, search]);
+
   function toggleStudent(id: string) {
-    setSelectedIds(current =>
+    setSelectedStudentIds(current =>
+      current.includes(id)
+        ? current.filter(item => item !== id)
+        : [...current, id]
+    );
+  }
+
+  function toggleAuthor(id: string) {
+    setSelectedAuthorIds(current =>
       current.includes(id)
         ? current.filter(item => item !== id)
         : [...current, id]
@@ -141,12 +209,22 @@ export default function AdminNotificationsPage() {
       }
     }
 
-    const recipients = recipientMode === 'all'
-      ? students.map(student => student.id)
-      : selectedIds;
+    const useStudents = audience === 'students' || audience === 'both';
+    const useAuthors = audience === 'authors' || audience === 'both';
+
+    const recipientIds = [
+      ...(useStudents
+        ? recipientMode === 'all' ? students.map(student => student.id) : selectedStudentIds
+        : []),
+      ...(useAuthors
+        ? recipientMode === 'all' ? blogAuthors.map(author => author.id) : selectedAuthorIds
+        : []),
+    ];
+    // A user linked to both roles can never receive the same notice twice.
+    const recipients = Array.from(new Set(recipientIds));
 
     if (!recipients.length) {
-      setErrorMessage('Select at least one student to receive this notification.');
+      setErrorMessage('Select at least one student or blog author to receive this notification.');
       return;
     }
 
@@ -192,8 +270,10 @@ export default function AdminNotificationsPage() {
       setTitle('');
       setMessage('');
       setLinkUrl('');
-      setSelectedIds([]);
+      setSelectedStudentIds([]);
+      setSelectedAuthorIds([]);
       setRecipientMode('all');
+      setAudience('students');
     }
 
     setSending(false);
@@ -223,7 +303,9 @@ export default function AdminNotificationsPage() {
             <h2>Send a platform update</h2>
             <p>Share important announcements with every student or a selected group.</p>
           </div>
-          <span className="admin-secure">{students.length} student account(s)</span>
+          <span className="admin-secure">
+            {students.length} student(s) · {blogAuthors.length} blog author(s)
+          </span>
         </div>
 
         {notice && <div className="admin-notice admin-notification-success" role="status">{notice}</div>}
@@ -291,27 +373,67 @@ export default function AdminNotificationsPage() {
 
           <aside className="admin-notification-recipients">
             <h2>Recipients</h2>
-            <p>Choose who should receive this announcement.</p>
+            <p>Choose the account group first. Student accounts and blog-author accounts are shown separately.</p>
 
-            <label className="admin-notification-radio">
-              <input
-                type="radio"
-                name="recipient-mode"
-                checked={recipientMode === 'all'}
-                onChange={() => setRecipientMode('all')}
-              />
-              <span><b>All students</b><small>{students.length} recipient(s)</small></span>
-            </label>
+            <div className="admin-notification-group-options">
+              <label className="admin-notification-radio">
+                <input
+                  type="radio"
+                  name="audience"
+                  checked={audience === 'students'}
+                  onChange={() => setAudience('students')}
+                />
+                <span><b>1. Students</b><small>{students.length} student account(s)</small></span>
+              </label>
 
-            <label className="admin-notification-radio">
-              <input
-                type="radio"
-                name="recipient-mode"
-                checked={recipientMode === 'selected'}
-                onChange={() => setRecipientMode('selected')}
-              />
-              <span><b>Selected students</b><small>{selectedIds.length} selected</small></span>
-            </label>
+              <label className="admin-notification-radio">
+                <input
+                  type="radio"
+                  name="audience"
+                  checked={audience === 'authors'}
+                  onChange={() => setAudience('authors')}
+                />
+                <span><b>2. Blog Authors</b><small>{blogAuthors.length} author account(s)</small></span>
+              </label>
+
+              <label className="admin-notification-radio">
+                <input
+                  type="radio"
+                  name="audience"
+                  checked={audience === 'both'}
+                  onChange={() => setAudience('both')}
+                />
+                <span><b>Both groups</b><small>Send to students and blog authors (without duplicate accounts)</small></span>
+              </label>
+            </div>
+
+            <div className="admin-notification-recipient-mode">
+              <strong>Delivery selection</strong>
+              <label className="admin-notification-radio">
+                <input
+                  type="radio"
+                  name="recipient-mode"
+                  checked={recipientMode === 'all'}
+                  onChange={() => setRecipientMode('all')}
+                />
+                <span><b>All in chosen group(s)</b><small>
+                  {(audience === 'students' || audience === 'both' ? students.length : 0) +
+                    (audience === 'authors' || audience === 'both' ? blogAuthors.length : 0)} recipient(s)
+                </small></span>
+              </label>
+              <label className="admin-notification-radio">
+                <input
+                  type="radio"
+                  name="recipient-mode"
+                  checked={recipientMode === 'selected'}
+                  onChange={() => setRecipientMode('selected')}
+                />
+                <span><b>Select specific people</b><small>
+                  {(audience === 'students' || audience === 'both' ? selectedStudentIds.length : 0) +
+                    (audience === 'authors' || audience === 'both' ? selectedAuthorIds.length : 0)} selected
+                </small></span>
+              </label>
+            </div>
 
             {recipientMode === 'selected' && (
               <>
@@ -320,24 +442,58 @@ export default function AdminNotificationsPage() {
                   value={search}
                   onChange={event => setSearch(event.target.value)}
                   placeholder="Search name or email"
-                  aria-label="Search students"
+                  aria-label="Search recipient name or email"
                 />
-                <div className="admin-notification-student-list">
-                  {filteredStudents.map(student => (
-                    <label key={student.id} className="admin-notification-student">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(student.id)}
-                        onChange={() => toggleStudent(student.id)}
-                      />
-                      <span>
-                        <b>{student.full_name || 'Student'}</b>
-                        <small>{student.email || student.id}</small>
-                      </span>
-                    </label>
-                  ))}
-                  {filteredStudents.length === 0 && <p>No matching students found.</p>}
-                </div>
+
+                {(audience === 'students' || audience === 'both') && (
+                  <section className="admin-notification-group">
+                    <div className="admin-notification-group-heading">
+                      <h3>1. Students</h3>
+                      <span>{selectedStudentIds.length} selected</span>
+                    </div>
+                    <div className="admin-notification-student-list">
+                      {filteredStudents.map(student => (
+                        <label key={student.id} className="admin-notification-student">
+                          <input
+                            type="checkbox"
+                            checked={selectedStudentIds.includes(student.id)}
+                            onChange={() => toggleStudent(student.id)}
+                          />
+                          <span>
+                            <b>{student.full_name || 'Student'}</b>
+                            <small>{student.email || 'Email not available'}</small>
+                          </span>
+                        </label>
+                      ))}
+                      {filteredStudents.length === 0 && <p>No student accounts match this search.</p>}
+                    </div>
+                  </section>
+                )}
+
+                {(audience === 'authors' || audience === 'both') && (
+                  <section className="admin-notification-group">
+                    <div className="admin-notification-group-heading">
+                      <h3>2. Blog Authors</h3>
+                      <span>{selectedAuthorIds.length} selected</span>
+                    </div>
+                    <div className="admin-notification-student-list">
+                      {filteredAuthors.map(author => (
+                        <label key={author.id} className="admin-notification-student">
+                          <input
+                            type="checkbox"
+                            checked={selectedAuthorIds.includes(author.id)}
+                            onChange={() => toggleAuthor(author.id)}
+                          />
+                          <span>
+                            <b>{author.full_name || 'Blog Author'}</b>
+                            <small>{author.email || 'Email not available'} · {author.author_status || 'Author account'}</small>
+                          </span>
+                        </label>
+                      ))}
+                      {filteredAuthors.length === 0 && <p>No blog-author accounts match this search.</p>}
+                    </div>
+                  </section>
+                )}
               </>
             )}
           </aside>
@@ -361,6 +517,12 @@ export default function AdminNotificationsPage() {
         .admin-notification-recipients h2{margin:0 0 7px;font-size:16px;color:#102b46}
         .admin-notification-recipients>p{margin:0 0 16px;color:#718392;font-size:11px;line-height:1.6}
         .admin-notification-radio{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid #e4ecef;border-radius:8px;margin-bottom:9px;cursor:pointer}
+        .admin-notification-group-options{padding-bottom:12px;border-bottom:1px solid #edf1f2;margin-bottom:15px}
+        .admin-notification-recipient-mode>strong{display:block;margin:0 0 9px;color:#284257;font-size:12px}
+        .admin-notification-group{margin-top:16px;border-top:1px solid #e4ecef;padding-top:13px}
+        .admin-notification-group-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}
+        .admin-notification-group-heading h3{margin:0;color:#102b46;font-size:13px}
+        .admin-notification-group-heading span{color:#129b98;font-size:10px;font-weight:800}
         .admin-notification-radio input,.admin-notification-student input{accent-color:#129b98}
         .admin-notification-radio span,.admin-notification-radio small,.admin-notification-student span,.admin-notification-student small{display:block}
         .admin-notification-radio b,.admin-notification-student b{font-size:12px;color:#29475c}
