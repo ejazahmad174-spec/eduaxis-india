@@ -70,7 +70,6 @@ export default function AuthorRegisterPage() {
             full_name: fullName.trim(),
             designation: designation.trim() || null,
             biography: biography.trim() || null,
-            status: 'pending',
           });
 
         if (profileError) {
