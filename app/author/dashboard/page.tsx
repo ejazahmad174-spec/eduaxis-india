@@ -25,11 +25,24 @@ type Submission = {
   featured_image_url?: string | null;
 };
 
+type AuthorNotification = {
+  id: string;
+  title: string;
+  message: string;
+  notification_type: string;
+  link_url: string | null;
+  is_read: boolean;
+  created_at: string;
+};
+
 export default function AuthorDashboard() {
   const router = useRouter();
 
   const [profile, setProfile] = useState<AuthorProfile | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [notifications, setNotifications] = useState<AuthorNotification[]>([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [notificationError, setNotificationError] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -80,6 +93,32 @@ export default function AuthorDashboard() {
     }
 
     setProfile(author);
+
+    const [notificationResult, unreadNotificationResult] = await Promise.all([
+      supabase
+        .from('student_notifications')
+        .select('id, title, message, notification_type, link_url, is_read, created_at')
+        .eq('student_id', authData.user.id)
+        .order('created_at', { ascending: false })
+        .limit(20),
+      supabase
+        .from('student_notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('student_id', authData.user.id)
+        .eq('is_read', false),
+    ]);
+
+    if (notificationResult.error) {
+      setNotificationError('Your notifications could not be loaded. Please refresh the page.');
+    } else {
+      setNotifications((notificationResult.data || []) as AuthorNotification[]);
+    }
+
+    if (unreadNotificationResult.error) {
+      setNotificationError('Your unread notification count could not be loaded.');
+    } else {
+      setUnreadNotificationCount(unreadNotificationResult.count || 0);
+    }
 
     if (author.status === 'approved') {
       const { data: articles, error: articlesError } = await supabase
@@ -287,6 +326,40 @@ export default function AuthorDashboard() {
     await saveSubmission('draft');
   }
 
+  async function markNotificationRead(id: string) {
+    if (!supabase) return;
+
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) {
+      router.replace('/author/login');
+      return;
+    }
+
+    const { error: updateError } = await supabase
+      .from('student_notifications')
+      .update({
+        is_read: true,
+        read_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('student_id', authData.user.id);
+
+    if (updateError) {
+      setNotificationError('This notification could not be marked as read. Please try again.');
+      return;
+    }
+
+    setNotifications(current =>
+      current.map(notification =>
+        notification.id === id
+          ? { ...notification, is_read: true }
+          : notification
+      )
+    );
+    setUnreadNotificationCount(current => Math.max(0, current - 1));
+    setNotificationError('');
+  }
+
   async function handleLogout() {
     if (!supabase) return;
     await supabase.auth.signOut();
@@ -341,6 +414,14 @@ export default function AuthorDashboard() {
         </Link>
 
         <div className="headerActions">
+          <a href="#author-notifications" className="notificationBell">
+            Notifications
+            {unreadNotificationCount > 0 && (
+              <span className="notificationBellCount">
+                {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+              </span>
+            )}
+          </a>
           <Link href="/blogs">View Blog</Link>
           <button onClick={handleLogout}>Logout</button>
         </div>
@@ -380,6 +461,79 @@ export default function AuthorDashboard() {
             <small>Saved Drafts</small>
             <strong>{draftCount}</strong>
           </div>
+        </section>
+
+        <section className="notificationSection" id="author-notifications">
+          <div className="notificationSectionHeading">
+            <div>
+              <span className="notificationEyebrow">AUTHOR UPDATES</span>
+              <h2>Notification Centre</h2>
+              <p>Announcements and messages from the EduAxis India administration team.</p>
+            </div>
+            <span className="unreadCountBadge">
+              {unreadNotificationCount} unread
+            </span>
+          </div>
+
+          {notificationError && (
+            <div className="notificationError" role="alert">{notificationError}</div>
+          )}
+
+          {notifications.length === 0 ? (
+            <div className="notificationEmpty">
+              <span>🔔</span>
+              <h3>You are all caught up</h3>
+              <p>Important announcements for blog authors will appear here.</p>
+            </div>
+          ) : (
+            <div className="authorNotificationList">
+              {notifications.map(notification => (
+                <article
+                  className={'authorNotificationCard' + (notification.is_read ? ' isRead' : ' isUnread')}
+                  key={notification.id}
+                >
+                  <div className="authorNotificationBody">
+                    <div className="authorNotificationMeta">
+                      <span>{notification.notification_type.replace(/_/g, ' ')}</span>
+                      <time>
+                        {new Date(notification.created_at).toLocaleString('en-IN', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </time>
+                    </div>
+                    <h3>{notification.title}</h3>
+                    <p>{notification.message}</p>
+                    {notification.link_url && (
+                      <a
+                        className="notificationRelatedLink"
+                        href={notification.link_url}
+                        target={notification.link_url.startsWith('http') ? '_blank' : undefined}
+                        rel={notification.link_url.startsWith('http') ? 'noreferrer' : undefined}
+                      >
+                        Open related page →
+                      </a>
+                    )}
+                  </div>
+
+                  {!notification.is_read ? (
+                    <button
+                      type="button"
+                      className="markReadButton"
+                      onClick={() => markNotificationRead(notification.id)}
+                    >
+                      Mark as read
+                    </button>
+                  ) : (
+                    <span className="readStatus">✓ Read</span>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="articleSection">
@@ -600,6 +754,31 @@ export default function AuthorDashboard() {
           text-decoration: none;
         }
 
+        .headerActions .notificationBell {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          color: #102b46;
+          padding: 8px 11px;
+          border: 1px solid #dce5e9;
+          border-radius: 8px;
+          background: #fff;
+        }
+
+        .notificationBellCount {
+          display: inline-grid;
+          min-width: 18px;
+          height: 18px;
+          padding: 0 4px;
+          place-items: center;
+          border-radius: 20px;
+          background: #129b98;
+          color: #fff;
+          font-size: 10px;
+          line-height: 1;
+        }
+
         .headerActions button {
           border: 1px solid #dce5e9;
           background: white;
@@ -678,6 +857,174 @@ export default function AuthorDashboard() {
           color: #102b46;
           font-size: 28px;
           margin-top: 8px;
+        }
+
+        .notificationSection {
+          margin: 0 0 26px;
+          padding: 24px;
+          border: 1px solid #e2eaed;
+          border-radius: 13px;
+          background: white;
+        }
+
+        .notificationSectionHeading {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 15px;
+          margin-bottom: 16px;
+        }
+
+        .notificationEyebrow {
+          color: #18a5a0;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 1.3px;
+        }
+
+        .notificationSectionHeading h2 {
+          margin: 5px 0;
+          color: #102b46;
+          font-size: 21px;
+        }
+
+        .notificationSectionHeading p {
+          margin: 0;
+          color: #657789;
+          font-size: 12px;
+          line-height: 1.6;
+        }
+
+        .unreadCountBadge {
+          flex: 0 0 auto;
+          padding: 8px 11px;
+          border-radius: 20px;
+          background: #e7f5f4;
+          color: #087f7b;
+          font-size: 11px;
+          font-weight: 800;
+        }
+
+        .authorNotificationList {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .authorNotificationCard {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 18px;
+          padding: 16px 0;
+          border-top: 1px solid #edf1f3;
+        }
+
+        .authorNotificationCard:first-child {
+          border-top: 0;
+          padding-top: 0;
+        }
+
+        .authorNotificationBody {
+          min-width: 0;
+          flex: 1;
+        }
+
+        .authorNotificationMeta {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 10px;
+          margin-bottom: 7px;
+        }
+
+        .authorNotificationMeta span {
+          color: #087f7b;
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: .7px;
+          text-transform: uppercase;
+        }
+
+        .authorNotificationMeta time {
+          color: #8a99a5;
+          font-size: 10px;
+        }
+
+        .authorNotificationBody h3 {
+          margin: 0;
+          color: #203c55;
+          font-size: 14px;
+          line-height: 1.5;
+        }
+
+        .authorNotificationBody p {
+          margin: 5px 0 0;
+          color: #657789;
+          font-size: 12px;
+          line-height: 1.7;
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+        }
+
+        .notificationRelatedLink {
+          display: inline-block;
+          margin-top: 8px;
+          color: #087f7b;
+          font-size: 11px;
+          font-weight: 800;
+          text-decoration: none;
+        }
+
+        .markReadButton {
+          flex: 0 0 auto;
+          border: 1px solid #b8dedd;
+          border-radius: 7px;
+          background: white;
+          color: #087f7b;
+          padding: 8px 10px;
+          font-size: 10px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .readStatus {
+          flex: 0 0 auto;
+          color: #718392;
+          font-size: 10px;
+          font-weight: 800;
+        }
+
+        .notificationEmpty {
+          padding: 28px 15px;
+          border: 1px dashed #cbd9df;
+          border-radius: 10px;
+          text-align: center;
+        }
+
+        .notificationEmpty>span {
+          font-size: 28px;
+        }
+
+        .notificationEmpty h3 {
+          margin: 8px 0 4px;
+          color: #102b46;
+          font-size: 14px;
+        }
+
+        .notificationEmpty p {
+          margin: 0;
+          color: #657789;
+          font-size: 12px;
+        }
+
+        .notificationError {
+          margin-bottom: 13px;
+          padding: 11px 13px;
+          border-radius: 8px;
+          background: #fff0ef;
+          color: #a52c25;
+          font-size: 12px;
+          line-height: 1.5;
         }
 
         .articleSection {
