@@ -179,7 +179,7 @@ export default function StudentProfilePage() {
 
         <section style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap', background: '#fff', border: '1px solid #dce5ec', borderRadius: 16, padding: 22, marginBottom: 20 }}>
           <div aria-hidden="true" style={{ width: 68, height: 68, borderRadius: '50%', display: 'grid', placeItems: 'center', background: '#e3f5f3', color: '#087f7b', fontSize: 25, fontWeight: 850 }}>
-            {(profile.full_name.trim().split(/\\s+/).map(part => part[0]).slice(0, 2).join('') || 'S').toUpperCase()}
+            {(profile.full_name.trim().split(/\s+/).map(part => part[0]).slice(0, 2).join('') || 'S').toUpperCase()}
           </div>
           <div style={{ flex: 1, minWidth: 180 }}>
             <h2 style={{ margin: '0 0 5px', fontSize: 21 }}>{profile.full_name || 'Student profile'}</h2>
