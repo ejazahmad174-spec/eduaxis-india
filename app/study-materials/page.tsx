@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import StudentNavigation from '@/components/student/StudentNavigation';
 
 type Material = {
   id: string | number;
@@ -190,19 +191,8 @@ export default function StudyMaterialsPage() {
 
   return (
     <main className="study-page">
-      <header className="study-header">
-        <div className="study-header-inner">
-          <Link href="/" className="study-brand">
-            <span className="study-logo">E</span>
-            <span>
-              <strong>EduAxis <b>India</b></strong>
-              <small>LEARN. PREPARE. PROGRESS.</small>
-            </span>
-          </Link>
+      <StudentNavigation />
 
-          <Link href="/" className="home-link">Home</Link>
-        </div>
-      </header>
 
       <section className="study-container">
         <div className="study-heading">
