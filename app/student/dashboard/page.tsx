@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import StudentNavigation from '@/components/student/StudentNavigation';
 
 type StudentProfile = {
   full_name: string | null;
@@ -68,6 +69,7 @@ export default function StudentDashboardPage() {
   }, [router]);
 
   async function handleSignOut() {
+    if (!window.confirm('Are you sure you want to log out?')) return;
     if (!supabase) return;
     setSigningOut(true);
     const { error } = await supabase.auth.signOut();
@@ -112,21 +114,8 @@ export default function StudentDashboardPage() {
 
   return (
     <main style={{ minHeight: '100vh', background: '#f3f7fa', color: '#102d49' }}>
-      <header style={{ background: '#102d49', color: '#fff', padding: '17px 22px' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <Link href="/" style={{ color: '#fff', textDecoration: 'none', fontWeight: 800, fontSize: 21 }}>
-            EduAxis <span style={{ color: '#55d2c6' }}>India</span>
-          </Link>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <Link href="/student/profile" style={{ color: '#fff', border: '1px solid rgba(255,255,255,.55)', textDecoration: 'none', borderRadius: 8, padding: '9px 13px', fontWeight: 700, fontSize: 14 }}>
-              My Profile
-            </Link>
-            <button onClick={handleSignOut} disabled={signingOut} style={{ background: '#fff', color: '#102d49', border: 0, borderRadius: 8, padding: '10px 15px', fontWeight: 750, cursor: signingOut ? 'wait' : 'pointer' }}>
-              {signingOut ? 'Signing out…' : 'Sign Out'}
-            </button>
-          </div>
-        </div>
-      </header>
+      <StudentNavigation />
+
 
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '38px 20px 55px' }}>
         <section style={{ background: '#fff', border: '1px solid #dce5ec', borderRadius: 16, padding: 28, boxShadow: '0 8px 30px rgba(16,45,73,.05)' }}>

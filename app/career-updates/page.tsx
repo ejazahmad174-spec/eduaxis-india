@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import StudentNavigation from '@/components/student/StudentNavigation';
 
 type Job = {
   id: string;
@@ -291,38 +292,7 @@ export default function CareerUpdatesPage() {
     }}>
 
       {/* Header */}
-      <header style={{
-        background: '#102d49',
-        color: '#fff',
-        padding: '16px 5%',
-      }}>
-        <div style={{
-          maxWidth: '1200px',
-          margin: 'auto',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '15px',
-          flexWrap: 'wrap',
-        }}>
-          <Link href="/" style={{
-            color: '#fff',
-            textDecoration: 'none',
-            fontSize: '23px',
-            fontWeight: 800,
-          }}>
-            EduAxis <span style={{ color: '#35c69a' }}>India</span>
-          </Link>
-
-          <Link href="/" style={{
-            color: '#fff',
-            textDecoration: 'none',
-            fontSize: '14px',
-          }}>
-            ← Back to Home
-          </Link>
-        </div>
-      </header>
+      <StudentNavigation />
 
       {/* Hero */}
       <section style={{
