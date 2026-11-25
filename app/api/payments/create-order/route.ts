@@ -181,7 +181,6 @@ export async function POST(request: Request) {
         .eq("student_id", userData.user.id)
         .eq("mock_test_id", mockTestId)
         .eq("status", "pending")
-        .not("razorpay_order_id", "is", null)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -191,6 +190,19 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "Could not check existing payment orders." },
         { status: 500 }
+      );
+    }
+
+    if (pendingRecord && !pendingRecord.razorpay_order_id) {
+      // Another request may have reserved the pending order and still be
+      // waiting for Razorpay to return its order ID. Do not create a second
+      // order during this short window.
+      return NextResponse.json(
+        {
+          error:
+            "A checkout request is already being prepared for this test. Please wait a few seconds and try again.",
+        },
+        { status: 409 }
       );
     }
 
@@ -262,6 +274,20 @@ export async function POST(request: Request) {
         .single();
 
     if (recordError || !paymentRecord) {
+      // A concurrent checkout request may have inserted the one allowed
+      // pending order after our initial lookup. The unique database index
+      // prevents duplicate payment orders; ask the browser to retry so it
+      // can reuse the order created by the winning request.
+      if (recordError?.code === "23505") {
+        return NextResponse.json(
+          {
+            error:
+              "A checkout request for this test is already in progress. Please wait a few seconds and try again; you will not be charged twice by this retry.",
+          },
+          { status: 409 }
+        );
+      }
+
       console.error("Payment record creation failed:", recordError);
       return NextResponse.json(
         { error: "Could not create the payment record." },
@@ -292,10 +318,22 @@ export async function POST(request: Request) {
       if (updateError) {
         console.error("Saving Razorpay order ID failed:", updateError);
 
+        // Release the pending-order uniqueness guard so a later request
+        // can retry safely. The Razorpay order is not returned to the client.
+        const { error: releaseError } = await adminClient
+          .from("payment_orders")
+          .update({ status: "failed" })
+          .eq("id", paymentRecord.id)
+          .eq("status", "pending");
+
+        if (releaseError) {
+          console.error("Could not release failed payment reservation:", releaseError);
+        }
+
         return NextResponse.json(
           {
             error:
-              "Razorpay created the order, but saving it failed. Please contact support before retrying.",
+              "Razorpay created an order, but EduAxis could not save its reference. No checkout was opened. Please retry; contact support if the issue continues.",
           },
           { status: 500 }
         );
