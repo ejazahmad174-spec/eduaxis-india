@@ -9,7 +9,7 @@ import StudentNavigation from '@/components/student/StudentNavigation';
 
 declare global {
   interface Window {
-    Razorpay?: new (options: {
+    Razorpay: new (options: {
       key: string;
       amount: number;
       currency: string;
