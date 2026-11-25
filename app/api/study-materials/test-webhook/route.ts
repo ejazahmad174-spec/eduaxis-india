@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import Razorpay from "razorpay";
 import { createHmac, timingSafeEqual } from "crypto";
 import { getStudyMaterialQaConfig } from "@/lib/study-material-qa";
+import { notifyStudentOfRefund } from "@/lib/refund-notifications";
 
 export const runtime = "nodejs";
 
@@ -106,7 +107,7 @@ export async function POST(request: Request) {
 
       const { data: order, error: orderError } = await adminClient
         .from("study_material_qa_payment_orders")
-        .select("id")
+        .select("id,user_id,study_material_id")
         .eq("razorpay_payment_id", refund.payment_id)
         .maybeSingle();
 
@@ -150,6 +151,46 @@ export async function POST(request: Request) {
         console.error("QA refund request status update failed:", requestUpdate.error);
         return NextResponse.json({ error: "QA refund was recorded, but its request status update failed." }, { status: 500 });
       }
+
+      const actionId = refund.notes?.eduaxis_refund_action_id;
+      const actionUpdate = typeof actionId === "string"
+        ? await adminClient.from("admin_refund_actions").update({
+            status: "processed",
+            razorpay_refund_id: refund.id,
+            processed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }).eq("id", actionId)
+        : await adminClient.from("admin_refund_actions").update({
+            status: "processed",
+            razorpay_refund_id: refund.id,
+            processed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }).eq("razorpay_refund_id", refund.id);
+
+      if (actionUpdate.error) {
+        console.error("QA admin refund action reconciliation failed:", actionUpdate.error);
+        return NextResponse.json({ error: "QA refund was recorded but admin audit reconciliation failed." }, { status: 500 });
+      }
+
+      const [studentResult, materialResult] = await Promise.all([
+        adminClient.from("profiles").select("email").eq("id", order.user_id).maybeSingle(),
+        adminClient.from("study_materials").select("title").eq("id", order.study_material_id).maybeSingle(),
+      ]);
+      if (studentResult.error || materialResult.error) {
+        console.error("QA refund notification details failed:", studentResult.error || materialResult.error);
+        return NextResponse.json({ error: "QA refund was recorded but notification details could not be loaded." }, { status: 500 });
+      }
+
+      await notifyStudentOfRefund(adminClient, {
+        studentId: order.user_id,
+        studentEmail: studentResult.data?.email || null,
+        refundId: refund.id,
+        status: "processed",
+        amountPaise: Number(refund.amount),
+        productTitle: materialResult.data?.title || "QA Study Material",
+        categoryLabel: "QA Test PDF",
+        orderReference: order.id,
+      });
 
       return NextResponse.json({ received: true, success: true, fully_refunded: result.fully_refunded });
     }
