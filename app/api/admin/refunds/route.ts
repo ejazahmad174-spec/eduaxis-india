@@ -629,7 +629,7 @@ export async function POST(request: Request) {
       }, { status: 202 });
     }
 
-    await adminClient
+    const { error: initialAuditUpdateError } = await adminClient
       .from("admin_refund_actions")
       .update({
         razorpay_refund_id: providerRefund.id,
@@ -641,19 +641,28 @@ export async function POST(request: Request) {
 
     let finalStatus: "processed" | "pending" | "failed" | "review_required" = providerRefund.status;
     let totalRefundedPaise = providerRefundRefundedTotal(providerRefundRows, providerRefund);
+    let auditNeedsReview = Boolean(initialAuditUpdateError);
+
+    if (initialAuditUpdateError) {
+      console.error("Razorpay accepted the refund but the first admin audit update failed:", initialAuditUpdateError);
+    }
 
     if (providerRefund.status === "processed") {
       try {
         const processed = await processRefundLedger(adminClient, category, providerRefund);
         totalRefundedPaise = Number(processed.total_refunded_paise || (providerRefundedPaise + refundAmountPaise));
-        await adminClient
+        const { error: processedAuditError } = await adminClient
           .from("admin_refund_actions")
           .update({ status: "processed", processed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
           .eq("id", action.id);
+        if (processedAuditError) {
+          auditNeedsReview = true;
+          console.error("Product refund ledger was updated but admin audit status update failed:", processedAuditError);
+        }
       } catch (ledgerError) {
         console.error("Provider processed refund could not be recorded in the product ledger:", ledgerError);
         finalStatus = "review_required";
-        await adminClient
+        const { error: reviewUpdateError } = await adminClient
           .from("admin_refund_actions")
           .update({
             status: "review_required",
@@ -661,6 +670,24 @@ export async function POST(request: Request) {
             updated_at: new Date().toISOString(),
           })
           .eq("id", action.id);
+        if (reviewUpdateError) {
+          console.error("Could not mark the admin refund action for manual review:", reviewUpdateError);
+        }
+      }
+    }
+
+    if (auditNeedsReview && finalStatus !== "review_required") {
+      finalStatus = "review_required";
+      const { error: reviewUpdateError } = await adminClient
+        .from("admin_refund_actions")
+        .update({
+          status: "review_required",
+          provider_error: "Razorpay accepted the refund, but EduAxis could not update its admin audit record. Verify provider and purchase ledgers before any retry.",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", action.id);
+      if (reviewUpdateError) {
+        console.error("Could not mark the admin refund action for manual review:", reviewUpdateError);
       }
     }
 
