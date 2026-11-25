@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { createClient } from "@supabase/supabase-js";
+import { notifyStudentOfRefund } from "@/lib/refund-notifications";
 
 export const runtime = "nodejs";
 
@@ -298,7 +299,7 @@ export async function POST(request: NextRequest) {
       // Check whether this payment belongs to a course order.
       const { data: order, error: orderError } = await supabase
         .from("course_payment_orders")
-        .select("id,amount_paise,status")
+        .select("id,amount_paise,status,user_id,course_id")
         .eq("razorpay_payment_id", paymentId)
         .maybeSingle();
 
@@ -340,6 +341,46 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
+
+      const actionId = refund.notes?.eduaxis_refund_action_id;
+      const actionUpdate = typeof actionId === "string"
+        ? await supabase.from("admin_refund_actions").update({
+            status: "processed",
+            razorpay_refund_id: refundId,
+            processed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }).eq("id", actionId)
+        : await supabase.from("admin_refund_actions").update({
+            status: "processed",
+            razorpay_refund_id: refundId,
+            processed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }).eq("razorpay_refund_id", refundId);
+
+      if (actionUpdate.error) {
+        console.error("Course admin refund action reconciliation failed:", actionUpdate.error);
+        return NextResponse.json({ success: false, message: "Course refund was recorded but admin audit reconciliation failed." }, { status: 500 });
+      }
+
+      const [studentResult, courseResult] = await Promise.all([
+        supabase.from("profiles").select("email").eq("id", order.user_id).maybeSingle(),
+        supabase.from("courses").select("title").eq("id", order.course_id).maybeSingle(),
+      ]);
+      if (studentResult.error || courseResult.error) {
+        console.error("Course refund notification details could not be loaded:", studentResult.error || courseResult.error);
+        return NextResponse.json({ success: false, message: "Course refund was recorded but notification details could not be loaded." }, { status: 500 });
+      }
+
+      await notifyStudentOfRefund(supabase, {
+        studentId: order.user_id,
+        studentEmail: studentResult.data?.email || null,
+        refundId,
+        status: "processed",
+        amountPaise: Number(refund.amount),
+        productTitle: courseResult.data?.title || "Course",
+        categoryLabel: "Course",
+        orderReference: order.id,
+      });
 
       return NextResponse.json({
         received: true,
