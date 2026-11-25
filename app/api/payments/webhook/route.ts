@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import Razorpay from "razorpay";
 import { createHmac, timingSafeEqual } from "crypto";
+import { notifyStudentOfRefund } from "@/lib/refund-notifications";
 
 export const runtime = "nodejs";
 
@@ -134,6 +135,46 @@ export async function POST(request: Request) {
           );
         }
 
+        const actionId = verifiedRefund.notes?.eduaxis_refund_action_id;
+        const actionUpdate = typeof actionId === "string"
+          ? await adminClient.from("admin_refund_actions").update({
+              status: "processed",
+              razorpay_refund_id: verifiedRefund.id,
+              processed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }).eq("id", actionId)
+          : await adminClient.from("admin_refund_actions").update({
+              status: "processed",
+              razorpay_refund_id: verifiedRefund.id,
+              processed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }).eq("razorpay_refund_id", verifiedRefund.id);
+
+        if (actionUpdate.error) {
+          console.error("Admin refund action could not be reconciled:", actionUpdate.error);
+          return NextResponse.json({ error: "Refund was recorded but admin audit reconciliation failed." }, { status: 500 });
+        }
+
+        const [studentResult, testResult] = await Promise.all([
+          adminClient.from("profiles").select("email").eq("id", order.student_id).maybeSingle(),
+          adminClient.from("mock_tests").select("title").eq("id", order.mock_test_id).maybeSingle(),
+        ]);
+        if (studentResult.error || testResult.error) {
+          console.error("Refund notification details could not be loaded:", studentResult.error || testResult.error);
+          return NextResponse.json({ error: "Refund was recorded but student notification details could not be loaded." }, { status: 500 });
+        }
+
+        await notifyStudentOfRefund(adminClient, {
+          studentId: order.student_id,
+          studentEmail: studentResult.data?.email || null,
+          refundId: verifiedRefund.id,
+          status: "processed",
+          amountPaise: verifiedRefund.amount,
+          productTitle: testResult.data?.title || "Mock Test",
+          categoryLabel: "Mock Test",
+          orderReference: order.id,
+        });
+
         return NextResponse.json({
           received: true,
           success: true,
@@ -145,7 +186,7 @@ export async function POST(request: Request) {
       // Study-material refunds use their own entitlement ledger.
       const { data: materialOrder, error: materialOrderError } = await adminClient
         .from("study_material_payment_orders")
-        .select("id")
+        .select("id,user_id,study_material_id")
         .eq("razorpay_payment_id", verifiedRefund.payment_id)
         .maybeSingle();
 
@@ -176,6 +217,46 @@ export async function POST(request: Request) {
           { status: 500 }
         );
       }
+
+      const materialActionId = verifiedRefund.notes?.eduaxis_refund_action_id;
+      const materialActionUpdate = typeof materialActionId === "string"
+        ? await adminClient.from("admin_refund_actions").update({
+            status: "processed",
+            razorpay_refund_id: verifiedRefund.id,
+            processed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }).eq("id", materialActionId)
+        : await adminClient.from("admin_refund_actions").update({
+            status: "processed",
+            razorpay_refund_id: verifiedRefund.id,
+            processed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }).eq("razorpay_refund_id", verifiedRefund.id);
+
+      if (materialActionUpdate.error) {
+        console.error("Study-material admin refund action reconciliation failed:", materialActionUpdate.error);
+        return NextResponse.json({ error: "PDF refund was recorded but audit reconciliation failed." }, { status: 500 });
+      }
+
+      const [materialStudent, materialProduct] = await Promise.all([
+        adminClient.from("profiles").select("email").eq("id", materialOrder.user_id).maybeSingle(),
+        adminClient.from("study_materials").select("title").eq("id", materialOrder.study_material_id).maybeSingle(),
+      ]);
+      if (materialStudent.error || materialProduct.error) {
+        console.error("Study-material refund notification details failed:", materialStudent.error || materialProduct.error);
+        return NextResponse.json({ error: "PDF refund was recorded but notification details could not be loaded." }, { status: 500 });
+      }
+
+      await notifyStudentOfRefund(adminClient, {
+        studentId: materialOrder.user_id,
+        studentEmail: materialStudent.data?.email || null,
+        refundId: verifiedRefund.id,
+        status: "processed",
+        amountPaise: verifiedRefund.amount,
+        productTitle: materialProduct.data?.title || "Study Material",
+        categoryLabel: "Study Material",
+        orderReference: materialOrder.id,
+      });
 
       return NextResponse.json({
         received: true,
