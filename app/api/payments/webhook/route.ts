@@ -204,12 +204,9 @@ export async function POST(request: Request) {
       );
     }
 
-    let paymentTable: "payment_orders" | "study_material_payment_orders" = "payment_orders";
-    let paymentIsStudyMaterial = false;
-
     const { data: mockTestOrder, error: orderError } = await adminClient
       .from("payment_orders")
-      .select("*")
+      .select("id,amount_paise,currency,razorpay_order_id,razorpay_payment_id,status")
       .eq("razorpay_order_id", payment.order_id)
       .maybeSingle();
 
@@ -221,12 +218,29 @@ export async function POST(request: Request) {
       );
     }
 
-    let order = mockTestOrder;
+    let paymentIsStudyMaterial = false;
+    let order: {
+      id: string;
+      amount_paise: number;
+      currency: string;
+      razorpay_order_id: string | null;
+      razorpay_payment_id: string | null;
+      status: string;
+    } | null = mockTestOrder
+      ? {
+          id: mockTestOrder.id,
+          amount_paise: Number(mockTestOrder.amount_paise),
+          currency: mockTestOrder.currency,
+          razorpay_order_id: mockTestOrder.razorpay_order_id,
+          razorpay_payment_id: mockTestOrder.razorpay_payment_id,
+          status: mockTestOrder.status,
+        }
+      : null;
 
     if (!order) {
       const { data: studyMaterialOrder, error: studyMaterialOrderError } = await adminClient
         .from("study_material_payment_orders")
-        .select("*")
+        .select("id,amount_paise,currency,razorpay_order_id,razorpay_payment_id,status")
         .eq("razorpay_order_id", payment.order_id)
         .maybeSingle();
 
@@ -242,23 +256,34 @@ export async function POST(request: Request) {
         return NextResponse.json({ received: true });
       }
 
-      order = studyMaterialOrder;
-      paymentTable = "study_material_payment_orders";
+      order = {
+        id: studyMaterialOrder.id,
+        amount_paise: Number(studyMaterialOrder.amount_paise),
+        currency: studyMaterialOrder.currency,
+        razorpay_order_id: studyMaterialOrder.razorpay_order_id,
+        razorpay_payment_id: studyMaterialOrder.razorpay_payment_id,
+        status: studyMaterialOrder.status,
+      };
       paymentIsStudyMaterial = true;
     }
 
     // A failed payment must never overwrite a successful payment.
     if (event.event === "payment.failed") {
       if (order.status === "pending") {
-        const { error: updateError } = await adminClient
-          .from(paymentTable)
-          .update({ status: "failed", updated_at: paymentIsStudyMaterial ? new Date().toISOString() : undefined })
-          .eq("id", order.id)
-          .eq("status", "pending");
+        const failureUpdate = paymentIsStudyMaterial
+          ? await adminClient
+              .from("study_material_payment_orders")
+              .update({ status: "failed", updated_at: new Date().toISOString() })
+              .eq("id", order.id)
+              .eq("status", "pending")
+          : await adminClient
+              .from("payment_orders")
+              .update({ status: "failed" })
+              .eq("id", order.id)
+              .eq("status", "pending");
 
-        if (updateError) {
-          console.error("Could not record failed payment:", updateError);
-
+        if (failureUpdate.error) {
+          console.error("Could not record failed payment:", failureUpdate.error);
           return NextResponse.json(
             { error: "Could not record payment failure." },
             { status: 500 }
