@@ -243,7 +243,9 @@ export default function MockTestExamPage() {
       [questionId]: option,
     }));
 
-    if (!supabase || !exam) return;
+    const client = supabase;
+    const currentExam = exam;
+    if (!client || !currentExam) return;
 
     setAnswerSaveMessage("Saving answer...");
 
@@ -251,10 +253,10 @@ export default function MockTestExamPage() {
     const request = (previousRequest || Promise.resolve())
       .catch(() => undefined)
       .then(async () => {
-        const { error: saveError } = await supabase.rpc(
+        const { error: saveError } = await client.rpc(
           "save_mock_test_answer",
           {
-            p_attempt_id: exam.attempt_id,
+            p_attempt_id: currentExam.attempt_id,
             p_question_id: questionId,
             p_selected_option: option,
           }
