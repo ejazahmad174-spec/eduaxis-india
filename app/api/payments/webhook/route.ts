@@ -75,7 +75,7 @@ export async function POST(request: Request) {
     // 1. HANDLE SUCCESSFULLY PROCESSED REFUNDS
     // --------------------------------------------------
 
-    if (event.event === "refund.processed") {
+    if (["refund.processed", "refund.failed"].includes(event.event)) {
       const refund = event?.payload?.refund?.entity;
 
       if (!refund?.id || !refund?.payment_id || !refund?.amount) {
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
         verifiedRefund.id !== refund.id ||
         verifiedRefund.payment_id !== refund.payment_id ||
         verifiedRefund.amount !== Number(refund.amount) ||
-        verifiedRefund.status !== "processed"
+        verifiedRefund.status !== (event.event === "refund.failed" ? "failed" : "processed")
       ) {
         console.error("Razorpay refund verification mismatch.");
 
@@ -119,6 +119,49 @@ export async function POST(request: Request) {
       }
 
       if (order) {
+        if (verifiedRefund.status === "failed") {
+          const failedActionId = verifiedRefund.notes?.eduaxis_refund_action_id;
+          const failedActionUpdate = typeof failedActionId === "string"
+            ? await adminClient.from("admin_refund_actions").update({
+                status: "failed",
+                razorpay_refund_id: verifiedRefund.id,
+                provider_error: "Razorpay marked this refund as failed.",
+                updated_at: new Date().toISOString(),
+              }).eq("id", failedActionId)
+            : await adminClient.from("admin_refund_actions").update({
+                status: "failed",
+                razorpay_refund_id: verifiedRefund.id,
+                provider_error: "Razorpay marked this refund as failed.",
+                updated_at: new Date().toISOString(),
+              }).eq("razorpay_refund_id", verifiedRefund.id);
+
+          if (failedActionUpdate.error) {
+            console.error("Failed mock-test refund admin audit update failed:", failedActionUpdate.error);
+            return NextResponse.json({ error: "Refund failure event could not be recorded." }, { status: 500 });
+          }
+
+          const [studentResult, testResult] = await Promise.all([
+            adminClient.from("profiles").select("email").eq("id", order.student_id).maybeSingle(),
+            adminClient.from("mock_tests").select("title").eq("id", order.mock_test_id).maybeSingle(),
+          ]);
+          if (studentResult.error || testResult.error) {
+            return NextResponse.json({ error: "Refund failure notification details could not be loaded." }, { status: 500 });
+          }
+
+          await notifyStudentOfRefund(adminClient, {
+            studentId: order.student_id,
+            studentEmail: studentResult.data?.email || null,
+            refundId: verifiedRefund.id,
+            status: "failed",
+            amountPaise: verifiedRefund.amount,
+            productTitle: testResult.data?.title || "Mock Test",
+            categoryLabel: "Mock Test",
+            orderReference: order.id,
+          });
+
+          return NextResponse.json({ received: true, success: true, refund_failed: true });
+        }
+
         // Mock-test refund: preserve the existing mock-test refund handler.
         const { data: refundResult, error: refundError } =
           await adminClient.rpc("process_mock_test_refund", {
@@ -201,6 +244,49 @@ export async function POST(request: Request) {
       // Ignore refunds that do not belong to any EduAxis payment table.
       if (!materialOrder) {
         return NextResponse.json({ received: true });
+      }
+
+      if (verifiedRefund.status === "failed") {
+        const failedActionId = verifiedRefund.notes?.eduaxis_refund_action_id;
+        const failedActionUpdate = typeof failedActionId === "string"
+          ? await adminClient.from("admin_refund_actions").update({
+              status: "failed",
+              razorpay_refund_id: verifiedRefund.id,
+              provider_error: "Razorpay marked this refund as failed.",
+              updated_at: new Date().toISOString(),
+            }).eq("id", failedActionId)
+          : await adminClient.from("admin_refund_actions").update({
+              status: "failed",
+              razorpay_refund_id: verifiedRefund.id,
+              provider_error: "Razorpay marked this refund as failed.",
+              updated_at: new Date().toISOString(),
+            }).eq("razorpay_refund_id", verifiedRefund.id);
+
+        if (failedActionUpdate.error) {
+          console.error("Study-material failed refund audit update failed:", failedActionUpdate.error);
+          return NextResponse.json({ error: "PDF refund failure could not be recorded." }, { status: 500 });
+        }
+
+        const [studentResult, materialResult] = await Promise.all([
+          adminClient.from("profiles").select("email").eq("id", materialOrder.user_id).maybeSingle(),
+          adminClient.from("study_materials").select("title").eq("id", materialOrder.study_material_id).maybeSingle(),
+        ]);
+        if (studentResult.error || materialResult.error) {
+          return NextResponse.json({ error: "PDF refund failure notification details could not be loaded." }, { status: 500 });
+        }
+
+        await notifyStudentOfRefund(adminClient, {
+          studentId: materialOrder.user_id,
+          studentEmail: studentResult.data?.email || null,
+          refundId: verifiedRefund.id,
+          status: "failed",
+          amountPaise: verifiedRefund.amount,
+          productTitle: materialResult.data?.title || "Study Material",
+          categoryLabel: "Study Material",
+          orderReference: materialOrder.id,
+        });
+
+        return NextResponse.json({ received: true, success: true, refund_failed: true });
       }
 
       const { data: materialRefundResult, error: materialRefundError } =
