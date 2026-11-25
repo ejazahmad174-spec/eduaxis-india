@@ -20,7 +20,7 @@ type ProductSales = {
 
 type Transaction = {
   id: string;
-  category: 'Mock Test' | 'Course';
+  category: 'Mock Test' | 'Course' | 'Study Material';
   title: string;
   kind: 'Payment' | 'Refund';
   status: string;
@@ -38,6 +38,7 @@ type Report = {
     unique_buyers: number;
     mock_test_orders: number;
     course_orders: number;
+    study_material_orders: number;
   };
   mockTests: {
     orders: number;
@@ -60,6 +61,12 @@ type Report = {
     published_count: number;
     paid_published_count: number;
     free_published_count: number;
+    orders: number;
+    buyers: number;
+    gross_paise: number;
+    refunds_paise: number;
+    net_paise: number;
+    products: ProductSales[];
     note: string;
   };
   recentTransactions: Transaction[];
@@ -147,10 +154,10 @@ export default function AdminSalesPage() {
   }, [loadReport]);
 
   const cards = report ? [
-    { label: 'Gross receipts', value: money(report.summary.gross_paise), detail: 'Captured mock-test and course payments' },
+    { label: 'Gross receipts', value: money(report.summary.gross_paise), detail: 'Captured mock-test, course and PDF payments' },
     { label: 'Refunds processed', value: money(report.summary.refunds_paise), detail: 'Processed refunds across recorded sales' },
     { label: 'Net collection', value: money(report.summary.net_paise), detail: 'After refunds, before gateway fees and taxes' },
-    { label: 'Unique buyers', value: report.summary.unique_buyers.toLocaleString('en-IN'), detail: 'Distinct students across mock tests and courses' },
+    { label: 'Unique buyers', value: report.summary.unique_buyers.toLocaleString('en-IN'), detail: 'Distinct students across paid resources' },
     { label: 'Successful orders', value: report.summary.successful_orders.toLocaleString('en-IN'), detail: 'Captured payment orders, including later-refunded orders' },
   ] : [];
 
@@ -224,6 +231,18 @@ export default function AdminSalesPage() {
                     <div><span>Refunds</span><b>{money(report.courses.refunds_paise)}</b></div>
                   </div>
                 </article>
+                <article className="sales-category">
+                  <div className="sales-category-top">
+                    <span className="sales-icon">📄</span>
+                    <div><h3>PDFs &amp; Study Materials</h3><small>{report.studyMaterials.orders} captured orders · {report.studyMaterials.buyers} unique buyers</small></div>
+                  </div>
+                  <div className="sales-category-amount">{money(report.studyMaterials.net_paise)}</div>
+                  <div className="sales-category-caption">Net collection</div>
+                  <div className="sales-category-metrics">
+                    <div><span>Gross receipts</span><b>{money(report.studyMaterials.gross_paise)}</b></div>
+                    <div><span>Refunds</span><b>{money(report.studyMaterials.refunds_paise)}</b></div>
+                  </div>
+                </article>
               </div>
             </section>
 
@@ -282,17 +301,34 @@ export default function AdminSalesPage() {
             <section className="sales-panel">
               <div className="sales-panel-heading">
                 <div>
-                  <h2>PDFs &amp; study materials</h2>
-                  <p>Published resource inventory and payment tracking readiness.</p>
+                  <h2>PDF revenue by individual study material</h2>
+                  <p>Captured PDF purchases grouped by the individual study-material record.</p>
                 </div>
-                <span className="sales-status-warning">Sales tracking not connected</span>
+                <span className="sales-count">{report.studyMaterials.published_count} published resources</span>
               </div>
               <div className="sales-materials-grid">
                 <div><strong>{report.studyMaterials.published_count}</strong><span>Published materials</span></div>
                 <div><strong>{report.studyMaterials.free_published_count}</strong><span>Free materials</span></div>
-                <div><strong>{report.studyMaterials.paid_published_count}</strong><span>Paid materials listed</span></div>
-                <div><strong>—</strong><span>Recorded buyers / revenue</span></div>
+                <div><strong>{report.studyMaterials.paid_published_count}</strong><span>Paid materials</span></div>
+                <div><strong>{report.studyMaterials.buyers}</strong><span>PDF buyers</span></div>
               </div>
+              {report.studyMaterials.products.length === 0 ? (
+                <div className="sales-empty">No captured premium PDF payments have been recorded yet.</div>
+              ) : (
+                <div className="sales-table-wrap" style={{ marginTop: 15 }}>
+                  <table className="sales-table">
+                    <thead><tr><th>Study material</th><th>Orders</th><th>Buyers</th><th>Gross</th><th>Refunds</th><th>Net</th></tr></thead>
+                    <tbody>
+                      {report.studyMaterials.products.map((item) => (
+                        <tr key={item.id}>
+                          <td><strong>{item.title}</strong><small>{item.active_orders} active · {item.fully_refunded_orders} fully refunded</small></td>
+                          <td>{item.orders}</td><td>{item.buyers}</td><td>{money(item.gross_paise)}</td><td>{money(item.refunds_paise)}</td><td className="sales-net">{money(item.net_paise)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
               <p className="sales-material-note">{report.studyMaterials.note}</p>
             </section>
 
@@ -350,7 +386,7 @@ export default function AdminSalesPage() {
         .sales-panel-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
         .sales-panel-heading h2{font-size:16px;color:#102b46;margin:0 0 5px}
         .sales-panel-heading p{font-size:11px;line-height:1.6;color:#758898;margin:0}
-        .sales-category-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.sales-category-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
         .sales-category{border:1px solid #e5ecef;border-radius:11px;padding:17px;background:#fbfcfd}
         .sales-category-top{display:flex;align-items:center;gap:11px}
         .sales-icon{width:38px;height:38px;border-radius:10px;background:#e7f5f2;display:grid;place-items:center;font-size:18px}
@@ -371,7 +407,7 @@ export default function AdminSalesPage() {
         .sales-table td small{font-size:9px;color:#8796a1;margin-top:4px}
         .sales-net{font-weight:800;color:#167c5a!important}
         .sales-refund-amount{font-weight:800;color:#b23b34!important}
-        .sales-status-warning{font-size:9px;font-weight:800;color:#8b5b17;background:#fff4dc;border-radius:30px;padding:7px 10px}
+        .sales-status-warning{font-size:9px;font-weight:800;color:#177147;background:#e7f6ee;border-radius:30px;padding:7px 10px}
         .sales-materials-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
         .sales-materials-grid>div{background:#f7f9fa;border:1px solid #e7edf0;border-radius:9px;padding:13px}
         .sales-materials-grid strong,.sales-materials-grid span{display:block}
