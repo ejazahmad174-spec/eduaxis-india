@@ -52,6 +52,20 @@ export async function GET(request: Request) {
       )
       .map((order) => order.study_material_id);
 
+    const orderIds = qaOrders.map((order) => order.id);
+    const { data: refundRequests, error: refundRequestError } = orderIds.length
+      ? await adminClient
+          .from("study_material_qa_refund_requests")
+          .select("id,payment_order_id,refund_type,amount_paise,status,razorpay_refund_id,created_at")
+          .in("payment_order_id", orderIds)
+          .order("created_at", { ascending: false })
+      : { data: [], error: null };
+
+    if (refundRequestError) {
+      console.error("QA refund request status lookup failed:", refundRequestError);
+      return NextResponse.json({ error: "QA refund status could not be loaded." }, { status: 500 });
+    }
+
     return NextResponse.json({
       isQaAccount: true,
       enabled: config.enabled,
@@ -64,6 +78,15 @@ export async function GET(request: Request) {
         amount_paise: Number(order.amount_paise),
         refunded_paise: Number(order.refunded_paise),
         paid_at: order.paid_at,
+      })),
+      refundRequests: (refundRequests || []).map((item) => ({
+        id: item.id,
+        payment_order_id: item.payment_order_id,
+        refund_type: item.refund_type,
+        amount_paise: Number(item.amount_paise),
+        status: item.status,
+        razorpay_refund_id: item.razorpay_refund_id,
+        created_at: item.created_at,
       })),
     });
   } catch (error) {
