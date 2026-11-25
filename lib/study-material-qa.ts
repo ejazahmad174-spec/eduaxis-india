@@ -15,9 +15,13 @@ export function getStudyMaterialQaConfig(): StudyMaterialQaConfig {
   const featureEnabled = process.env.RAZORPAY_PDF_TEST_ENABLED === "true";
   const isTestKey = keyId.startsWith("rzp_test_");
 
+  const fullyConfigured = Boolean(
+    featureEnabled && qaUserId && isTestKey && keySecret && webhookSecret
+  );
+
   return {
-    enabled: Boolean(featureEnabled && qaUserId && isTestKey && keySecret),
-    webhookReady: Boolean(featureEnabled && qaUserId && isTestKey && keySecret && webhookSecret),
+    enabled: fullyConfigured,
+    webhookReady: fullyConfigured,
     qaUserId,
     keyId,
     keySecret,
