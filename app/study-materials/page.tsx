@@ -843,7 +843,138 @@ export default function StudyMaterialsPage() {
             grid-template-columns: 1fr;
           }
         }
+`      `}</style>
+      <style jsx global>{`
+        /* MaterialCard is a nested render function, so its nodes need global
+           selectors rather than the parent component's styled-jsx scope. */
+        .material-card {
+          background: #ffffff;
+          border: 1px solid #dce5ef;
+          border-radius: 13px;
+          padding: 23px;
+          box-shadow: 0 3px 12px rgba(15, 45, 73, 0.05);
+          min-width: 0;
+        }
+
+        .material-card h3 {
+          font-size: 20px;
+          line-height: 1.35;
+          color: #102d49;
+          margin: 15px 0 8px;
+          font-weight: 800;
+        }
+
+        .material-card p {
+          color: #475569;
+          font-size: 14px;
+          line-height: 1.55;
+          margin: 10px 0;
+        }
+
+        .material-card .material-description {
+          color: #64748b;
+          line-height: 1.6;
+          min-height: 42px;
+        }
+
+        .material-card .free-badge,
+        .material-card .premium-badge {
+          display: inline-flex;
+          align-items: center;
+          width: fit-content;
+          padding: 6px 11px;
+          border-radius: 20px;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: .35px;
+          background: #e0f5f2;
+          color: #087f75;
+        }
+
+        .material-card .premium-badge {
+          background: #fff1d6;
+          color: #946000;
+        }
+
+        .material-card .download-button,
+        .material-card .premium-purchase-button,
+        .material-card .premium-download-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          width: 100%;
+          min-height: 46px;
+          margin-top: 12px;
+          padding: 12px 16px;
+          border: 0;
+          border-radius: 9px;
+          background: #102d49;
+          color: #ffffff;
+          font: inherit;
+          font-size: 14px;
+          font-weight: 800;
+          cursor: pointer;
+          box-shadow: 0 5px 12px rgba(16, 45, 73, .13);
+          transition: transform .16s ease, background .16s ease, box-shadow .16s ease;
+        }
+
+        .material-card .download-button:hover,
+        .material-card .premium-purchase-button:hover {
+          background: #087f85;
+          transform: translateY(-1px);
+          box-shadow: 0 7px 15px rgba(8, 127, 133, .18);
+        }
+
+        .material-card .premium-download-button {
+          background: #087f75;
+        }
+
+        .material-card .premium-download-button:hover {
+          background: #066a62;
+          transform: translateY(-1px);
+        }
+
+        .material-card .premium-purchase-button:disabled {
+          opacity: .6;
+          cursor: wait;
+          transform: none;
+        }
+
+        .material-card .premium-action {
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+          margin-top: 18px;
+          padding: 15px;
+          border: 1px solid #f2dfb8;
+          border-radius: 11px;
+          background: #fff8e9;
+          color: #946000;
+        }
+
+        .material-card .premium-action > strong {
+          color: #102d49;
+          font-size: 25px;
+          font-weight: 900;
+        }
+
+        .material-card .premium-action span {
+          font-size: 12px;
+        }
+
+        .material-card .premium-unlocked {
+          color: #087443;
+          font-weight: 800;
+        }
+
+        @media (max-width: 600px) {
+          .material-card {
+            padding: 18px;
+          }
+        }
       `}</style>
+
     </main>
   );
 }
