@@ -40,6 +40,16 @@ type ExamData = {
   questions: ExamQuestion[];
 };
 
+type MockTestPreview = {
+  title: string;
+  title_hi?: string | null;
+  instructions?: string | null;
+  instructions_hi?: string | null;
+  duration_minutes: number | null;
+  total_marks: number | null;
+  negative_marking: number;
+};
+
 type ReviewQuestion = {
   question_id: string;
   question_text: string;
@@ -173,6 +183,8 @@ export default function MockTestExamPage() {
   const testId = String(params.id);
   const [language, setLanguage] = useState<Language>("en");
   const [exam, setExam] = useState<ExamData | null>(null);
+  const [preview, setPreview] = useState<MockTestPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(true);
   const [answers, setAnswers] = useState<Record<string, OptionKey>>({});
   const [marked, setMarked] = useState<string[]>([]);
   const [visited, setVisited] = useState<string[]>([]);
@@ -213,11 +225,29 @@ export default function MockTestExamPage() {
         window.location.replace("/student/login?next=" + encodeURIComponent(nextPath));
         return;
       }
+      const { data: testPreview, error: previewError } = await supabase
+        .from("mock_tests")
+        .select("title,title_hi,instructions,instructions_hi,duration_minutes,total_marks,negative_marking")
+        .eq("id", testId)
+        .eq("status", "published")
+        .maybeSingle();
+
+      if (!active) return;
+
+      if (previewError) {
+        setError("We could not load the test instructions. Please refresh and try again.");
+      } else if (!testPreview) {
+        setError("This mock test is unavailable.");
+      } else {
+        setPreview(testPreview as MockTestPreview);
+      }
+
+      setPreviewLoading(false);
       setAuthChecking(false);
     }
     checkStudentLogin();
     return () => { active = false; };
-  }, []);
+  }, [testId]);
 
   const startExam = async () => {
     if (!supabase || loading) return;
@@ -638,13 +668,30 @@ export default function MockTestExamPage() {
             {switchLanguage()}
             <div className="ea-exam-kicker" style={{ marginTop: 24 }}>EDUAXIS INDIA · EXAMINATION MODE</div>
             <h1 className="ea-exam-h1">{t.instructions}</h1>
-            <h2 style={{ fontSize: 23, color: "#28445d", marginTop: 15 }}>{exam ? (language === "hi" ? exam.test_title_hi || exam.test_title : exam.test_title) : t.start}</h2>
-            {exam?.instructions && <p className="ea-exam-muted">{language === "hi" ? exam.instructions_hi || exam.instructions : exam.instructions}</p>}
+            <h2 style={{ fontSize: 23, color: "#28445d", marginTop: 15 }}>
+              {exam
+                ? (language === "hi" ? exam.test_title_hi || exam.test_title : exam.test_title)
+                : preview
+                  ? (language === "hi" ? preview.title_hi || preview.title : preview.title)
+                  : previewLoading ? "Loading test details…" : t.start}
+            </h2>
+            {(exam?.instructions || preview?.instructions) && (
+              <p className="ea-exam-muted">
+                {language === "hi"
+                  ? exam?.instructions_hi || preview?.instructions_hi || exam?.instructions || preview?.instructions
+                  : exam?.instructions || preview?.instructions}
+              </p>
+            )}
             <div className="ea-exam-summary-grid">
-              <div className="ea-exam-summary-cell"><strong>{exam?.questions.length || "—"}</strong><span>Questions</span></div>
-              <div className="ea-exam-summary-cell"><strong>{exam?.duration_minutes || "—"}</strong><span>{t.duration} (min)</span></div>
-              <div className="ea-exam-summary-cell"><strong>{exam ? Number(exam.total_marks).toFixed(0) : "—"}</strong><span>{t.totalMarks}</span></div>
+              <div className="ea-exam-summary-cell"><strong>MCQ</strong><span>Question format</span></div>
+              <div className="ea-exam-summary-cell"><strong>{exam?.duration_minutes ?? preview?.duration_minutes ?? "—"}</strong><span>{t.duration} (min)</span></div>
+              <div className="ea-exam-summary-cell"><strong>{exam ? Number(exam.total_marks).toFixed(0) : preview?.total_marks != null ? Number(preview.total_marks).toFixed(0) : "—"}</strong><span>{t.totalMarks}</span></div>
             </div>
+            {preview && (
+              <p className="ea-exam-muted" style={{ fontSize: 12, marginTop: 8 }}>
+                {t.negative}: {Number(preview.negative_marking).toFixed(2)} marks per incorrect answer.
+              </p>
+            )}
             <ul className="ea-exam-instruction-list">
               <li>All questions are multiple-choice questions with four options.</li>
               <li>Select one option. Your answers are saved automatically as you work.</li>
