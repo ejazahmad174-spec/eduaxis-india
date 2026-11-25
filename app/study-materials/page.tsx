@@ -65,6 +65,9 @@ export default function StudyMaterialsPage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [purchasedMaterials, setPurchasedMaterials] = useState<string[]>([]);
+  const [qaPurchasedMaterials, setQaPurchasedMaterials] = useState<string[]>([]);
+  const [isQaAccount, setIsQaAccount] = useState<boolean | null>(null);
+  const [qaCheckoutEnabled, setQaCheckoutEnabled] = useState(false);
   const [processingMaterial, setProcessingMaterial] = useState('');
 
   useEffect(() => {
@@ -110,6 +113,38 @@ export default function StudyMaterialsPage() {
 
       if (!active) return;
 
+      // Resolve the student-specific payment mode before showing purchase buttons.
+      // Fail closed: a status error must not expose a live checkout to the QA account.
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) throw new Error('Student session could not be read.');
+
+        const qaResponse = await fetch('/api/study-materials/test-status', {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${accessToken}` },
+          cache: 'no-store',
+        });
+        const qaData = await qaResponse.json();
+        if (!qaResponse.ok) throw new Error(qaData.error || 'QA checkout status could not be checked.');
+
+        if (!active) return;
+        setIsQaAccount(Boolean(qaData.isQaAccount));
+        setQaCheckoutEnabled(Boolean(qaData.isQaAccount && qaData.enabled && qaData.webhookReady));
+        setQaPurchasedMaterials(Array.isArray(qaData.purchases) ? qaData.purchases : []);
+      } catch (qaStatusError) {
+        if (!active) return;
+        setIsQaAccount(null);
+        setQaCheckoutEnabled(false);
+        setError(
+          qaStatusError instanceof Error
+            ? qaStatusError.message
+            : 'Purchase options could not be verified. Please refresh the page.'
+        );
+      }
+
+      if (!active) return;
+
       if (freeResult.error || premiumResult.error) {
         setError('Unable to load study materials. Please try again later.');
       } else {
@@ -152,6 +187,102 @@ export default function StudyMaterialsPage() {
       active = false;
     };
   }, [router]);
+
+  async function purchaseQaMaterial(item: Material) {
+    const client = supabase;
+    if (!client || !isQaAccount || !qaCheckoutEnabled || processingMaterial) return;
+
+    setMessage('');
+    const { data: authData, error: authError } = await client.auth.getUser();
+    if (authError || !authData.user) {
+      router.replace(`/student/login?next=${encodeURIComponent('/study-materials')}`);
+      return;
+    }
+
+    setProcessingMaterial(item.id);
+    try {
+      const { data: sessionData } = await client.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error('Your student session has expired. Please log in again.');
+
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded || !window.Razorpay) {
+        throw new Error('Unable to load Razorpay Checkout. Please try again.');
+      }
+
+      const orderResponse = await fetch('/api/study-materials/test-create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ materialId: item.id }),
+      });
+      const orderData = await orderResponse.json();
+      if (!orderResponse.ok || !orderData.testMode) {
+        throw new Error(orderData.error || 'Razorpay test checkout is not ready.');
+      }
+      if (typeof orderData.keyId !== 'string' || !orderData.keyId.startsWith('rzp_test_')) {
+        throw new Error('QA checkout refused an invalid non-test Razorpay key.');
+      }
+
+      const checkout = new window.Razorpay({
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: 'EduAxis India · QA Test',
+        description: orderData.materialTitle || item.title,
+        order_id: orderData.orderId,
+        prefill: { email: authData.user.email || '' },
+        theme: { color: '#087f75' },
+        handler: async (response) => {
+          try {
+            setMessage('Razorpay test payment received. Verifying the test transaction...');
+            const verifyResponse = await fetch('/api/study-materials/test-verify', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify(response),
+            });
+            const verifyData = await verifyResponse.json();
+            if (!verifyResponse.ok || !verifyData.success || !verifyData.testMode) {
+              throw new Error(verifyData.error || 'QA test payment verification failed.');
+            }
+
+            setQaPurchasedMaterials((current) =>
+              current.includes(item.id) ? current : [...current, item.id]
+            );
+            setMessage('Test payment verified. The QA-only PDF download is now unlocked. No real money was used.');
+          } catch (verifyError) {
+            setMessage(
+              verifyError instanceof Error
+                ? verifyError.message
+                : 'QA payment verification failed. Please retry or contact support.'
+            );
+          } finally {
+            setProcessingMaterial('');
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setProcessingMaterial('');
+            setMessage('QA test checkout closed. No real payment was taken.');
+          },
+        },
+      });
+
+      checkout.open();
+    } catch (purchaseError) {
+      setMessage(
+        purchaseError instanceof Error
+          ? purchaseError.message
+          : 'Unable to process the Razorpay QA test payment.'
+      );
+      setProcessingMaterial('');
+    }
+  }
 
   async function purchaseMaterial(item: Material) {
     const client = supabase;
@@ -259,15 +390,19 @@ export default function StudyMaterialsPage() {
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) throw new Error('Please log in again to download this PDF.');
 
-      const response = await fetch('/api/study-materials/download', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ materialId }),
-        cache: 'no-store',
-      });
+      const isQaPurchase = isQaAccount === true && qaPurchasedMaterials.includes(materialId);
+      const response = await fetch(
+        isQaPurchase ? '/api/study-materials/test-download' : '/api/study-materials/download',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ materialId }),
+          cache: 'no-store',
+        }
+      );
       const payload = await response.json();
       if (!response.ok || !payload.signedUrl) {
         throw new Error(payload.error || 'Unable to prepare your secure PDF download.');
@@ -368,23 +503,47 @@ export default function StudyMaterialsPage() {
                 ? `₹${item.price}`
                 : 'Premium access'}
             </strong>
-            {purchasedMaterials.includes(item.id) ? (
+            {purchasedMaterials.includes(item.id) || qaPurchasedMaterials.includes(item.id) ? (
               <>
-                <span className="premium-unlocked">✓ Purchased · Access available</span>
+                <span className="premium-unlocked">
+                  ✓ {qaPurchasedMaterials.includes(item.id) ? 'QA Test Purchase · Access available' : 'Purchased · Access available'}
+                </span>
                 <button
                   className="premium-download-button"
                   onClick={() => downloadPurchasedPdf(item.id)}
                 >
-                  ↓ Download Purchased PDF
+                  ↓ Download {qaPurchasedMaterials.includes(item.id) ? 'QA Test PDF' : 'Purchased PDF'}
                 </button>
               </>
-            ) : (
+            ) : isQaAccount === true ? (
+              qaCheckoutEnabled ? (
+                <>
+                  <span className="qa-test-mode-note">QA ONLY · RAZORPAY TEST MODE · NO REAL CHARGE</span>
+                  <button
+                    className="premium-purchase-button qa-test-purchase-button"
+                    disabled={!!processingMaterial}
+                    onClick={() => purchaseQaMaterial(item)}
+                  >
+                    {processingMaterial === item.id ? 'Preparing test checkout…' : 'Run Test Checkout'}
+                  </button>
+                </>
+              ) : (
+                <div className="qa-test-disabled">
+                  <strong>QA checkout is not enabled yet.</strong>
+                  <span>Live purchases are disabled for this QA account. Separate Razorpay test credentials are required.</span>
+                </div>
+              )
+            ) : isQaAccount === false ? (
               <button
                 className="premium-purchase-button"
                 disabled={!!processingMaterial}
                 onClick={() => purchaseMaterial(item)}
               >
                 {processingMaterial === item.id ? 'Preparing checkout…' : 'Purchase Now'}
+              </button>
+            ) : (
+              <button className="premium-purchase-button" disabled>
+                Checking secure purchase options…
               </button>
             )}
           </div>
@@ -966,6 +1125,40 @@ export default function StudyMaterialsPage() {
         .material-card .premium-unlocked {
           color: #087443;
           font-weight: 800;
+        }
+
+        .material-card .qa-test-mode-note {
+          display: block;
+          margin-top: 8px;
+          color: #087f75;
+          font-size: 10px;
+          letter-spacing: .55px;
+          font-weight: 900;
+        }
+
+        .material-card .qa-test-purchase-button {
+          background: #087f75;
+        }
+
+        .material-card .qa-test-purchase-button:hover {
+          background: #06665f;
+        }
+
+        .material-card .qa-test-disabled {
+          display: grid;
+          gap: 6px;
+          margin-top: 11px;
+          padding: 12px;
+          border: 1px solid #ead8b7;
+          border-radius: 9px;
+          background: #fff9ee;
+          color: #805913;
+          font-size: 12px;
+          line-height: 1.5;
+        }
+
+        .material-card .qa-test-disabled strong {
+          color: #684609;
         }
 
         @media (max-width: 600px) {
