@@ -214,6 +214,7 @@ export default function MockTestExamPage() {
       if (!supabase) {
         if (active) {
           setError("Unable to connect. Please refresh the page and try again.");
+          setPreviewLoading(false);
           setAuthChecking(false);
         }
         return;
