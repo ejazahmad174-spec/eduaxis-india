@@ -42,25 +42,6 @@ function loadRazorpayScript(): Promise<boolean> {
   });
 }
 
-type QaOrder = {
-  id: string;
-  study_material_id: string;
-  status: string;
-  amount_paise: number;
-  refunded_paise: number;
-  paid_at: string | null;
-};
-
-type QaRefundRequest = {
-  id: string;
-  payment_order_id: string;
-  refund_type: "partial" | "full";
-  amount_paise: number;
-  status: string;
-  razorpay_refund_id: string | null;
-  created_at: string;
-};
-
 type Material = {
   id: string;
   title: string;
@@ -85,9 +66,6 @@ export default function StudyMaterialsPage() {
   const [message, setMessage] = useState('');
   const [purchasedMaterials, setPurchasedMaterials] = useState<string[]>([]);
   const [qaPurchasedMaterials, setQaPurchasedMaterials] = useState<string[]>([]);
-  const [qaOrders, setQaOrders] = useState<QaOrder[]>([]);
-  const [qaRefundRequests, setQaRefundRequests] = useState<QaRefundRequest[]>([]);
-  const [qaRefundBusy, setQaRefundBusy] = useState("");
   const [isQaAccount, setIsQaAccount] = useState<boolean | null>(null);
   const [qaCheckoutEnabled, setQaCheckoutEnabled] = useState(false);
   const [processingMaterial, setProcessingMaterial] = useState('');
@@ -154,8 +132,6 @@ export default function StudyMaterialsPage() {
         setIsQaAccount(Boolean(qaData.isQaAccount));
         setQaCheckoutEnabled(Boolean(qaData.isQaAccount && qaData.enabled && qaData.webhookReady));
         setQaPurchasedMaterials(Array.isArray(qaData.purchases) ? qaData.purchases : []);
-        setQaOrders(Array.isArray(qaData.qaOrders) ? qaData.qaOrders as QaOrder[] : []);
-        setQaRefundRequests(Array.isArray(qaData.refundRequests) ? qaData.refundRequests as QaRefundRequest[] : []);
       } catch (qaStatusError) {
         if (!active) return;
         setIsQaAccount(null);
@@ -211,101 +187,6 @@ export default function StudyMaterialsPage() {
       active = false;
     };
   }, [router]);
-
-  async function refreshQaStatus() {
-    const client = supabase;
-    if (!client) return;
-
-    const { data: sessionData } = await client.auth.getSession();
-    const accessToken = sessionData.session?.access_token;
-    if (!accessToken) {
-      setMessage("Your QA student session has expired. Please sign in again.");
-      return;
-    }
-
-    const response = await fetch("/api/study-materials/test-status", {
-      method: "GET",
-      headers: { Authorization: `Bearer ${accessToken}` },
-      cache: "no-store",
-    });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "Could not refresh QA refund status.");
-
-    setQaPurchasedMaterials(Array.isArray(payload.purchases) ? payload.purchases : []);
-    setQaOrders(Array.isArray(payload.qaOrders) ? payload.qaOrders as QaOrder[] : []);
-    setQaRefundRequests(Array.isArray(payload.refundRequests) ? payload.refundRequests as QaRefundRequest[] : []);
-  }
-
-  async function runQaRefund(item: Material, refundType: "partial" | "full") {
-    const client = supabase;
-    if (!client || !isQaAccount || !qaCheckoutEnabled || qaRefundBusy) return;
-
-    const currentOrder = qaOrders.find((order) => order.study_material_id === item.id);
-    if (!currentOrder || !["paid", "partially_refunded"].includes(currentOrder.status)) {
-      setMessage("No refundable QA payment is available for this PDF.");
-      return;
-    }
-
-    const expectedPaise = refundType === "partial"
-      ? 2500
-      : Math.max(0, currentOrder.amount_paise - currentOrder.refunded_paise);
-    const expectedAmount = (expectedPaise / 100).toLocaleString("en-IN", {
-      style: "currency",
-      currency: "INR",
-      minimumFractionDigits: 2,
-    });
-    const confirmed = window.confirm(
-      refundType === "partial"
-        ? `Start a ₹25.00 Razorpay TEST partial refund for this QA payment? PDF access should remain available.`
-        : `Refund the remaining ${expectedAmount} in Razorpay TEST Mode? This should fully refund the QA payment and revoke PDF access.`
-    );
-    if (!confirmed) return;
-
-    setMessage("");
-    setQaRefundBusy(item.id + ":" + refundType);
-    try {
-      const { data: sessionData } = await client.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      if (!accessToken) throw new Error("Your QA student session has expired.");
-
-      const response = await fetch("/api/study-materials/test-refund", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ materialId: item.id, refundType }),
-      });
-      const payload = await response.json();
-
-      if (!response.ok && !payload.refundInitiated) {
-        throw new Error(payload.error || "The QA refund request failed.");
-      }
-
-      if (payload.refundStatus === "processed") {
-        setMessage(
-          refundType === "partial"
-            ? "₹25.00 QA partial refund is confirmed. PDF access should remain active."
-            : "The full QA refund is confirmed. PDF access should now be revoked."
-        );
-      } else {
-        setMessage(
-          payload.error ||
-          "Razorpay accepted the QA refund. Waiting for the verified refund webhook before changing PDF access."
-        );
-      }
-
-      await refreshQaStatus();
-    } catch (refundError) {
-      setMessage(
-        refundError instanceof Error
-          ? refundError.message
-          : "Unable to complete the QA refund test."
-      );
-    } finally {
-      setQaRefundBusy("");
-    }
-  }
 
   async function purchaseQaMaterial(item: Material) {
     const client = supabase;
@@ -599,16 +480,6 @@ export default function StudyMaterialsPage() {
     item: Material;
     premium?: boolean;
   }) {
-    const qaOrder = qaOrders.find((order) => order.study_material_id === item.id);
-    const qaRefundPending = qaRefundRequests.some(
-      (request) =>
-        request.payment_order_id === qaOrder?.id &&
-        ["reserved", "pending"].includes(request.status)
-    );
-    const qaRemainingPaise = qaOrder
-      ? Math.max(0, qaOrder.amount_paise - qaOrder.refunded_paise)
-      : 0;
-
     return (
       <article className="material-card">
         <span className={premium ? 'premium-badge' : 'free-badge'}>
@@ -643,65 +514,7 @@ export default function StudyMaterialsPage() {
                 >
                   ↓ Download {qaPurchasedMaterials.includes(item.id) ? 'QA Test PDF' : 'Purchased PDF'}
                 </button>
-                {qaPurchasedMaterials.includes(item.id) && qaOrder && (
-                  <div className="qa-refund-panel">
-                    <div className="qa-refund-summary">
-                      <span>QA payment: ₹{(qaOrder.amount_paise / 100).toFixed(2)}</span>
-                      <span>Refunded: ₹{(qaOrder.refunded_paise / 100).toFixed(2)}</span>
-                      <span>Remaining: ₹{(qaRemainingPaise / 100).toFixed(2)}</span>
-                    </div>
-                    {qaRefundPending ? (
-                      <div className="qa-refund-pending">
-                        A Razorpay test refund is processing. Refresh status after the webhook arrives.
-                      </div>
-                    ) : (
-                      <div className="qa-refund-actions">
-                        {qaOrder.refunded_paise === 0 && (
-                          <button
-                            className="qa-refund-button"
-                            disabled={!!qaRefundBusy}
-                            onClick={() => runQaRefund(item, "partial")}
-                          >
-                            {qaRefundBusy === item.id + ":partial" ? "Processing…" : "Test partial refund ₹25"}
-                          </button>
-                        )}
-                        <button
-                          className="qa-refund-button qa-refund-full"
-                          disabled={!!qaRefundBusy || qaRemainingPaise < 100}
-                          onClick={() => runQaRefund(item, "full")}
-                        >
-                          {qaRefundBusy === item.id + ":full"
-                            ? "Processing…"
-                            : `Test full refund ₹${(qaRemainingPaise / 100).toFixed(2)}`}
-                        </button>
-                      </div>
-                    )}
-                    <button
-                      className="qa-refresh-button"
-                      disabled={!!qaRefundBusy}
-                      onClick={() => void refreshQaStatus().catch((refreshError) => setMessage(
-                        refreshError instanceof Error ? refreshError.message : "Could not refresh QA status."
-                      ))}
-                    >
-                      Refresh refund status
-                    </button>
-                    <small>QA-only test controls. These refunds are excluded from real sales.</small>
-                  </div>
-                )}
               </>
-            ) : isQaAccount === true && qaOrder?.status === "refunded" ? (
-              <div className="qa-refunded-state">
-                <strong>✓ Full QA refund confirmed</strong>
-                <span>Premium PDF access has been revoked. Download is no longer available.</span>
-                <button
-                  className="qa-refresh-button"
-                  onClick={() => void refreshQaStatus().catch((refreshError) => setMessage(
-                    refreshError instanceof Error ? refreshError.message : "Could not refresh QA status."
-                  ))}
-                >
-                  Refresh status
-                </button>
-              </div>
             ) : isQaAccount === true ? (
               qaCheckoutEnabled ? (
                 <>
