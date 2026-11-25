@@ -119,20 +119,37 @@ export default function StudentMockTestsPage() {
 
       setTests((data || []) as MockTest[]);
 
-      const { data: purchases, error: purchaseError } = await supabase
-        .from("mock_test_purchases")
-        .select("mock_test_id")
-        .eq("student_id", user.id);
+      const [purchaseResult, paidOrderResult] = await Promise.all([
+        supabase
+          .from("mock_test_purchases")
+          .select("mock_test_id, payment_order_id")
+          .eq("student_id", user.id),
+
+        supabase
+          .from("payment_orders")
+          .select("id, mock_test_id")
+          .eq("student_id", user.id)
+          .eq("status", "paid")
+          .not("razorpay_payment_id", "is", null),
+      ]);
 
       if (!active) return;
 
-      if (purchaseError) {
+      if (purchaseResult.error || paidOrderResult.error) {
         setError(
           "Unable to load your purchase history. Please refresh the page."
         );
       } else {
+        const purchaseOrderIds = new Set(
+          (purchaseResult.data || []).map((item) => item.payment_order_id)
+        );
+
+        // A historical purchase is not an active entitlement after its
+        // payment order has been refunded.
         setPurchasedTests(
-          (purchases || []).map((item) => item.mock_test_id)
+          (paidOrderResult.data || [])
+            .filter((order) => purchaseOrderIds.has(order.id))
+            .map((order) => order.mock_test_id)
         );
       }
 
