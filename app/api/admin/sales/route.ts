@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 type PaymentOrder = {
   id: string;
-  student_id: string;
+  student_id?: string;
   mock_test_id?: string;
   course_id?: string;
   user_id?: string;
