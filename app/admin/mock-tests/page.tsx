@@ -476,7 +476,138 @@ export default function AdminMockTests() {
   }
 
   async function changeStatus(test: Test, status: string) {
-    if (!supabase) return;
+    if (!supabase || busy) return;
+
+    if (status === "published") {
+      setBusy(true);
+      setMessage("");
+
+      try {
+        // Reload questions before publishing so the check uses current database data.
+        const { data: questionRows, error: questionError } = await supabase
+          .from("mock_test_questions")
+          .select("id, question_text, question_text_hi, options, options_hi, correct_option, marks")
+          .eq("mock_test_id", test.id)
+          .order("sort_order");
+
+        if (questionError) throw questionError;
+
+        const publishQuestions = questionRows || [];
+        if (publishQuestions.length === 0) {
+          setMessage("Publishing blocked: add questions to this test before publishing.");
+          return;
+        }
+
+        if (!test.title?.trim()) {
+          setMessage("Publishing blocked: the test title is required.");
+          return;
+        }
+
+        const duplicatePublished = tests.find(
+          (item) =>
+            item.id !== test.id &&
+            item.status === "published" &&
+            item.title.trim().toLocaleLowerCase() === test.title.trim().toLocaleLowerCase()
+        );
+
+        if (duplicatePublished) {
+          setMessage(
+            "Publishing blocked: another published test already has this title. Rename this test so students can distinguish the two tests."
+          );
+          return;
+        }
+
+        if (
+          !Number.isFinite(Number(test.duration_minutes)) ||
+          Number(test.duration_minutes) <= 0 ||
+          !Number.isFinite(Number(test.total_marks)) ||
+          Number(test.total_marks) <= 0
+        ) {
+          setMessage("Publishing blocked: duration and total marks must be greater than zero.");
+          return;
+        }
+
+        if (
+          !Number.isFinite(Number(test.negative_marking ?? 0)) ||
+          Number(test.negative_marking ?? 0) < 0 ||
+          (test.pass_marks !== null &&
+            test.pass_marks !== undefined &&
+            (!Number.isFinite(Number(test.pass_marks)) ||
+              Number(test.pass_marks) < 0 ||
+              Number(test.pass_marks) > Number(test.total_marks)))
+        ) {
+          setMessage("Publishing blocked: check the negative-marking and pass-mark settings.");
+          return;
+        }
+
+        if (
+          test.access_type === "paid" &&
+          (!Number.isFinite(Number(test.price)) || Number(test.price) <= 0)
+        ) {
+          setMessage("Publishing blocked: a paid test must have a valid price greater than zero.");
+          return;
+        }
+
+        let marksTotal = 0;
+        const invalidQuestions: number[] = [];
+
+        publishQuestions.forEach((question, index) => {
+          marksTotal += Number(question.marks) || 0;
+
+          const options = question.options || {};
+          const optionsHi = question.options_hi || {};
+          const valid =
+            typeof question.question_text === "string" &&
+            question.question_text.trim().length > 0 &&
+            typeof question.question_text_hi === "string" &&
+            question.question_text_hi.trim().length > 0 &&
+            ["A", "B", "C", "D"].every(
+              (key) => typeof options[key] === "string" && options[key].trim().length > 0
+            ) &&
+            ["A", "B", "C", "D"].every(
+              (key) => typeof optionsHi[key] === "string" && optionsHi[key].trim().length > 0
+            ) &&
+            ["A", "B", "C", "D"].includes(question.correct_option) &&
+            Number.isFinite(Number(question.marks)) &&
+            Number(question.marks) > 0;
+
+          if (!valid) invalidQuestions.push(index + 1);
+        });
+
+        if (invalidQuestions.length > 0) {
+          const shown = invalidQuestions.slice(0, 8).join(", ");
+          const extra = invalidQuestions.length > 8
+            ? ` and ${invalidQuestions.length - 8} more`
+            : "";
+          setMessage(
+            `Publishing blocked: complete the English/Hindi question text, all four options, correct option and positive marks for question(s) ${shown}${extra}.`
+          );
+          return;
+        }
+
+        if (Math.abs(marksTotal - Number(test.total_marks)) > 0.01) {
+          setMessage(
+            `Publishing blocked: question marks total ${marksTotal.toFixed(2)}, but this test is configured for ${Number(test.total_marks).toFixed(2)} marks. Adjust the questions or test total before publishing.`
+          );
+          return;
+        }
+
+        const confirmed = window.confirm(
+          `Publish "${test.title}"?\n\nQuestions: ${publishQuestions.length}\nMaximum marks: ${Number(test.total_marks).toFixed(2)}\nAccess: ${test.access_type === "paid" ? `Paid (₹${Number(test.price).toFixed(2)})` : "Free"}\n\nStudents will be able to see this test.`
+        );
+
+        if (!confirmed) return;
+      } catch (validationError) {
+        setMessage(
+          validationError instanceof Error
+            ? "Could not validate this test: " + validationError.message
+            : "Could not validate this test before publishing."
+        );
+        return;
+      } finally {
+        setBusy(false);
+      }
+    }
 
     const { data, error } = await supabase
       .from("mock_tests")
