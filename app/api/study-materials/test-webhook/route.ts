@@ -72,8 +72,7 @@ export async function POST(request: Request) {
         payment.amount !== Number(order.amount_paise) ||
         payment.currency !== order.currency ||
         (order.razorpay_payment_id && order.razorpay_payment_id !== payment.id) ||
-        order.status === "refunded" ||
-        order.status === "failed"
+        order.status === "refunded"
       ) {
         return NextResponse.json({ error: "QA captured payment did not match its order." }, { status: 400 });
       }
