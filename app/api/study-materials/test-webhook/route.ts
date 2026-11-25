@@ -126,6 +126,31 @@ export async function POST(request: Request) {
         console.error("QA refund recording failed:", refundError);
         return NextResponse.json({ error: "Could not record QA refund." }, { status: 500 });
       }
+
+      const qaRefundRequestId = refundEntity.notes?.qa_refund_request_id;
+      const requestUpdate = typeof qaRefundRequestId === "string"
+        ? await adminClient
+            .from("study_material_qa_refund_requests")
+            .update({
+              status: "processed",
+              razorpay_refund_id: refund.id,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", qaRefundRequestId)
+        : await adminClient
+            .from("study_material_qa_refund_requests")
+            .update({
+              status: "processed",
+              razorpay_refund_id: refund.id,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("razorpay_refund_id", refund.id);
+
+      if (requestUpdate.error) {
+        console.error("QA refund request status update failed:", requestUpdate.error);
+        return NextResponse.json({ error: "QA refund was recorded, but its request status update failed." }, { status: 500 });
+      }
+
       return NextResponse.json({ received: true, success: true, fully_refunded: result.fully_refunded });
     }
 
