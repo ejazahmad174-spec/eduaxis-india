@@ -609,20 +609,31 @@ export default function AdminMockTests() {
       }
     }
 
-    const { data, error } = await supabase
-      .from("mock_tests")
-      .update({ status })
-      .eq("id", test.id)
-      .select()
-      .single();
+    setBusy(true);
+    try {
+      const { data, error } = await supabase
+        .from("mock_tests")
+        .update({ status })
+        .eq("id", test.id)
+        .select()
+        .single();
 
-    if (error) {
-      setMessage(error.message);
-    } else {
-      setTests((current) =>
-        current.map((t) => (t.id === test.id ? (data as Test) : t))
+      if (error) {
+        setMessage(error.message);
+      } else {
+        setTests((current) =>
+          current.map((t) => (t.id === test.id ? (data as Test) : t))
+        );
+        setMessage(status === "published" ? "Test published." : "Test moved to Draft.");
+      }
+    } catch (statusError) {
+      setMessage(
+        statusError instanceof Error
+          ? "Could not change test status: " + statusError.message
+          : "Could not change test status."
       );
-      setMessage(status === "published" ? "Test published." : "Test moved to Draft.");
+    } finally {
+      setBusy(false);
     }
   }
 
