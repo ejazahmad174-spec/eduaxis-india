@@ -7,8 +7,43 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import StudentNavigation from '@/components/student/StudentNavigation';
 
+declare global {
+  interface Window {
+    Razorpay?: new (options: {
+      key: string;
+      amount: number;
+      currency: string;
+      name: string;
+      description: string;
+      order_id: string;
+      handler: (response: {
+        razorpay_order_id: string;
+        razorpay_payment_id: string;
+        razorpay_signature: string;
+      }) => void;
+      prefill?: { email?: string };
+      theme?: { color?: string };
+      modal?: { ondismiss?: () => void };
+    }) => { open: () => void };
+  }
+}
+
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (window.Razorpay) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(Boolean(window.Razorpay));
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
 type Material = {
-  id: string | number;
+  id: string;
   title: string;
   description: string | null;
   exam_category: string | null;
@@ -28,6 +63,9 @@ export default function StudyMaterialsPage() {
   const [category, setCategory] = useState('All Categories');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [purchasedMaterials, setPurchasedMaterials] = useState<string[]>([]);
+  const [processingMaterial, setProcessingMaterial] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -79,6 +117,32 @@ export default function StudyMaterialsPage() {
         setPremiumMaterials((premiumResult.data || []) as Material[]);
       }
 
+      const [purchaseResult, paidOrderResult] = await Promise.all([
+        supabase
+          .from('study_material_purchases')
+          .select('study_material_id,payment_order_id')
+          .eq('user_id', user.id),
+        supabase
+          .from('study_material_payment_orders')
+          .select('id,study_material_id')
+          .eq('user_id', user.id)
+          .eq('status', 'paid')
+          .not('razorpay_payment_id', 'is', null),
+      ]);
+
+      if (!active) return;
+
+      if (purchaseResult.error || paidOrderResult.error) {
+        setError('Unable to load your premium PDF purchases. Please refresh the page.');
+      } else {
+        const paidOrderIds = new Set((paidOrderResult.data || []).map((item) => item.id));
+        setPurchasedMaterials(
+          (purchaseResult.data || [])
+            .filter((item) => paidOrderIds.has(item.payment_order_id))
+            .map((item) => item.study_material_id)
+        );
+      }
+
       setLoading(false);
     }
 
@@ -88,6 +152,135 @@ export default function StudyMaterialsPage() {
       active = false;
     };
   }, [router]);
+
+  async function purchaseMaterial(item: Material) {
+    const client = supabase;
+    if (!client || processingMaterial) return;
+
+    setMessage('');
+    const { data: authData, error: authError } = await client.auth.getUser();
+    if (authError || !authData.user) {
+      router.replace(`/student/login?next=${encodeURIComponent('/study-materials')}`);
+      return;
+    }
+
+    if (purchasedMaterials.includes(item.id)) {
+      setMessage('You have already purchased this PDF. Use the download button to access it.');
+      return;
+    }
+
+    setProcessingMaterial(item.id);
+    try {
+      const { data: sessionData } = await client.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error('Your login session has expired. Please log in again.');
+
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded || !window.Razorpay) {
+        throw new Error('Unable to load Razorpay Checkout. Please try again.');
+      }
+
+      const orderResponse = await fetch('/api/study-materials/create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ materialId: item.id }),
+      });
+      const orderData = await orderResponse.json();
+      if (!orderResponse.ok) throw new Error(orderData.error || 'Unable to start PDF checkout.');
+
+      const checkout = new window.Razorpay({
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: 'EduAxis India',
+        description: orderData.materialTitle || item.title,
+        order_id: orderData.orderId,
+        prefill: { email: authData.user.email || '' },
+        theme: { color: '#174ea6' },
+        handler: async (response) => {
+          try {
+            setMessage('Payment received. Verifying your payment...');
+            const verifyResponse = await fetch('/api/study-materials/verify', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify(response),
+            });
+            const verifyData = await verifyResponse.json();
+            if (!verifyResponse.ok || !verifyData.success) {
+              throw new Error(
+                verifyData.error ||
+                'Payment verification is pending. Please refresh your purchase status or contact support.'
+              );
+            }
+            setPurchasedMaterials((current) =>
+              current.includes(item.id) ? current : [...current, item.id]
+            );
+            setMessage('Payment successful! Your premium PDF is now unlocked.');
+          } catch (verifyError) {
+            setMessage(
+              verifyError instanceof Error
+                ? verifyError.message
+                : 'Payment verification failed. Please contact support.'
+            );
+          } finally {
+            setProcessingMaterial('');
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setProcessingMaterial('');
+            setMessage('Payment window closed. No PDF access was granted.');
+          },
+        },
+      });
+
+      checkout.open();
+    } catch (purchaseError) {
+      setMessage(
+        purchaseError instanceof Error
+          ? purchaseError.message
+          : 'Unable to process your PDF purchase.'
+      );
+      setProcessingMaterial('');
+    }
+  }
+
+  async function downloadPurchasedPdf(materialId: string) {
+    const client = supabase;
+    if (!client) return;
+    try {
+      const { data: sessionData } = await client.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error('Please log in again to download this PDF.');
+
+      const response = await fetch('/api/study-materials/download', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ materialId }),
+        cache: 'no-store',
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.signedUrl) {
+        throw new Error(payload.error || 'Unable to prepare your secure PDF download.');
+      }
+      window.location.assign(payload.signedUrl);
+    } catch (downloadError) {
+      setMessage(
+        downloadError instanceof Error
+          ? downloadError.message
+          : 'Unable to download the premium PDF.'
+      );
+    }
+  }
 
   const allMaterials = [...freeMaterials, ...premiumMaterials];
 
@@ -175,7 +368,25 @@ export default function StudyMaterialsPage() {
                 ? `₹${item.price}`
                 : 'Premium access'}
             </strong>
-            <span>Online purchase will be available soon.</span>
+            {purchasedMaterials.includes(item.id) ? (
+              <>
+                <span className="premium-unlocked">✓ Purchased · Access available</span>
+                <button
+                  className="premium-download-button"
+                  onClick={() => downloadPurchasedPdf(item.id)}
+                >
+                  ↓ Download Purchased PDF
+                </button>
+              </>
+            ) : (
+              <button
+                className="premium-purchase-button"
+                disabled={!!processingMaterial}
+                onClick={() => purchaseMaterial(item)}
+              >
+                {processingMaterial === item.id ? 'Preparing checkout…' : 'Purchase Now'}
+              </button>
+            )}
           </div>
         ) : (
           <button
@@ -203,6 +414,8 @@ export default function StudyMaterialsPage() {
             resources for your examination.
           </p>
         </div>
+
+        {message && <div className="study-message" role="status">{message}</div>}
 
         <div className="study-filters">
           <input
@@ -538,6 +751,45 @@ export default function StudyMaterialsPage() {
 
         .premium-action span {
           font-size: 12px;
+        }
+
+        .premium-purchase-button,
+        .premium-download-button {
+          width: 100%;
+          margin-top: 9px;
+          padding: 12px 14px;
+          border: 0;
+          border-radius: 8px;
+          background: #102d49;
+          color: #fff;
+          font-size: 13px;
+          font-weight: 750;
+          cursor: pointer;
+        }
+
+        .premium-purchase-button:disabled {
+          opacity: .6;
+          cursor: wait;
+        }
+
+        .premium-download-button {
+          background: #087f75;
+        }
+
+        .premium-unlocked {
+          color: #087443;
+          font-weight: 750;
+        }
+
+        .study-message {
+          margin: 0 0 20px;
+          padding: 13px 15px;
+          border: 1px solid #b9d9e8;
+          border-radius: 9px;
+          background: #edf7fb;
+          color: #174a6e;
+          font-size: 13px;
+          line-height: 1.55;
         }
 
         .empty-state {
