@@ -8,6 +8,7 @@ type PaymentOrder = {
   student_id?: string;
   mock_test_id?: string;
   course_id?: string;
+  study_material_id?: string;
   user_id?: string;
   amount_paise: number;
   status: string;
@@ -37,7 +38,7 @@ type ProductSales = {
 
 type Transaction = {
   id: string;
-  category: "Mock Test" | "Course";
+  category: "Mock Test" | "Course" | "Study Material";
   title: string;
   kind: "Payment" | "Refund";
   status: string;
@@ -53,7 +54,7 @@ function groupSales(
   orders: PaymentOrder[],
   refunds: Refund[],
   products: Array<{ id: string; title: string }>,
-  category: "Mock Test" | "Course",
+  category: "Mock Test" | "Course" | "Study Material",
 ) {
   const titles = new Map(products.map((product) => [product.id, product.title]));
   const refundsByOrder = new Map<string, number>();
@@ -78,7 +79,11 @@ function groupSales(
   }>();
 
   for (const order of orders) {
-    const productId = category === "Mock Test" ? order.mock_test_id : order.course_id;
+    const productId = category === "Mock Test"
+      ? order.mock_test_id
+      : category === "Course"
+        ? order.course_id
+        : order.study_material_id;
     if (!productId) continue;
 
     const group = groups.get(productId) || {
@@ -168,6 +173,8 @@ export async function GET(request: Request) {
       courseRefundsResult,
       coursesResult,
       materialsResult,
+      studyMaterialOrdersResult,
+      studyMaterialRefundsResult,
     ] = await Promise.all([
       adminClient
         .from("payment_orders")
@@ -198,6 +205,16 @@ export async function GET(request: Request) {
       adminClient
         .from("study_materials")
         .select("id,title,status,access_type,price"),
+      adminClient
+        .from("study_material_payment_orders")
+        .select("id,user_id,study_material_id,amount_paise,status,razorpay_payment_id,created_at,paid_at")
+        .in("status", ["paid", "refunded"])
+        .not("razorpay_payment_id", "is", null)
+        .order("paid_at", { ascending: false }),
+      adminClient
+        .from("study_material_payment_refunds")
+        .select("payment_order_id,amount_paise,status,created_at")
+        .eq("status", "processed"),
     ]);
 
     const errors = [
@@ -208,6 +225,8 @@ export async function GET(request: Request) {
       courseRefundsResult.error,
       coursesResult.error,
       materialsResult.error,
+      studyMaterialOrdersResult.error,
+      studyMaterialRefundsResult.error,
     ].filter(Boolean);
 
     if (errors.length > 0) {
@@ -222,6 +241,8 @@ export async function GET(request: Request) {
     const mockRefunds = (mockRefundsResult.data || []) as Refund[];
     const courseOrders = (courseOrdersResult.data || []) as PaymentOrder[];
     const courseRefunds = (courseRefundsResult.data || []) as Refund[];
+    const studyMaterialOrders = (studyMaterialOrdersResult.data || []) as PaymentOrder[];
+    const studyMaterialRefunds = (studyMaterialRefundsResult.data || []) as Refund[];
 
     const mockSales = groupSales(
       mockOrders,
@@ -235,15 +256,24 @@ export async function GET(request: Request) {
       (coursesResult.data || []).map((item) => ({ id: item.id, title: item.title })),
       "Course",
     );
+    const studyMaterialSales = groupSales(
+      studyMaterialOrders,
+      studyMaterialRefunds,
+      (materialsResult.data || []).map((item) => ({ id: item.id, title: item.title })),
+      "Study Material",
+    );
 
     const mockGross = sum(mockOrders.map((order) => Number(order.amount_paise)));
     const courseGross = sum(courseOrders.map((order) => Number(order.amount_paise)));
+    const studyMaterialGross = sum(studyMaterialOrders.map((order) => Number(order.amount_paise)));
     const mockRefundTotal = sum(mockRefunds.map((refund) => Number(refund.amount_paise)));
     const courseRefundTotal = sum(courseRefunds.map((refund) => Number(refund.amount_paise)));
+    const studyMaterialRefundTotal = sum(studyMaterialRefunds.map((refund) => Number(refund.amount_paise)));
 
     const buyerIds = new Set([
       ...mockOrders.map((order) => order.student_id),
       ...courseOrders.map((order) => order.user_id),
+      ...studyMaterialOrders.map((order) => order.user_id),
     ].filter(Boolean));
 
     const recentTransactions: Transaction[] = [
@@ -260,6 +290,15 @@ export async function GET(request: Request) {
         id: order.id,
         category: "Course" as const,
         title: courseSales.find((item) => item.id === order.course_id)?.title || "Course",
+        kind: "Payment" as const,
+        status: order.status,
+        amount_paise: Number(order.amount_paise),
+        date: order.paid_at || order.created_at,
+      })),
+      ...studyMaterialOrders.map((order) => ({
+        id: order.id,
+        category: "Study Material" as const,
+        title: studyMaterialSales.find((item) => item.id === order.study_material_id)?.title || "Study Material",
         kind: "Payment" as const,
         status: order.status,
         amount_paise: Number(order.amount_paise),
@@ -289,6 +328,18 @@ export async function GET(request: Request) {
           date: refund.created_at,
         };
       }),
+      ...studyMaterialRefunds.map((refund) => {
+        const order = studyMaterialOrders.find((item) => item.id === refund.payment_order_id);
+        return {
+          id: "study-material-refund-" + refund.payment_order_id + "-" + refund.created_at,
+          category: "Study Material" as const,
+          title: studyMaterialSales.find((item) => item.id === order?.study_material_id)?.title || "Study material refund",
+          kind: "Refund" as const,
+          status: refund.status,
+          amount_paise: Number(refund.amount_paise),
+          date: refund.created_at,
+        };
+      }),
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 30);
 
     const materials = materialsResult.data || [];
@@ -299,13 +350,14 @@ export async function GET(request: Request) {
     return NextResponse.json({
       generatedAt: new Date().toISOString(),
       summary: {
-        gross_paise: mockGross + courseGross,
-        refunds_paise: mockRefundTotal + courseRefundTotal,
-        net_paise: mockGross + courseGross - mockRefundTotal - courseRefundTotal,
-        successful_orders: mockOrders.length + courseOrders.length,
+        gross_paise: mockGross + courseGross + studyMaterialGross,
+        refunds_paise: mockRefundTotal + courseRefundTotal + studyMaterialRefundTotal,
+        net_paise: mockGross + courseGross + studyMaterialGross - mockRefundTotal - courseRefundTotal - studyMaterialRefundTotal,
+        successful_orders: mockOrders.length + courseOrders.length + studyMaterialOrders.length,
         unique_buyers: buyerIds.size,
         mock_test_orders: mockOrders.length,
         course_orders: courseOrders.length,
+        study_material_orders: studyMaterialOrders.length,
       },
       mockTests: {
         orders: mockOrders.length,
@@ -324,11 +376,17 @@ export async function GET(request: Request) {
         products: courseSales,
       },
       studyMaterials: {
-        tracking_enabled: false,
+        tracking_enabled: true,
         published_count: publishedMaterials.length,
         paid_published_count: paidMaterials.length,
         free_published_count: freeMaterials.length,
-        note: "Study-material checkout and purchase records are not implemented yet. Sales and buyer counts are therefore unavailable for this category.",
+        orders: studyMaterialOrders.length,
+        buyers: new Set(studyMaterialOrders.map((order) => order.user_id)).size,
+        gross_paise: studyMaterialGross,
+        refunds_paise: studyMaterialRefundTotal,
+        net_paise: studyMaterialGross - studyMaterialRefundTotal,
+        products: studyMaterialSales,
+        note: "Premium study material sales are recorded and included in gross, refund and net totals.",
       },
       recentTransactions,
     });
