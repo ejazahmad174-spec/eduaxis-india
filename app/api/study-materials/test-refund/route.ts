@@ -246,21 +246,29 @@ export async function POST(request: Request) {
           `refunds/${encodeURIComponent(reserved.razorpay_refund_id)}`, "GET"
         );
       } else {
+        // For the final refund after a prior partial refund, omit the amount
+        // so Razorpay refunds the remaining refundable balance as a full refund.
+        // A fresh request ID is issued by the reservation RPC after the previous
+        // rejected attempt was checked against Razorpay's refund list.
+        const refundBody: Record<string, unknown> = refundType === "full"
+          ? {}
+          : {
+              amount: Number(reserved.amount_paise),
+              speed: "normal",
+              receipt: requestId,
+              notes: {
+                qa_test: "true",
+                qa_refund_request_id: requestId,
+                payment_order_id: order.id,
+                study_material_id: materialId,
+                refund_type: refundType,
+              },
+            };
+
         refund = await razorpayRequest(
           config.keyId, config.keySecret,
           `payments/${encodeURIComponent(order.razorpay_payment_id)}/refund`, "POST",
-          {
-            amount: Number(reserved.amount_paise),
-            speed: "normal",
-            receipt: requestId,
-            notes: {
-              qa_test: "true",
-              qa_refund_request_id: requestId,
-              payment_order_id: order.id,
-              study_material_id: materialId,
-              refund_type: refundType,
-            },
-          },
+          refundBody,
           requestId
         );
       }
