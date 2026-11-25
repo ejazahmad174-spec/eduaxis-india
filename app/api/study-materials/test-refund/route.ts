@@ -133,6 +133,7 @@ export async function POST(request: Request) {
         providerPayment.id !== order.razorpay_payment_id ||
         providerPayment.currency !== "INR" ||
         Number(providerPayment.amount) !== Number(order.amount_paise) ||
+        Number(providerPayment.amount_refunded) !== Number(order.refunded_paise) ||
         providerPayment.status !== "captured"
       ) {
         return NextResponse.json({
