@@ -117,46 +117,71 @@ export async function POST(request: Request) {
         );
       }
 
-      // Ignore refunds that do not belong to EduAxis India.
-      if (!order) {
+      if (order) {
+        // Mock-test refund: preserve the existing mock-test refund handler.
+        const { data: refundResult, error: refundError } =
+          await adminClient.rpc("process_mock_test_refund", {
+            p_refund_id: verifiedRefund.id,
+            p_payment_id: verifiedRefund.payment_id,
+            p_amount_paise: verifiedRefund.amount,
+          });
+
+        if (refundError || !refundResult?.success) {
+          console.error("Mock-test refund processing failed:", refundError);
+          return NextResponse.json(
+            { error: "Refund recording failed. Retry required." },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json({
+          received: true,
+          success: true,
+          fully_refunded: refundResult.fully_refunded,
+          message: refundResult.message,
+        });
+      }
+
+      // Study-material refunds use their own entitlement ledger.
+      const { data: materialOrder, error: materialOrderError } = await adminClient
+        .from("study_material_payment_orders")
+        .select("id")
+        .eq("razorpay_payment_id", verifiedRefund.payment_id)
+        .maybeSingle();
+
+      if (materialOrderError) {
+        console.error("Study-material refund order lookup failed:", materialOrderError);
+        return NextResponse.json(
+          { error: "Could not find the original PDF payment." },
+          { status: 500 }
+        );
+      }
+
+      // Ignore refunds that do not belong to any EduAxis payment table.
+      if (!materialOrder) {
         return NextResponse.json({ received: true });
       }
 
-      // Record refund and revoke access if fully refunded.
-      const { data: refundResult, error: refundError } =
-        await adminClient.rpc("process_mock_test_refund", {
+      const { data: materialRefundResult, error: materialRefundError } =
+        await adminClient.rpc("process_study_material_refund", {
           p_refund_id: verifiedRefund.id,
           p_payment_id: verifiedRefund.payment_id,
           p_amount_paise: verifiedRefund.amount,
         });
 
-      if (refundError) {
-        console.error("Refund processing failed:", refundError);
-
+      if (materialRefundError || !materialRefundResult?.success) {
+        console.error("Study-material refund processing failed:", materialRefundError);
         return NextResponse.json(
-          { error: "Refund recording failed. Retry required." },
+          { error: "PDF refund recording failed. Retry required." },
           { status: 500 }
         );
       }
-
-      if (!refundResult?.success) {
-        return NextResponse.json(
-          { error: "Refund processing could not be confirmed." },
-          { status: 500 }
-        );
-      }
-
-      console.log("EduAxis refund processed:", {
-        refundId: verifiedRefund.id,
-        paymentId: verifiedRefund.payment_id,
-        fullyRefunded: refundResult.fully_refunded,
-      });
 
       return NextResponse.json({
         received: true,
         success: true,
-        fully_refunded: refundResult.fully_refunded,
-        message: refundResult.message,
+        fully_refunded: materialRefundResult.fully_refunded,
+        message: materialRefundResult.message,
       });
     }
 
@@ -179,7 +204,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: order, error: orderError } = await adminClient
+    let paymentTable: "payment_orders" | "study_material_payment_orders" = "payment_orders";
+    let paymentIsStudyMaterial = false;
+
+    const { data: mockTestOrder, error: orderError } = await adminClient
       .from("payment_orders")
       .select("*")
       .eq("razorpay_order_id", payment.order_id)
@@ -187,23 +215,44 @@ export async function POST(request: Request) {
 
     if (orderError) {
       console.error("Webhook order lookup failed:", orderError);
-
       return NextResponse.json(
         { error: "Could not look up the payment order." },
         { status: 500 }
       );
     }
 
+    let order = mockTestOrder;
+
     if (!order) {
-      return NextResponse.json({ received: true });
+      const { data: studyMaterialOrder, error: studyMaterialOrderError } = await adminClient
+        .from("study_material_payment_orders")
+        .select("*")
+        .eq("razorpay_order_id", payment.order_id)
+        .maybeSingle();
+
+      if (studyMaterialOrderError) {
+        console.error("Study-material webhook order lookup failed:", studyMaterialOrderError);
+        return NextResponse.json(
+          { error: "Could not look up the PDF payment order." },
+          { status: 500 }
+        );
+      }
+
+      if (!studyMaterialOrder) {
+        return NextResponse.json({ received: true });
+      }
+
+      order = studyMaterialOrder;
+      paymentTable = "study_material_payment_orders";
+      paymentIsStudyMaterial = true;
     }
 
     // A failed payment must never overwrite a successful payment.
     if (event.event === "payment.failed") {
       if (order.status === "pending") {
         const { error: updateError } = await adminClient
-          .from("payment_orders")
-          .update({ status: "failed" })
+          .from(paymentTable)
+          .update({ status: "failed", updated_at: paymentIsStudyMaterial ? new Date().toISOString() : undefined })
           .eq("id", order.id)
           .eq("status", "pending");
 
@@ -258,11 +307,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: activation, error: activationError } =
-      await adminClient.rpc("activate_mock_test_purchase", {
-        p_payment_order_id: order.id,
-        p_razorpay_payment_id: payment.id,
-      });
+    const { data: activation, error: activationError } = paymentIsStudyMaterial
+      ? await adminClient.rpc("activate_study_material_purchase", {
+          p_payment_order_id: order.id,
+          p_razorpay_payment_id: payment.id,
+        })
+      : await adminClient.rpc("activate_mock_test_purchase", {
+          p_payment_order_id: order.id,
+          p_razorpay_payment_id: payment.id,
+        });
 
     if (activationError) {
       console.error("Webhook purchase activation failed:", activationError);
