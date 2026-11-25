@@ -9,7 +9,22 @@ type RefundData = {
   id: string;
   amount: number;
   payment_id: string;
+  receipt?: string | null;
+  notes?: Record<string, string> | null;
   status: "pending" | "processed" | "failed";
+};
+
+type RazorpayPayment = {
+  id: string;
+  amount: number;
+  amount_refunded: number;
+  status: string;
+  currency: string;
+};
+
+type RefundCollection = {
+  count: number;
+  items: RefundData[];
 };
 
 async function razorpayRequest(
@@ -33,11 +48,19 @@ async function razorpayRequest(
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(payload?.error?.description || "Razorpay rejected the QA refund.");
-    Object.assign(error, { status: response.status });
+    const error = new Error(
+      payload?.error?.description || payload?.error?.reason || "Razorpay rejected the QA refund."
+    );
+    Object.assign(error, {
+      status: response.status,
+      providerCode: payload?.error?.code || null,
+      providerField: payload?.error?.field || null,
+      providerReason: payload?.error?.reason || null,
+      providerDescription: payload?.error?.description || null,
+    });
     throw error;
   }
-  return payload as RefundData;
+  return payload;
 }
 
 export async function POST(request: Request) {
@@ -82,6 +105,127 @@ export async function POST(request: Request) {
     if (orderError || !order) return NextResponse.json({ error: "No verified QA payment was found." }, { status: 404 });
     if (!order.razorpay_payment_id || !["paid", "partially_refunded"].includes(order.status)) {
       return NextResponse.json({ error: "This QA payment is not eligible for another refund." }, { status: 409 });
+    }
+
+    // Before retrying a previously failed request, reconcile directly with
+    // Razorpay. A refund with the same receipt/notes may already exist even
+    // when the original API response was lost or malformed.
+    const { data: previousRequest, error: previousRequestError } = await admin
+      .from("study_material_qa_refund_requests")
+      .select("id,amount_paise,status,razorpay_refund_id")
+      .eq("payment_order_id", order.id)
+      .eq("refund_type", refundType)
+      .maybeSingle();
+
+    if (previousRequestError) {
+      return NextResponse.json({ error: "Could not inspect the earlier QA refund attempt." }, { status: 500 });
+    }
+
+    if (previousRequest?.status === "failed" && !previousRequest.razorpay_refund_id) {
+      const providerPayment = await razorpayRequest(
+        config.keyId,
+        config.keySecret,
+        `payments/${encodeURIComponent(order.razorpay_payment_id)}`,
+        "GET"
+      ) as RazorpayPayment;
+
+      if (
+        providerPayment.id !== order.razorpay_payment_id ||
+        providerPayment.currency !== "INR" ||
+        Number(providerPayment.amount) !== Number(order.amount_paise) ||
+        providerPayment.status !== "captured"
+      ) {
+        return NextResponse.json({
+          error: "Razorpay payment is not in a refundable captured state. No retry was sent.",
+          providerPaymentStatus: providerPayment.status,
+        }, { status: 409 });
+      }
+
+      const providerRefunds = await razorpayRequest(
+        config.keyId,
+        config.keySecret,
+        `payments/${encodeURIComponent(order.razorpay_payment_id)}/refunds?count=100`,
+        "GET"
+      ) as RefundCollection;
+
+      const matchedRefund = (providerRefunds.items || []).find((item) =>
+        item.receipt === previousRequest.id ||
+        item.notes?.qa_refund_request_id === previousRequest.id
+      );
+
+      if (matchedRefund) {
+        if (
+          matchedRefund.payment_id !== order.razorpay_payment_id ||
+          Number(matchedRefund.amount) !== Number(previousRequest.amount_paise)
+        ) {
+          return NextResponse.json({
+            error: "A Razorpay refund was found, but its amount/payment does not match this QA request. Manual reconciliation is required.",
+          }, { status: 409 });
+        }
+
+        const update = await admin
+          .from("study_material_qa_refund_requests")
+          .update({
+            razorpay_refund_id: matchedRefund.id,
+            status: matchedRefund.status,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", previousRequest.id);
+
+        if (update.error) {
+          return NextResponse.json({
+            error: "Razorpay already has this refund. EduAxis could not save the provider reference; refresh status or contact support.",
+            refundInitiated: true,
+          }, { status: 202 });
+        }
+
+        if (matchedRefund.status === "processed") {
+          const { data: reconciled, error: reconcileError } = await admin.rpc(
+            "process_study_material_qa_refund",
+            {
+              p_refund_id: matchedRefund.id,
+              p_payment_id: matchedRefund.payment_id,
+              p_amount_paise: matchedRefund.amount,
+            }
+          );
+
+          if (reconcileError || !reconciled?.success) {
+            return NextResponse.json({
+              error: "Razorpay processed the refund, but EduAxis reconciliation needs attention.",
+              refundInitiated: true,
+            }, { status: 202 });
+          }
+
+          await admin
+            .from("study_material_qa_refund_requests")
+            .update({
+              status: "processed",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", previousRequest.id);
+
+          return NextResponse.json({
+            success: true,
+            refundStatus: "processed",
+            refundType,
+            amountPaise: matchedRefund.amount,
+            fullyRefunded: reconciled.fully_refunded,
+            totalRefundedPaise: reconciled.total_refunded_paise,
+            reconciledExistingRefund: true,
+          });
+        }
+
+        return NextResponse.json({
+          success: matchedRefund.status === "pending",
+          refundStatus: matchedRefund.status,
+          refundType,
+          amountPaise: matchedRefund.amount,
+          message: "The existing Razorpay refund was found. No duplicate refund was created.",
+        }, { status: matchedRefund.status === "pending" ? 200 : 409 });
+      }
+
+      // No provider refund with this request's receipt or metadata exists.
+      // The same request ID, receipt and idempotency key can now be retried.
     }
 
     const { data: reserved, error: reserveError } = await admin.rpc("reserve_study_material_qa_refund", {
@@ -181,7 +325,25 @@ export async function POST(request: Request) {
       message: "Razorpay accepted the QA refund. Access changes after the verified refund event arrives.",
     });
   } catch (error) {
-    console.error("Study material QA refund error:", error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to process the QA refund." }, { status: 500 });
+    const providerError = error as Error & {
+      status?: number;
+      providerCode?: string | null;
+      providerField?: string | null;
+      providerReason?: string | null;
+      providerDescription?: string | null;
+    };
+    console.error("Study material QA refund error:", {
+      message: providerError.message,
+      status: providerError.status || null,
+      code: providerError.providerCode || null,
+      field: providerError.providerField || null,
+      reason: providerError.providerReason || null,
+      description: providerError.providerDescription || null,
+    });
+    return NextResponse.json({
+      error: providerError.providerDescription || providerError.providerReason || providerError.message || "Unable to process the QA refund.",
+      providerCode: providerError.providerCode || undefined,
+      providerField: providerError.providerField || undefined,
+    }, { status: providerError.status && providerError.status >= 400 && providerError.status < 500 ? 502 : 500 });
   }
 }
