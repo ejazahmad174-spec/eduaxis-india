@@ -112,26 +112,58 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check whether the student already owns this test.
-    const { data: existingPurchase, error: purchaseError } =
+    // Only a successfully paid order with an active purchase link grants
+    // access. A purchase row linked to a refunded order is historical only.
+    const { data: activePaidOrder, error: paidOrderError } =
       await adminClient
-        .from("mock_test_purchases")
+        .from("payment_orders")
         .select("id")
         .eq("student_id", userData.user.id)
         .eq("mock_test_id", mockTestId)
+        .eq("status", "paid")
+        .not("razorpay_payment_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
-    if (purchaseError) {
-      console.error("Purchase lookup failed:", purchaseError);
+    if (paidOrderError) {
+      console.error("Paid order lookup failed:", paidOrderError);
       return NextResponse.json(
-        { error: "Could not check your purchase history." },
+        { error: "Could not check your payment history." },
         { status: 500 }
       );
     }
 
-    if (existingPurchase) {
+    if (activePaidOrder) {
+      const { data: activePurchase, error: purchaseError } =
+        await adminClient
+          .from("mock_test_purchases")
+          .select("id")
+          .eq("student_id", userData.user.id)
+          .eq("mock_test_id", mockTestId)
+          .eq("payment_order_id", activePaidOrder.id)
+          .maybeSingle();
+
+      if (purchaseError) {
+        console.error("Active purchase lookup failed:", purchaseError);
+        return NextResponse.json(
+          { error: "Could not verify your test access." },
+          { status: 500 }
+        );
+      }
+
+      if (activePurchase) {
+        return NextResponse.json(
+          { error: "You have already purchased this test." },
+          { status: 409 }
+        );
+      }
+
       return NextResponse.json(
-        { error: "You have already purchased this test." },
+        {
+          error:
+            "A payment for this test is already recorded, but access activation needs attention. Please contact support before making another payment.",
+        },
         { status: 409 }
       );
     }
