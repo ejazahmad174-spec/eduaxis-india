@@ -89,7 +89,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true, success: true });
     }
 
-    if (event.event === "refund.processed") {
+    if (event.event === "refund.processed" || event.event === "refund.failed") {
       const refundEntity = event?.payload?.refund?.entity;
       if (!refundEntity?.id || !refundEntity?.payment_id || !refundEntity?.amount) {
         return NextResponse.json({ error: "QA refund details are missing." }, { status: 400 });
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
 
       const refund = await razorpay.refunds.fetch(refundEntity.id);
       if (
-        refund.status !== "processed" ||
+        refund.status !== (event.event === "refund.failed" ? "failed" : "processed") ||
         refund.id !== refundEntity.id ||
         refund.payment_id !== refundEntity.payment_id ||
         refund.amount !== Number(refundEntity.amount)
@@ -113,6 +113,67 @@ export async function POST(request: Request) {
 
       if (orderError) return NextResponse.json({ error: "Could not find QA refund order." }, { status: 500 });
       if (!order) return NextResponse.json({ received: true });
+
+      if (event.event === "refund.failed") {
+        const qaRefundRequestId = refundEntity.notes?.qa_refund_request_id;
+        const requestUpdate = typeof qaRefundRequestId === "string"
+          ? await adminClient.from("study_material_qa_refund_requests").update({
+              status: "failed",
+              razorpay_refund_id: refund.id,
+              updated_at: new Date().toISOString(),
+            }).eq("id", qaRefundRequestId)
+          : await adminClient.from("study_material_qa_refund_requests").update({
+              status: "failed",
+              razorpay_refund_id: refund.id,
+              updated_at: new Date().toISOString(),
+            }).eq("razorpay_refund_id", refund.id);
+
+        if (requestUpdate.error) {
+          console.error("QA failed refund request update failed:", requestUpdate.error);
+          return NextResponse.json({ error: "QA refund failure request could not be recorded." }, { status: 500 });
+        }
+
+        const actionId = refund.notes?.eduaxis_refund_action_id;
+        const actionUpdate = typeof actionId === "string"
+          ? await adminClient.from("admin_refund_actions").update({
+              status: "failed",
+              razorpay_refund_id: refund.id,
+              provider_error: "Razorpay marked this QA refund as failed.",
+              updated_at: new Date().toISOString(),
+            }).eq("id", actionId)
+          : await adminClient.from("admin_refund_actions").update({
+              status: "failed",
+              razorpay_refund_id: refund.id,
+              provider_error: "Razorpay marked this QA refund as failed.",
+              updated_at: new Date().toISOString(),
+            }).eq("razorpay_refund_id", refund.id);
+
+        if (actionUpdate.error) {
+          console.error("QA admin refund audit update failed:", actionUpdate.error);
+          return NextResponse.json({ error: "QA refund failure audit could not be recorded." }, { status: 500 });
+        }
+
+        const [studentResult, materialResult] = await Promise.all([
+          adminClient.from("profiles").select("email").eq("id", order.user_id).maybeSingle(),
+          adminClient.from("study_materials").select("title").eq("id", order.study_material_id).maybeSingle(),
+        ]);
+        if (studentResult.error || materialResult.error) {
+          return NextResponse.json({ error: "QA refund failure notification details could not be loaded." }, { status: 500 });
+        }
+
+        await notifyStudentOfRefund(adminClient, {
+          studentId: order.user_id,
+          studentEmail: studentResult.data?.email || null,
+          refundId: refund.id,
+          status: "failed",
+          amountPaise: Number(refund.amount),
+          productTitle: materialResult.data?.title || "QA Study Material",
+          categoryLabel: "QA Test PDF",
+          orderReference: order.id,
+        });
+
+        return NextResponse.json({ received: true, success: true, refund_failed: true });
+      }
 
       const { data: result, error: refundError } = await adminClient.rpc(
         "process_study_material_qa_refund",
