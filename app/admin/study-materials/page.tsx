@@ -7,7 +7,7 @@ import '../admin.css';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 
 type Material = {
-  id: number;
+  id: string;
   title: string;
   description: string | null;
   exam_category: string | null;
@@ -39,7 +39,7 @@ export default function StudyMaterialsPage() {
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [materials, setMaterials] = useState<Material[]>([]);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [editingFilePath, setEditingFilePath] = useState('');
   const [editingAccessType, setEditingAccessType] = useState('free');
 
@@ -224,6 +224,19 @@ export default function StudyMaterialsPage() {
         finalFilePath = `${bucket}/${newPath}`;
       }
 
+      if (status === 'published') {
+        if (accessType === 'paid') {
+          if (!finalFilePath.startsWith('premium-study-materials/')) {
+            throw new Error('Publishing blocked: paid PDFs must be stored in the private premium-study-materials bucket. Upload the PDF again under Paid access.');
+          }
+          if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
+            throw new Error('Publishing blocked: a paid PDF must have a valid price greater than zero.');
+          }
+        } else if (!finalFilePath.startsWith('free-study-materials/')) {
+          throw new Error('Publishing blocked: free PDFs must be stored in the free-study-materials bucket. Upload the PDF again under Free access.');
+        }
+      }
+
       const values = {
         title: title.trim(),
         description: description.trim(),
@@ -290,6 +303,26 @@ export default function StudyMaterialsPage() {
     setErrorMessage('');
 
     const nextStatus = item.status === 'published' ? 'draft' : 'published';
+
+    if (nextStatus === 'published') {
+      if (item.access_type === 'paid') {
+        if (!item.file_path?.startsWith('premium-study-materials/')) {
+          setErrorMessage('Publishing blocked: paid PDFs must be stored in the private premium-study-materials bucket.');
+          setBusy(false);
+          return;
+        }
+        if (!Number.isFinite(Number(item.price)) || Number(item.price) <= 0) {
+          setErrorMessage('Publishing blocked: a paid PDF must have a valid price greater than zero.');
+          setBusy(false);
+          return;
+        }
+      } else if (!item.file_path?.startsWith('free-study-materials/')) {
+        setErrorMessage('Publishing blocked: free PDFs must be stored in the free-study-materials bucket.');
+        setBusy(false);
+        return;
+      }
+    }
+
     const { error } = await client
       .from('study_materials')
       .update({ status: nextStatus })
