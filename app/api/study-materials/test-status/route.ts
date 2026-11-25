@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     });
     const { data: orders, error: orderError } = await adminClient
       .from("study_material_qa_payment_orders")
-      .select("id,study_material_id,status,amount_paise,refunded_paise,paid_at")
+      .select("id,study_material_id,status,amount_paise,refunded_paise,paid_at,razorpay_payment_id")
       .eq("user_id", data.user.id)
       .order("created_at", { ascending: false });
 
@@ -46,13 +46,6 @@ export async function GET(request: Request) {
     }
 
     const qaOrders = orders || [];
-    const purchases = qaOrders
-      .filter((order) =>
-        ["paid", "partially_refunded"].includes(order.status) &&
-        Number(order.refunded_paise) < Number(order.amount_paise)
-      )
-      .map((order) => order.study_material_id);
-
     const orderIds = qaOrders.map((order) => order.id);
     const { data: refundRequests, error: refundRequestError } = orderIds.length
       ? await adminClient
