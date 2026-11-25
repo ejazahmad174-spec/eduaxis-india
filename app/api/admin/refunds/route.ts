@@ -639,7 +639,7 @@ export async function POST(request: Request) {
       })
       .eq("id", action.id);
 
-    let finalStatus = providerRefund.status;
+    let finalStatus: "processed" | "pending" | "failed" | "review_required" = providerRefund.status;
     let totalRefundedPaise = providerRefundRefundedTotal(providerRefundRows, providerRefund);
 
     if (providerRefund.status === "processed") {
