@@ -66,8 +66,8 @@ export async function POST(request: Request) {
     if (orderError || !qaOrder) {
       return NextResponse.json({ error: "QA test order was not found for this student." }, { status: 404 });
     }
-    if (qaOrder.status === "refunded" || qaOrder.status === "failed") {
-      return NextResponse.json({ error: "This QA test order is no longer active." }, { status: 409 });
+    if (qaOrder.status === "refunded") {
+      return NextResponse.json({ error: "This QA test order has been fully refunded." }, { status: 409 });
     }
     if (qaOrder.razorpay_payment_id && qaOrder.razorpay_payment_id !== paymentId) {
       return NextResponse.json({ error: "This QA order is already linked to another payment." }, { status: 409 });
