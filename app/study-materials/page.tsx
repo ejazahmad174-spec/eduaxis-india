@@ -843,7 +843,7 @@ export default function StudyMaterialsPage() {
             grid-template-columns: 1fr;
           }
         }
-`      `}</style>
+      `}</style>
       <style jsx global>{`
         /* MaterialCard is a nested render function, so its nodes need global
            selectors rather than the parent component's styled-jsx scope. */
