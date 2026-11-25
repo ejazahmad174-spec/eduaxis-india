@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import StudentNavigation from "@/components/student/StudentNavigation";
@@ -27,6 +27,13 @@ type ExamData = {
   duration_minutes: number;
   total_marks: number;
   negative_marking: number;
+  expires_at: string;
+  remaining_seconds: number;
+  resumed?: boolean;
+  saved_answers: Array<{
+    question_id: string;
+    selected_option: string | null;
+  }>;
   questions: ExamQuestion[];
 };
 
@@ -134,12 +141,15 @@ export default function MockTestExamPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [current, setCurrent] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(0);
+  const [deadlineAtMs, setDeadlineAtMs] = useState<number | null>(null);
+  const [answerSaveMessage, setAnswerSaveMessage] = useState("");
   const [started, setStarted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState("");
   const [authChecking, setAuthChecking] = useState(true);
+  const saveRequestsRef = useRef<Map<string, Promise<void>>>(new Map());
 
   const t = labels[language];
 
@@ -201,11 +211,78 @@ export default function MockTestExamPage() {
     } else {
       const examData = data as ExamData;
       setExam(examData);
-      setSecondsLeft(examData.duration_minutes * 60);
+
+      const restoredAnswers: Record<string, string> = {};
+      for (const saved of examData.saved_answers || []) {
+        if (saved.selected_option) {
+          restoredAnswers[saved.question_id] = saved.selected_option;
+        }
+      }
+
+      setAnswers(restoredAnswers);
+      const remainingSeconds = Math.max(
+        0,
+        Number(examData.remaining_seconds) || 0
+      );
+      setSecondsLeft(remainingSeconds);
+      setDeadlineAtMs(Date.now() + remainingSeconds * 1000);
+      setAnswerSaveMessage(
+        examData.resumed
+          ? "Your previous attempt has been restored. Saved answers are available."
+          : "Answers are saved automatically as you work."
+      );
       setStarted(true);
     }
 
     setLoading(false);
+  };
+
+  const saveAnswer = (questionId: string, option: "A" | "B" | "C" | "D") => {
+    setAnswers((previous) => ({
+      ...previous,
+      [questionId]: option,
+    }));
+
+    if (!supabase || !exam) return;
+
+    setAnswerSaveMessage("Saving answer...");
+
+    const previousRequest = saveRequestsRef.current.get(questionId);
+    const request = (previousRequest || Promise.resolve())
+      .catch(() => undefined)
+      .then(async () => {
+        const { error: saveError } = await supabase.rpc(
+          "save_mock_test_answer",
+          {
+            p_attempt_id: exam.attempt_id,
+            p_question_id: questionId,
+            p_selected_option: option,
+          }
+        );
+
+        if (saveError) throw new Error(saveError.message);
+      });
+
+    saveRequestsRef.current.set(questionId, request);
+
+    void request
+      .then(() => {
+        if (saveRequestsRef.current.get(questionId) === request) {
+          setAnswerSaveMessage("Answers saved automatically.");
+        }
+      })
+      .catch(() => {
+        if (saveRequestsRef.current.get(questionId) === request) {
+          setAnswerSaveMessage(
+            "An answer could not be saved. Check your connection before continuing."
+          );
+        }
+      })
+      .finally(() => {
+        if (saveRequestsRef.current.get(questionId) === request) {
+          saveRequestsRef.current.delete(questionId);
+        }
+      });
   };
 
   const submitExam = useCallback(
@@ -229,6 +306,11 @@ export default function MockTestExamPage() {
       setSubmitting(true);
       setError("");
 
+      // Allow answer writes already in flight to finish before final submission.
+      await Promise.allSettled(
+        Array.from(saveRequestsRef.current.values())
+      );
+
       const answerList = exam.questions.map((q) => ({
         question_id: q.id,
         selected_option: answers[q.id] || null,
@@ -251,14 +333,19 @@ export default function MockTestExamPage() {
   );
 
   useEffect(() => {
-    if (!started || result || submitting || secondsLeft <= 0) return;
+    if (!started || result || submitting || deadlineAtMs === null) return;
 
-    const timer = window.setInterval(() => {
-      setSecondsLeft((previous) => Math.max(0, previous - 1));
-    }, 1000);
+    const updateRemainingTime = () => {
+      setSecondsLeft(
+        Math.max(0, Math.ceil((deadlineAtMs - Date.now()) / 1000))
+      );
+    };
+
+    updateRemainingTime();
+    const timer = window.setInterval(updateRemainingTime, 1000);
 
     return () => window.clearInterval(timer);
-  }, [started, result, submitting, secondsLeft]);
+  }, [started, result, submitting, deadlineAtMs]);
 
   useEffect(() => {
     if (started && secondsLeft === 0 && !result && !submitting) {
@@ -476,6 +563,9 @@ export default function MockTestExamPage() {
               : exam.test_title}
           </strong>
           <div>{t.answered}: {answeredCount} / {exam.questions.length}</div>
+          <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+            {answerSaveMessage || "Answers save automatically as you work."}
+          </div>
         </div>
 
         <div className="timer">{formatTime(secondsLeft)}</div>
@@ -507,12 +597,8 @@ export default function MockTestExamPage() {
                 type="radio"
                 name={question.id}
                 checked={answers[question.id] === option}
-                onChange={() =>
-                  setAnswers((previous) => ({
-                    ...previous,
-                    [question.id]: option,
-                  }))
-                }
+                disabled={submitting || secondsLeft <= 0}
+                onChange={() => saveAnswer(question.id, option)}
               />
 
               <strong>{option}.</strong> {displayedOptions[option]}
