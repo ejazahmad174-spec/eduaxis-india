@@ -35,17 +35,21 @@ export async function GET(request: Request) {
     });
     const { data: orders, error: orderError } = await adminClient
       .from("study_material_qa_payment_orders")
-      .select("study_material_id,status,amount_paise,refunded_paise")
+      .select("id,study_material_id,status,amount_paise,refunded_paise,paid_at")
       .eq("user_id", data.user.id)
-      .in("status", ["paid", "partially_refunded"]);
+      .order("created_at", { ascending: false });
 
     if (orderError) {
       console.error("QA study material status lookup failed:", orderError);
       return NextResponse.json({ error: "QA purchase status could not be loaded." }, { status: 500 });
     }
 
-    const purchases = (orders || [])
-      .filter((order) => Number(order.refunded_paise) < Number(order.amount_paise))
+    const qaOrders = orders || [];
+    const purchases = qaOrders
+      .filter((order) =>
+        ["paid", "partially_refunded"].includes(order.status) &&
+        Number(order.refunded_paise) < Number(order.amount_paise)
+      )
       .map((order) => order.study_material_id);
 
     return NextResponse.json({
@@ -53,6 +57,14 @@ export async function GET(request: Request) {
       enabled: config.enabled,
       webhookReady: config.webhookReady,
       purchases: Array.from(new Set(purchases)),
+      qaOrders: qaOrders.map((order) => ({
+        id: order.id,
+        study_material_id: order.study_material_id,
+        status: order.status,
+        amount_paise: Number(order.amount_paise),
+        refunded_paise: Number(order.refunded_paise),
+        paid_at: order.paid_at,
+      })),
     });
   } catch (error) {
     console.error("QA payment status error:", error);
