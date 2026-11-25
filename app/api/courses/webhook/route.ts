@@ -264,7 +264,7 @@ export async function POST(request: NextRequest) {
     // EVENT 3: REFUND PROCESSED
     // --------------------------------------------------
 
-    if (eventType === "refund.processed") {
+    if (eventType === "refund.processed" || eventType === "refund.failed") {
       const refundId = refundEntity?.id;
       const paymentId = refundEntity?.payment_id;
 
@@ -281,7 +281,7 @@ export async function POST(request: NextRequest) {
       if (
         refund.id !== refundId ||
         refund.payment_id !== paymentId ||
-        refund.status !== "processed" ||
+        refund.status !== (eventType === "refund.failed" ? "failed" : "processed") ||
         Number(refund.amount) <= 0 ||
         Number(refund.amount) !== Number(refundEntity.amount)
       ) {
@@ -312,6 +312,49 @@ export async function POST(request: NextRequest) {
           received: true,
           message: "Not a course payment.",
         });
+      }
+
+      if (eventType === "refund.failed") {
+        const failedActionId = refund.notes?.eduaxis_refund_action_id;
+        const failedActionUpdate = typeof failedActionId === "string"
+          ? await supabase.from("admin_refund_actions").update({
+              status: "failed",
+              razorpay_refund_id: refundId,
+              provider_error: "Razorpay marked this refund as failed.",
+              updated_at: new Date().toISOString(),
+            }).eq("id", failedActionId)
+          : await supabase.from("admin_refund_actions").update({
+              status: "failed",
+              razorpay_refund_id: refundId,
+              provider_error: "Razorpay marked this refund as failed.",
+              updated_at: new Date().toISOString(),
+            }).eq("razorpay_refund_id", refundId);
+
+        if (failedActionUpdate.error) {
+          console.error("Course failed refund audit update failed:", failedActionUpdate.error);
+          return NextResponse.json({ success: false, message: "Course refund failure could not be recorded." }, { status: 500 });
+        }
+
+        const [studentResult, courseResult] = await Promise.all([
+          supabase.from("profiles").select("email").eq("id", order.user_id).maybeSingle(),
+          supabase.from("courses").select("title").eq("id", order.course_id).maybeSingle(),
+        ]);
+        if (studentResult.error || courseResult.error) {
+          return NextResponse.json({ success: false, message: "Course refund failure notification details could not be loaded." }, { status: 500 });
+        }
+
+        await notifyStudentOfRefund(supabase, {
+          studentId: order.user_id,
+          studentEmail: studentResult.data?.email || null,
+          refundId,
+          status: "failed",
+          amountPaise: Number(refund.amount),
+          productTitle: courseResult.data?.title || "Course",
+          categoryLabel: "Course",
+          orderReference: order.id,
+        });
+
+        return NextResponse.json({ received: true, success: true, refund_failed: true });
       }
 
       // Record refund and revoke access only after full refund.
