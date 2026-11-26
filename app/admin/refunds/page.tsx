@@ -294,6 +294,24 @@ export default function AdminRefundsPage() {
     ['initiating', 'pending', 'review_required'].includes(action.status)
   ).length;
 
+  const currentBalanceSnapshotPaise = Math.round(Number(merchantBalance) * 100);
+  const modalRefundAmountPaise = selectedOrder
+    ? refundType === 'full'
+      ? selectedOrder.remaining_paise
+      : Math.round(Number(partialAmount) * 100) || 0
+    : 0;
+  const balanceSufficient = Boolean(
+    selectedOrder &&
+    balanceChecked &&
+    merchantBalance.trim() &&
+    Number.isSafeInteger(currentBalanceSnapshotPaise) &&
+    currentBalanceSnapshotPaise >= 0 &&
+    modalRefundAmountPaise >= 100 &&
+    modalRefundAmountPaise <= selectedOrder.remaining_paise &&
+    (refundType !== 'partial' || modalRefundAmountPaise < selectedOrder.remaining_paise) &&
+    currentBalanceSnapshotPaise >= modalRefundAmountPaise
+  );
+
   return (
     <main className="admin-shell">
       <AdminSidebar />
@@ -535,7 +553,7 @@ export default function AdminRefundsPage() {
                 </div>
                 <div className="refund-modal-actions">
                   <button type="button" className="refund-cancel-button" onClick={() => setSelectedOrder(null)} disabled={submitting}>Cancel</button>
-                  <button type="submit" className="refund-submit-button" disabled={submitting}>
+                  <button type="submit" className="refund-submit-button" disabled={submitting || !balanceSufficient}>
                     {submitting ? 'Submitting…' : `Confirm refund · ${money(refundType === 'full' ? selectedOrder.remaining_paise : Math.round(Number(partialAmount) * 100) || 0)}`}
                   </button>
                 </div>
