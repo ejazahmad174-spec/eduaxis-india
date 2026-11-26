@@ -112,6 +112,14 @@ export default function Home() {
   const [feedbackStatus, setFeedbackStatus] = useState("");
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [studentName, setStudentName] = useState('');
+  const [currentAffairsSummary, setCurrentAffairsSummary] = useState({
+    national: 0,
+    international: 0,
+    education: 0,
+    bihar: 0,
+    total: 0,
+    updatedAt: "",
+  });
 
   useEffect(() => {
     let active = true;
@@ -125,6 +133,57 @@ export default function Home() {
       setStudentName(String(name).trim().split(/\s+/)[0] || 'Student');
     }
     checkStudentSession();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadCurrentAffairsSummary() {
+      if (!supabase) return;
+
+      const { data, error } = await supabase
+        .from("current_affairs_items")
+        .select("category,original_published_at,approved_at")
+        .eq("status", "published")
+        .order("original_published_at", { ascending: false })
+        .limit(100);
+
+      if (!active || error) return;
+
+      const summary = {
+        national: 0,
+        international: 0,
+        education: 0,
+        bihar: 0,
+        total: (data || []).length,
+        updatedAt: "",
+      };
+
+      let newest = 0;
+      (data || []).forEach((item) => {
+        if (item.category === "education") summary.education += 1;
+        else if (item.category === "international") summary.international += 1;
+        else if (item.category === "bihar") summary.bihar += 1;
+        else summary.national += 1;
+
+        const timestamp = new Date(item.approved_at || item.original_published_at || "").getTime();
+        if (Number.isFinite(timestamp) && timestamp > newest) newest = timestamp;
+      });
+
+      if (newest) {
+        summary.updatedAt = new Date(newest).toLocaleDateString("en-IN", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+          timeZone: "Asia/Kolkata",
+        });
+      }
+
+      setCurrentAffairsSummary(summary);
+    }
+
+    loadCurrentAffairsSummary();
     return () => { active = false; };
   }, []);
 
@@ -205,15 +264,15 @@ export default function Home() {
               </div>
               <span className="ea-art-label">DAILY UPDATE</span>
             </div>
-            <div className="ea-affairs-date">National · International · Education · Bihar</div>
+            <div className="ea-affairs-date">National · International · Education · Bihar · {currentAffairsSummary.total} verified updates</div>
             <div className="ea-affairs-grid">
-              <div className="ea-affairs-tile"><span>▤</span><b>National Affairs</b><small>Government, policies and important decisions</small></div>
-              <div className="ea-affairs-tile"><span>◎</span><b>International Affairs</b><small>World events and global developments</small></div>
-              <div className="ea-affairs-tile"><span>⌂</span><b>Education & Exams</b><small>Education policies, examinations and schemes</small></div>
-              <div className="ea-affairs-tile"><span>⌖</span><b>Bihar Special</b><small>State government and regional developments</small></div>
+              <div className="ea-affairs-tile"><span>▤</span><b>National Affairs</b><small>{currentAffairsSummary.national ? currentAffairsSummary.national + " verified updates · " : ""}Government, policies and important decisions</small></div>
+              <div className="ea-affairs-tile"><span>◎</span><b>International Affairs</b><small>{currentAffairsSummary.international ? currentAffairsSummary.international + " verified updates · " : ""}World events and global developments</small></div>
+              <div className="ea-affairs-tile"><span>⌂</span><b>Education & Exams</b><small>{currentAffairsSummary.education ? currentAffairsSummary.education + " verified updates · " : ""}Education policies, examinations and schemes</small></div>
+              <div className="ea-affairs-tile"><span>⌖</span><b>Bihar Special</b><small>{currentAffairsSummary.bihar ? currentAffairsSummary.bihar + " verified updates · " : ""}State government and regional developments</small></div>
             </div>
             <div className="ea-affairs-bottom">
-              <span><b>Daily updates</b><small>Read verified updates and exam-relevant facts</small></span>
+              <span><b>Daily updates</b><small>{currentAffairsSummary.total ? currentAffairsSummary.total + " published · " + (currentAffairsSummary.updatedAt ? "Updated " + currentAffairsSummary.updatedAt : "Recently reviewed") : "Updates are collected daily and reviewed before publication"}</small></span>
               <span className="ea-affairs-read">Explore updates →</span>
             </div>
           </a>
