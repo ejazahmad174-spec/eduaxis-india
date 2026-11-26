@@ -276,7 +276,7 @@ async function getProductsAndOrders(adminClient: SupabaseClient) {
     adminClient.from("study_materials").select("id,title"),
     adminClient.from("study_material_qa_payment_orders").select("id,user_id,study_material_id,amount_paise,currency,status,razorpay_payment_id,refunded_paise,created_at,paid_at").not("razorpay_payment_id", "is", null).order("paid_at", { ascending: false }).range(0, 249),
     adminClient.from("study_material_qa_payment_refunds").select("payment_order_id,razorpay_refund_id,amount_paise,created_at"),
-    adminClient.from("admin_refund_actions").select("id,category,payment_order_id,student_id,amount_paise,refund_type,status,razorpay_refund_id,reason,mode,merchant_balance_snapshot_paise,merchant_balance_checked_at,merchant_balance_source,provider_error_code,provider_error,created_at,processed_at").order("created_at", { ascending: false }).limit(150),
+    adminClient.from("admin_refund_actions").select("id,category,payment_order_id,student_id,amount_paise,refund_type,status,razorpay_refund_id,reason,mode,provider_error_code,provider_error,created_at,processed_at").order("created_at", { ascending: false }).limit(150),
   ]);
 
   const allResults = [
@@ -444,16 +444,48 @@ export async function POST(request: Request) {
     adminClient = context.adminClient;
 
     const body = await request.json();
-    const category = body.category as RefundCategory;
-    const paymentOrderId = body.paymentOrderId;
-    const refundType = body.refundType as RefundType;
-    const amountInput = body.amountPaise;
-    const merchantBalanceSnapshotPaise = body.merchantBalancePaise;
-    const merchantBalanceChecked = body.merchantBalanceChecked === true;
-    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
-    const requestSource = ["student_email", "admin_initiated", "support_email", "other"].includes(body.requestSource)
-      ? body.requestSource
-      : "student_email";
+    const retryActionId = typeof body.retryActionId === "string" && UUID_RE.test(body.retryActionId)
+      ? body.retryActionId
+      : null;
+
+    let retryAction: {
+      id: string;
+      category: RefundCategory;
+      payment_order_id: string;
+      student_id: string;
+      razorpay_payment_id: string;
+      mode: "live" | "test";
+      refund_type: RefundType;
+      amount_paise: number;
+      reason: string;
+      request_source: string;
+      status: string;
+      razorpay_refund_id: string | null;
+    } | null = null;
+
+    if (retryActionId) {
+      const { data, error } = await adminClient
+        .from("admin_refund_actions")
+        .select("id,category,payment_order_id,student_id,razorpay_payment_id,mode,refund_type,amount_paise,reason,request_source,status,razorpay_refund_id")
+        .eq("id", retryActionId)
+        .maybeSingle();
+
+      if (error || !data) return jsonError("The queued refund action could not be found.", 404);
+      if (data.status !== "awaiting_funds" || data.razorpay_refund_id) {
+        return jsonError("Only a refund explicitly waiting for funds can be retried. Refresh the refund history first.", 409);
+      }
+      retryAction = data as typeof retryAction;
+    }
+
+    const category = (retryAction?.category || body.category) as RefundCategory;
+    const paymentOrderId = retryAction?.payment_order_id || body.paymentOrderId;
+    const refundType = (retryAction?.refund_type || body.refundType) as RefundType;
+    const amountInput = retryAction ? retryAction.amount_paise : body.amountPaise;
+    const reason = retryAction?.reason || (typeof body.reason === "string" ? body.reason.trim() : "");
+    const requestSource = retryAction?.request_source ||
+      (["student_email", "admin_initiated", "support_email", "other"].includes(body.requestSource)
+        ? body.requestSource
+        : "student_email");
 
     if (
       !["mock_test", "course", "study_material", "qa_study_material"].includes(category) ||
@@ -472,6 +504,14 @@ export async function POST(request: Request) {
     }
 
     const credentials = paymentConfig(category);
+    if (retryAction && retryAction.mode !== credentials.mode) {
+      return jsonError("The queued refund mode does not match the configured Razorpay credentials. Manual review is required.", 409);
+    }
+
+    if (retryAction && (retryAction.student_id !== order.studentId || retryAction.razorpay_payment_id !== order.paymentId)) {
+      return jsonError("The queued refund no longer matches the original purchase. Manual review is required.", 409);
+    }
+
     const providerPayment = await razorpayRequest(
       credentials.keyId,
       credentials.keySecret,
@@ -525,71 +565,85 @@ export async function POST(request: Request) {
     const remainingPaise = providerPayment.amount - providerRefundedPaise;
     if (remainingPaise < 100) return jsonError("This payment has no refundable balance remaining.", 409);
 
-    const refundAmountPaise = refundType === "full"
-      ? remainingPaise
-      : Number(amountInput);
+    const refundAmountPaise = retryAction
+      ? Number(retryAction.amount_paise)
+      : refundType === "full"
+        ? remainingPaise
+        : Number(amountInput);
 
     if (
       !Number.isSafeInteger(refundAmountPaise) ||
       refundAmountPaise < 100 ||
       refundAmountPaise > remainingPaise ||
-      (refundType === "partial" && refundAmountPaise >= remainingPaise)
+      (!retryAction && refundType === "partial" && refundAmountPaise >= remainingPaise)
     ) {
-      return jsonError("The refund amount must be at least ₹1 and cannot exceed the remaining payment balance. Use Full refund for the complete balance.", 400);
+      if (retryAction) {
+        await adminClient.from("admin_refund_actions").update({
+          status: "review_required",
+          provider_error: "The purchase was refunded through another route after this request was queued. Verify the remaining payable balance before taking further action.",
+          updated_at: new Date().toISOString(),
+        }).eq("id", retryAction.id);
+      }
+      return jsonError(
+        retryAction
+          ? "The queued amount no longer fits the remaining refundable balance. The action has been moved to manual review."
+          : "The refund amount must be at least ₹1 and cannot exceed the remaining payment balance. Use Full refund for the complete balance.",
+        409,
+      );
     }
 
-    if (
-      !Number.isSafeInteger(merchantBalanceSnapshotPaise) ||
-      merchantBalanceSnapshotPaise < 0 ||
-      !merchantBalanceChecked
-    ) {
-      return jsonError("Check the current Razorpay merchant balance for the same Test/Live mode, enter it in ₹, and confirm that you checked it just now.", 400);
-    }
-
-    if (merchantBalanceSnapshotPaise < refundAmountPaise) {
-      const shortfallPaise = refundAmountPaise - merchantBalanceSnapshotPaise;
-      return NextResponse.json({
-        error: "Insufficient Razorpay merchant balance. No refund request was sent.",
-        code: "INSUFFICIENT_DECLARED_MERCHANT_BALANCE",
-        requiredPaise: refundAmountPaise,
-        availablePaise: merchantBalanceSnapshotPaise,
-        shortfallPaise,
-        message: `Required ${money(refundAmountPaise)}. Entered available balance ${money(merchantBalanceSnapshotPaise)}. Shortfall ${money(shortfallPaise)}.`,
-      }, { status: 409 });
-    }
-
-    const merchantBalanceCheckedAt = new Date().toISOString();
-
-    const actionUuid = randomUUID();
     const idempotencyKey = randomUUID();
-    const { data: action, error: actionError } = await adminClient
-      .from("admin_refund_actions")
-      .insert({
-        id: actionUuid,
-        category,
-        payment_order_id: order.id,
-        student_id: order.studentId,
-        razorpay_payment_id: order.paymentId,
-        mode: credentials.mode,
-        refund_type: refundType,
-        amount_paise: refundAmountPaise,
-        currency: order.currency,
-        merchant_balance_snapshot_paise: merchantBalanceSnapshotPaise,
-        merchant_balance_checked_at: merchantBalanceCheckedAt,
-        merchant_balance_source: "razorpay_dashboard_manual",
-        reason,
-        request_source: requestSource,
-        source_reference: typeof body.sourceReference === "string" ? body.sourceReference.trim().slice(0, 180) : null,
-        status: "initiating",
-        idempotency_key: idempotencyKey,
-        initiated_by: context.userId,
-      })
-      .select("id,category,payment_order_id,student_id,amount_paise,refund_type,status,mode,created_at")
-      .single();
+    let action: { id: string };
 
-    if (actionError || !action) {
-      console.error("Could not create admin refund audit action:", actionError);
-      return jsonError("The refund action could not be saved. No provider request was sent.", 500);
+    if (retryAction) {
+      const { data: claimedAction, error: claimError } = await adminClient
+        .from("admin_refund_actions")
+        .update({
+          status: "initiating",
+          idempotency_key: idempotencyKey,
+          provider_error_code: null,
+          provider_error: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", retryAction.id)
+        .eq("status", "awaiting_funds")
+        .is("razorpay_refund_id", null)
+        .select("id")
+        .maybeSingle();
+
+      if (claimError || !claimedAction) {
+        return jsonError("This queued refund is already being retried or is no longer eligible. Refresh the refund history.", 409);
+      }
+      action = claimedAction;
+    } else {
+      const actionUuid = randomUUID();
+      const { data: createdAction, error: actionError } = await adminClient
+        .from("admin_refund_actions")
+        .insert({
+          id: actionUuid,
+          category,
+          payment_order_id: order.id,
+          student_id: order.studentId,
+          razorpay_payment_id: order.paymentId,
+          mode: credentials.mode,
+          refund_type: refundType,
+          amount_paise: refundAmountPaise,
+          currency: order.currency,
+          reason,
+          request_source: requestSource,
+          source_reference: typeof body.sourceReference === "string" ? body.sourceReference.trim().slice(0, 180) : null,
+          status: "initiating",
+          idempotency_key: idempotencyKey,
+          initiated_by: context.userId,
+        })
+        .select("id")
+        .single();
+
+      if (actionError || !createdAction) {
+        console.error("Could not create admin refund audit action:", actionError);
+        return jsonError("The refund action could not be saved. No provider request was sent.", 500);
+      }
+      action = createdAction;
     }
 
     actionId = action.id;
@@ -618,6 +672,64 @@ export async function POST(request: Request) {
       ) as RazorpayRefund;
     } catch (providerError) {
       const error = providerError as Error & { status?: number; code?: string };
+      const normalizedDescription = (error.message || "").toLowerCase();
+      const insufficientBalance =
+        error.status === 400 &&
+        (
+          /not enough balance/.test(normalizedDescription) ||
+          /does not have enough balance/.test(normalizedDescription) ||
+          /insufficient (merchant )?balance/.test(normalizedDescription) ||
+          /merchant.{0,80}balance.{0,40}lower than.{0,40}refund amount/.test(normalizedDescription) ||
+          /insufficient funds to carry out the refund/.test(normalizedDescription)
+        );
+
+      if (insufficientBalance) {
+        const { error: queueError } = await adminClient
+          .from("admin_refund_actions")
+          .update({
+            status: "awaiting_funds",
+            razorpay_refund_id: null,
+            provider_error_code: error.code || "INSUFFICIENT_BALANCE",
+            provider_error: error.message.slice(0, 1000),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", action.id);
+
+        if (queueError) {
+          console.error("Refund could not be queued after Razorpay reported insufficient balance:", queueError);
+          await adminClient.from("admin_refund_actions").update({
+            status: "review_required",
+            provider_error: "Razorpay reported insufficient balance, but EduAxis could not safely save the Awaiting funds status. Check Razorpay before retrying.",
+            updated_at: new Date().toISOString(),
+          }).eq("id", action.id);
+          return NextResponse.json({
+            error: "Razorpay did not process the refund and EduAxis could not save its queue status. Manual review is required.",
+            actionId: action.id,
+            status: "review_required",
+          }, { status: 202 });
+        }
+
+        const notification = await notifyStudentOfRefund(adminClient, {
+          studentId: order.studentId,
+          studentEmail: order.studentEmail,
+          refundId: action.id,
+          status: "awaiting_funds",
+          amountPaise: refundAmountPaise,
+          productTitle: order.title,
+          categoryLabel: category === "qa_study_material" ? "QA Test PDF" : category === "mock_test" ? "Mock Test" : category === "course" ? "Course" : "Study Material",
+          orderReference: order.id,
+        });
+
+        return NextResponse.json({
+          success: true,
+          actionId: action.id,
+          status: "awaiting_funds",
+          amountPaise: refundAmountPaise,
+          notification,
+          message: `Razorpay has not processed this refund because the merchant balance is insufficient. The full ${money(refundAmountPaise)} request is saved as Awaiting funds. Retry it after sufficient funds become available.`,
+        }, { status: 200 });
+      }
+
       const deterministicFailure = Boolean(error.status && error.status >= 400 && error.status < 500);
       await adminClient
         .from("admin_refund_actions")
