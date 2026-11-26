@@ -1,0 +1,177 @@
+.page {
+  min-height: 100vh;
+  padding: 42px 20px 72px;
+  background: #f4f8fa;
+  color: #172b3d;
+}
+.page * { box-sizing: border-box; }
+.container { width: min(1120px, 100%); margin: 0 auto; }
+.back {
+  color: #129b98;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+.header { margin: 28px 0; }
+.kicker {
+  color: #129b98;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.header h1 {
+  margin: 8px 0;
+  color: #102b46;
+  font: 800 clamp(30px, 5vw, 44px)/1.15 Manrope, "Segoe UI", sans-serif;
+  letter-spacing: -1px;
+}
+.header p {
+  max-width: 760px;
+  margin: 0;
+  color: #657789;
+  font-size: 14px;
+  line-height: 1.75;
+}
+.categoryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 13px;
+}
+.category {
+  min-height: 164px;
+  padding: 18px;
+  text-align: left;
+  border: 1px solid #d6e9e9;
+  border-radius: 15px;
+  background: #e5f4f3;
+  cursor: pointer;
+  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+.category:hover {
+  transform: translateY(-2px);
+  border-color: #9ccfcb;
+  box-shadow: 0 10px 24px #102b460d;
+}
+.category.active {
+  border-color: #129b98;
+  box-shadow: inset 0 0 0 1px #129b98;
+  background: #dff1ef;
+}
+.categoryIcon { color: #129b98; font-size: 24px; line-height: 1; }
+.category h2 {
+  margin: 13px 0 6px;
+  color: #102b46;
+  font: 800 15px/1.35 Manrope, "Segoe UI", sans-serif;
+}
+.category p {
+  margin: 0;
+  color: #657789;
+  font-size: 11px;
+  line-height: 1.55;
+}
+.categoryCount {
+  display: inline-block;
+  margin-top: 10px;
+  color: #087d7a;
+  font-size: 10px;
+  font-weight: 800;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin: 30px 0 15px;
+}
+.toolbar h2 {
+  margin: 0;
+  color: #102b46;
+  font: 800 23px/1.3 Manrope, "Segoe UI", sans-serif;
+}
+.toolbar p { margin: 5px 0 0; color: #708292; font-size: 12px; }
+.search {
+  width: min(330px, 100%);
+  padding: 12px 14px;
+  border: 1px solid #d7e3e8;
+  border-radius: 9px;
+  outline: none;
+  background: #fff;
+  color: #172b3d;
+  font: inherit;
+  font-size: 13px;
+}
+.search:focus { border-color: #129b98; box-shadow: 0 0 0 3px #129b9818; }
+.articleList { display: grid; gap: 12px; }
+.article {
+  padding: 20px 22px;
+  border: 1px solid #e0e9ed;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 5px 18px #102b4607;
+}
+.articleMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  color: #788997;
+  font-size: 11px;
+}
+.tag {
+  padding: 5px 8px;
+  border-radius: 20px;
+  background: #e4f4f2;
+  color: #087d7a;
+  font-size: 10px;
+  font-weight: 800;
+}
+.article h3 {
+  margin: 11px 0 8px;
+  color: #102b46;
+  font: 800 18px/1.4 Manrope, "Segoe UI", sans-serif;
+}
+.summary { margin: 0; color: #607486; font-size: 13px; line-height: 1.75; }
+.articleFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #edf1f3;
+}
+.source { color: #83919c; font-size: 11px; }
+.read {
+  color: #129b98;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.empty, .state, .error {
+  padding: 30px;
+  border: 1px dashed #cbdde3;
+  border-radius: 14px;
+  background: #fff;
+  color: #647789;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.empty strong { display: block; margin-bottom: 6px; color: #102b46; font-size: 16px; }
+.error { border-color: #fecaca; background: #fef2f2; color: #b91c1c; }
+@media (max-width: 900px) {
+  .categoryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .page { padding: 28px 14px 50px; }
+  .categoryGrid { gap: 9px; }
+  .category { min-height: 160px; padding: 13px; }
+  .category h2 { font-size: 13px; }
+  .category p { font-size: 10px; }
+  .toolbar { align-items: stretch; flex-direction: column; }
+  .search { width: 100%; }
+  .article { padding: 16px; }
+  .article h3 { font-size: 16px; }
+  .articleFooter { align-items: flex-start; flex-direction: column; }
+}
