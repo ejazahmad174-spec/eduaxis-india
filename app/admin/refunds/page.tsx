@@ -365,7 +365,7 @@ export default function AdminRefundsPage() {
             <section className="refund-kpis">
               <article><span>Payment records</span><strong>{report.orders.length.toLocaleString('en-IN')}</strong><small>Captured customer and QA transactions</small></article>
               <article><span>Outstanding refundable balance</span><strong>{money(totalRefundable)}</strong><small>Remaining captured amount across eligible orders</small></article>
-              <article><span>Pending / review actions</span><strong>{pendingActions.toLocaleString('en-IN')}</strong><small>Awaiting provider confirmation or manual review</small></article>
+              <article><span>Pending / awaiting-funds actions</span><strong>{pendingActions.toLocaleString('en-IN')}</strong><small>Awaiting provider funds, confirmation or manual review</small></article>
             </section>
 
             <section className="refund-panel">
@@ -404,6 +404,12 @@ export default function AdminRefundsPage() {
                     <tbody>
                       {filteredOrders.map((order) => {
                         const eligible = order.remaining_paise >= 100 && ['paid', 'partially_refunded'].includes(order.status);
+                        const openAction = report.actions.find((action) =>
+                          action.payment_order_id === order.id &&
+                          action.category === order.category &&
+                          ['initiating', 'pending', 'review_required', 'awaiting_funds'].includes(action.status)
+                        );
+                        const canInitiate = eligible && !openAction;
                         return (
                           <tr key={order.category + ':' + order.id}>
                             <td>
@@ -418,9 +424,15 @@ export default function AdminRefundsPage() {
                             <td className="refund-remaining">{money(order.remaining_paise)}</td>
                             <td><span className={'refund-status ' + (order.status === 'refunded' ? 'is-closed' : order.status === 'partially_refunded' ? 'is-partial' : 'is-active')}>{order.status.replaceAll('_', ' ')}</span></td>
                             <td>
-                              <button className="refund-open-button" disabled={!eligible} onClick={() => openRefund(order)}>
-                                {eligible ? 'Initiate refund' : 'No balance'}
-                              </button>
+                              {openAction?.status === 'awaiting_funds' ? (
+                                <button className="refund-open-button" disabled={submitting} onClick={() => void retryAwaitingRefund(openAction)}>
+                                  {retryingActionId === openAction.id ? 'Retrying…' : 'Retry queued refund'}
+                                </button>
+                              ) : (
+                                <button className="refund-open-button" disabled={!canInitiate || submitting} onClick={() => openRefund(order)}>
+                                  {openAction ? openAction.status === 'review_required' ? 'Manual review' : 'Refund pending' : eligible ? 'Initiate refund' : 'No balance'}
+                                </button>
+                              )}
                             </td>
                           </tr>
                         );
@@ -436,7 +448,7 @@ export default function AdminRefundsPage() {
               <div className="refund-panel-heading">
                 <div>
                   <h2>Recent admin refund actions</h2>
-                  <p>Provider status is authoritative. A refund marked Pending is not counted as processed until Razorpay confirms it.</p>
+                  <p>Razorpay status is authoritative. Awaiting funds actions keep the approved amount queued for retry; Pending actions await provider confirmation.</p>
                 </div>
                 <span>{report.actions.length} actions</span>
               </div>
