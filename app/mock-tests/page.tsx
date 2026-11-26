@@ -492,7 +492,7 @@ export default function StudentMockTestsPage() {
                 );
               })}
 
-              {legacySeries.length > 0 && (
+              {visibleSeries.some((series) => series.isLegacy) && (
                 <section className={styles.group}>
                   <div className={styles.groupHeading}>
                     <div>
