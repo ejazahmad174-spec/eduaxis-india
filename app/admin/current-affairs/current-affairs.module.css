@@ -1,0 +1,222 @@
+.main {
+  max-width: 1250px;
+  margin: 0 auto;
+  padding: 30px 28px 64px;
+  color: #172b3d;
+}
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 22px;
+}
+.kicker {
+  color: #129b98;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.7px;
+  text-transform: uppercase;
+}
+.header h1 {
+  margin: 8px 0 7px;
+  color: #102b46;
+  font: 800 clamp(27px, 4vw, 36px)/1.2 Manrope, "Segoe UI", sans-serif;
+  letter-spacing: -.7px;
+}
+.header p { margin: 0; color: #657789; font-size: 13px; line-height: 1.7; }
+.primaryButton, .secondaryButton, .publishButton, .rejectButton, .pauseButton, .enableButton {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background .15s ease, opacity .15s ease;
+}
+.primaryButton { background: #129b98; color: #fff; white-space: nowrap; }
+.primaryButton:hover { background: #087d7a; }
+.secondaryButton { background: #eaf0f4; color: #355166; }
+.secondaryButton:hover { background: #dce7ed; }
+.publishButton { background: #15803d; color: #fff; }
+.publishButton:hover { background: #166534; }
+.rejectButton { background: #fff1f0; color: #b42318; border: 1px solid #f4cbc7; }
+.rejectButton:hover { background: #fee4e2; }
+.pauseButton { background: #fff1f0; color: #b42318; border: 1px solid #f4cbc7; }
+.enableButton { background: #dcfce7; color: #166534; }
+.primaryButton:disabled, .secondaryButton:disabled, .publishButton:disabled, .rejectButton:disabled, .pauseButton:disabled, .enableButton:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.notice, .error {
+  margin: 14px 0;
+  padding: 13px 15px;
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.notice { border: 1px solid #b7e0d6; background: #effaf6; color: #176b56; }
+.error { border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; }
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+.stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 17px;
+  border: 1px solid #e0e9ed;
+  border-radius: 12px;
+  background: #fff;
+}
+.stats strong { color: #102b46; font: 800 26px/1.1 Manrope, "Segoe UI", sans-serif; }
+.stats span { color: #738493; font-size: 11px; }
+.panel {
+  margin-top: 18px;
+  padding: 22px;
+  border: 1px solid #e0e9ed;
+  border-radius: 15px;
+  background: #fff;
+  box-shadow: 0 5px 18px #102b4608;
+}
+.panelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.panelHeader h2 {
+  margin: 0;
+  color: #102b46;
+  font: 800 20px/1.3 Manrope, "Segoe UI", sans-serif;
+}
+.panelHeader p { margin: 5px 0 0; color: #748493; font-size: 12px; line-height: 1.6; }
+.schedule {
+  padding: 7px 10px;
+  border-radius: 20px;
+  background: #e4f4f2;
+  color: #087d7a;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 15px;
+}
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tab, .tabActive {
+  border: 1px solid #e0e9ed;
+  border-radius: 7px;
+  padding: 8px 10px;
+  background: #fff;
+  color: #687b89;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tabActive { border-color: #9ed5cf; background: #e8f6f4; color: #087d7a; }
+.search {
+  width: min(280px, 100%);
+  border: 1px solid #d9e4e9;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  outline: none;
+  color: #172b3d;
+  font: inherit;
+  font-size: 12px;
+}
+.search:focus { border-color: #129b98; box-shadow: 0 0 0 3px #129b9818; }
+.itemList { display: grid; gap: 11px; }
+.item {
+  padding: 17px;
+  border: 1px solid #e5ecef;
+  border-radius: 11px;
+  background: #fbfdfe;
+}
+.itemTop { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.category {
+  color: #087d7a;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+.status {
+  padding: 5px 8px;
+  border-radius: 20px;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.pending { background: #fff5dc; color: #966313; }
+.published { background: #dcfce7; color: #166534; }
+.rejected { background: #fee4e2; color: #b42318; }
+.item h3 {
+  margin: 9px 0 7px;
+  color: #102b46;
+  font: 750 15px/1.45 Manrope, "Segoe UI", sans-serif;
+}
+.summary { margin: 0; color: #677b8c; font-size: 12px; line-height: 1.65; }
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 12px;
+  color: #8a98a3;
+  font-size: 10px;
+}
+.meta a { color: #129b98; font-weight: 800; text-decoration: none; }
+.actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 13px; }
+.empty {
+  padding: 25px;
+  border: 1px dashed #cfdee4;
+  border-radius: 10px;
+  color: #778896;
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+}
+.sourceList { display: grid; gap: 9px; }
+.source {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 14px;
+  border: 1px solid #e6edef;
+  border-radius: 10px;
+  background: #fbfdfe;
+}
+.sourceInfo { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.sourceInfo strong { color: #18344b; font-size: 12px; }
+.sourceInfo a {
+  overflow-wrap: anywhere;
+  color: #129b98;
+  font-size: 10px;
+  text-decoration: none;
+}
+.sourceInfo small { color: #83919c; font-size: 10px; line-height: 1.5; }
+.sourceInfo .sourceError { color: #b42318; }
+@media (max-width: 900px) {
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .header { align-items: flex-start; flex-direction: column; }
+  .filters { align-items: stretch; flex-direction: column; }
+  .search { width: 100%; }
+}
+@media (max-width: 600px) {
+  .main { padding: 22px 14px 45px; }
+  .stats { gap: 8px; }
+  .stats > div { padding: 13px; }
+  .panel { padding: 15px; }
+  .panelHeader { align-items: flex-start; flex-direction: column; }
+  .source { align-items: flex-start; flex-direction: column; }
+}
