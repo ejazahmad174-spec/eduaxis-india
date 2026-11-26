@@ -136,7 +136,7 @@ async function fetchPage(
 
   const headers: Record<string, string> = {
     "User-Agent": USER_AGENT,
-    Accept: "application/rss+xml, application/xml, text/xml",
+    Accept: "application/rss+xml, application/xml, text/xml, text/html",
   };
 
   if (previousEtag) {
