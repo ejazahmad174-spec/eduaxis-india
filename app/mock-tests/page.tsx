@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import StudentNavigation from "@/components/student/StudentNavigation";
+import styles from "./mock-tests.module.css";
+import { BSEB_CLASS_XII_SERIES, BSEB_LOGO_URL, MOCK_TEST_SERIES_GROUPS } from "@/lib/mock-test-series";
 
 type MockTest = {
   id: string;
@@ -66,11 +68,12 @@ export default function StudentMockTestsPage() {
 
   const [tests, setTests] = useState<MockTest[]>([]);
   const [purchasedTests, setPurchasedTests] = useState<string[]>([]);
+  const [selectedSeriesId, setSelectedSeriesId] = useState("");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [processingTest, setProcessingTest] = useState("");
-  const [loggedIn, setLoggedIn] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -99,7 +102,6 @@ export default function StudentMockTestsPage() {
         return;
       }
 
-      setLoggedIn(true);
 
       const { data, error: testError } = await supabase
         .from("mock_tests")
@@ -294,13 +296,68 @@ export default function StudentMockTestsPage() {
     }
   }
 
-  const freeTests = tests.filter(
-    (test) => test.access_type === "free"
+  type SeriesView = {
+    id: string;
+    group: string;
+    subject: string;
+    examCategory: string;
+    description: string;
+    boardName: string;
+    logoUrl: string;
+    plannedTests: number | null;
+    plannedFreeTests: number | null;
+    plannedPaidTests: number | null;
+    isLegacy?: boolean;
+  };
+
+  const configuredCategories = new Set(
+    BSEB_CLASS_XII_SERIES.map((series) => series.examCategory)
   );
 
-  const premiumTests = tests.filter(
-    (test) => test.access_type === "paid"
-  );
+  const legacySeries = Array.from(
+    new Set(
+      tests
+        .map((test) => test.exam_category || "Other examination")
+        .filter((category) => !configuredCategories.has(category))
+    )
+  ).map((category, index) => ({
+    id: "existing-series-" + index,
+    group: "Other examinations",
+    subject: category,
+    examCategory: category,
+    description: "Previously published examination practice tests.",
+    boardName: category,
+    logoUrl: BSEB_LOGO_URL,
+    plannedTests: null,
+    plannedFreeTests: null,
+    plannedPaidTests: null,
+    isLegacy: true,
+  })) as SeriesView[];
+
+  const allSeries = [...BSEB_CLASS_XII_SERIES, ...legacySeries] as SeriesView[];
+  const visibleSeries = allSeries.filter((series) => {
+    const term = search.trim().toLowerCase();
+    if (!term) return true;
+    return [
+      series.group,
+      series.subject,
+      series.examCategory,
+      series.description,
+      series.boardName,
+    ].join(" ").toLowerCase().includes(term);
+  });
+  const selectedSeries = allSeries.find((series) => series.id === selectedSeriesId) || null;
+  const selectedTests = selectedSeries
+    ? tests.filter((test) => test.exam_category === selectedSeries.examCategory)
+    : [];
+  const selectedFreeTests = selectedTests.filter((test) => test.access_type === "free");
+  const selectedPremiumTests = selectedTests.filter((test) => test.access_type === "paid");
+
+  function openSeries(series: SeriesView) {
+    setMessage("");
+    setSelectedSeriesId(series.id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   function TestCard({ test }: { test: MockTest }) {
     const isFree = test.access_type === "free";
@@ -308,53 +365,33 @@ export default function StudentMockTestsPage() {
     const isProcessing = processingTest === test.id;
 
     return (
-      <article className="test-card">
-        <span className={isFree ? "free-tag" : "paid-tag"}>
-          {isFree ? "FREE TEST" : "PREMIUM TEST"}
-        </span>
+      <article className={styles.testCard}>
+        <div className={styles.testCardTop}>
+          <span className={styles.accessTag + " " + (isFree ? styles.free : styles.paid)}>
+            {isFree ? "FREE TEST" : "PREMIUM TEST"}
+          </span>
+          {isPurchased && <span className={styles.owned}>✓ Unlocked</span>}
+        </div>
 
-        <h2>{test.title}</h2>
+        <h3 className={styles.testTitle}>{test.title}</h3>
 
-        <div className="test-info">
-          <div>
-            <strong>Examination:</strong> {test.exam_category}
-          </div>
-          <div>
-            <strong>Duration:</strong> {test.duration_minutes} minutes
-          </div>
-          <div>
-            <strong>Total Marks:</strong> {test.total_marks}
-          </div>
-
-          {!isFree && (
-            <div>
-              <strong>Price:</strong> ₹{test.price ?? 0}
-            </div>
-          )}
+        <div className={styles.testMeta}>
+          <span><b>Duration:</b> {test.duration_minutes} minutes</span>
+          <span><b>Total marks:</b> {test.total_marks}</span>
+          {!isFree && <span><b>Price:</b> ₹{test.price ?? 0}</span>}
         </div>
 
         {isFree || isPurchased ? (
-          <>
-            {isPurchased && (
-              <p className="purchased-message">
-                ✓ Purchased – Access available
-              </p>
-            )}
-
-            <a
-              className="test-button"
-              href={`/mock-tests/${test.id}`}
-            >
-              View Test & Start
-            </a>
-          </>
+          <a className={styles.testAction} href={"/mock-tests/" + test.id}>
+            {isPurchased ? "Continue Test" : "Start Free Test"} <span aria-hidden="true">→</span>
+          </a>
         ) : (
           <button
-            className="test-button"
+            className={styles.testAction}
             onClick={() => purchaseTest(test)}
             disabled={!!processingTest}
           >
-            {isProcessing ? "Processing..." : "Purchase Now"}
+            {isProcessing ? "Processing..." : "Purchase Test · ₹" + (test.price ?? 0)}
           </button>
         )}
       </article>
@@ -362,239 +399,219 @@ export default function StudentMockTestsPage() {
   }
 
   return (
-    <main className="mock-page">
+    <main className={styles.page}>
       <StudentNavigation />
-      <style>{`
-        .mock-page {
-          box-sizing: border-box;
-          max-width: 1100px;
-          min-height: 100vh;
-          margin: 0 auto;
-          padding: 35px 20px 60px;
-          color: #172033;
-          background: #f4f7fb;
-        }
 
-        .page-link {
-          color: #174ea6;
-          text-decoration: none;
-          font-weight: 600;
-        }
-
-        .page-title {
-          font-size: 34px;
-          line-height: 1.2;
-          margin: 25px 0 12px;
-          color: #102d49;
-          font-weight: 800;
-        }
-
-        .page-description {
-          color: #64748b;
-          line-height: 1.7;
-        }
-
-        .test-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
-          gap: 18px;
-          margin-top: 25px;
-        }
-
-        .test-card {
-          box-sizing: border-box;
-          border: 1px solid #dbe5f0;
-          border-radius: 14px;
-          padding: 24px;
-          background: #ffffff;
-          box-shadow: 0 5px 18px rgba(15, 45, 80, 0.08);
-          transition: transform 0.18s ease, box-shadow 0.18s ease;
-        }
-
-        .test-card:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 9px 24px rgba(15, 45, 80, 0.13);
-        }
-
-        .test-card h2 {
-          font-size: 19px;
-          margin: 12px 0;
-        }
-
-        .test-info {
-          color: #64748b;
-          font-size: 14px;
-          line-height: 1.9;
-        }
-
-        .test-button {
-          display: inline-block;
-          margin-top: 15px;
-          padding: 11px 17px;
-          background: #174ea6;
-          color: white;
-          border: none;
-          border-radius: 7px;
-          text-decoration: none;
-          font-weight: 600;
-          cursor: pointer;
-          font-size: 14px;
-        }
-
-        .test-button:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        .free-tag {
-          color: #15803d;
-          background: #dcfce7;
-          padding: 5px 10px;
-          border-radius: 20px;
-          font-size: 12px;
-          font-weight: 700;
-        }
-
-        .paid-tag {
-          color: #92400e;
-          background: #fef3c7;
-          padding: 5px 10px;
-          border-radius: 20px;
-          font-size: 12px;
-          font-weight: 700;
-        }
-
-        .message {
-          margin-top: 20px;
-          padding: 13px;
-          background: #eff6ff;
-          color: #1e40af;
-          border-radius: 8px;
-          line-height: 1.6;
-        }
-
-        .test-section {
-          margin-top: 40px;
-          padding: 26px;
-          border: 1px solid #e2eaf3;
-          border-radius: 16px;
-          background: #ffffff;
-          box-shadow: 0 3px 14px rgba(15, 45, 80, 0.04);
-        }
-
-        .test-section h2 {
-          font-size: 25px;
-          color: #102d49;
-          margin-bottom: 8px;
-        }
-
-        .section-description {
-          color: #64748b;
-          line-height: 1.6;
-        }
-
-        .empty-state {
-          padding: 25px;
-          margin-top: 20px;
-          background: #f8fafc;
-          border-radius: 12px;
-          color: #64748b;
-        }
-
-        .empty-state h3 {
-          color: #102d49;
-          margin-top: 0;
-        }
-
-        .purchased-message {
-          color: #15803d;
-          margin-top: 12px;
-          font-weight: 650;
-        }
-
-        .message {
-          border: 1px solid #bfdbfe;
-        }
-
-        @media (max-width: 640px) {
-          .mock-page {
-            padding: 24px 14px 40px;
-          }
-
-          .test-section {
-            padding: 17px;
-            margin-top: 28px;
-          }
-
-          .test-card {
-            padding: 19px;
-          }
-
-          .page-title {
-            font-size: 28px;
-          }
-        }
-      `}</style>
-
-      <a className="page-link" href="/student/dashboard">
-        ← Back to Student Dashboard
-      </a>
-
-      <h1 className="page-title">Online Mock Tests</h1>
-
-      <p className="page-description">
-        Practise with examination-oriented tests, evaluate your preparation
-        and improve your performance with EduAxis India.
-      </p>
-
-      {message && <div className="message">{message}</div>}
-
-      {loading && <p>Checking login and loading available mock tests...</p>}
-
-      {error && (
-        <p style={{ color: "#b91c1c" }}>
-          Unable to load mock tests: {error}
-        </p>
-      )}
-
-      {!loading && !error && (
+      {!selectedSeries ? (
         <>
-          <section className="test-section">
-            <h2>Free Mock Tests</h2>
-            <p className="section-description">
-              Practise and evaluate your preparation with free tests.
-            </p>
+          <a className={styles.backLink} href="/student/dashboard">
+            ← Back to Student Dashboard
+          </a>
 
-            {freeTests.length === 0 ? (
-              <div className="empty-state">
-                <h3>No free mock tests available yet.</h3>
-                <p>New free tests will appear here after they are published.</p>
+          <div className={styles.mockHeading}>
+            <div>
+              <div className={styles.eyebrow}>PRACTISE · EVALUATE · IMPROVE</div>
+              <h1>Popular Mock Test Series</h1>
+              <p>
+                Choose your BSEB Class XII stream and subject. Every subject has
+                its own 11-test bundle with one free test and ten premium tests planned.
+              </p>
+            </div>
+            <input
+              className={styles.search}
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search a subject or test series..."
+              aria-label="Search test series"
+            />
+          </div>
+
+          {message && <div className={styles.alert}>{message}</div>}
+          {loading && <div className={styles.loading}>Checking your account and loading test series...</div>}
+          {error && <div className={styles.alert + " " + styles.error}>Unable to load mock tests: {error}</div>}
+
+          {!loading && !error && (
+            <>
+              {MOCK_TEST_SERIES_GROUPS.map((group) => {
+                const groupSeries = visibleSeries.filter((series) => series.group === group.name);
+                if (!groupSeries.length) return null;
+
+                return (
+                  <section className={styles.group} key={group.name}>
+                    <div className={styles.groupHeading}>
+                      <div>
+                        <h2>{group.name}</h2>
+                        <p>{group.description}</p>
+                      </div>
+                      <span className={styles.groupCount}>{groupSeries.length} subject bundles</span>
+                    </div>
+
+                    <div className={styles.seriesGrid}>
+                      {groupSeries.map((series) => {
+                        const available = tests.filter((test) => test.exam_category === series.examCategory);
+                        const availableFree = available.filter((test) => test.access_type === "free").length;
+                        const availablePaid = available.filter((test) => test.access_type === "paid").length;
+
+                        return (
+                          <article className={styles.seriesCard} key={series.id}>
+                            <div className={styles.seriesCardHead}>
+                              <span className={styles.seriesLogo}>
+                                <img src={series.logoUrl} alt="Bihar School Examination Board emblem" loading="lazy" />
+                              </span>
+                              <span className={styles.seriesAuthority}>
+                                {series.boardName}
+                                <br />
+                                CLASS XII BOARD EXAMINATION
+                              </span>
+                            </div>
+                            <span className={styles.seriesLevel}>
+                              {series.group.toUpperCase()} · SUBJECT SERIES
+                            </span>
+                            <h3 className={styles.seriesTitle}>{series.subject} Test Series</h3>
+                            <p className={styles.seriesDescription}>{series.description}</p>
+                            <div className={styles.stats}>
+                              <span className={styles.stat}>11 tests planned</span>
+                              <span className={styles.stat + " " + styles.statFree}>1 free</span>
+                              <span className={styles.stat + " " + styles.statPaid}>10 premium</span>
+                            </div>
+                            <div className={styles.availability}>
+                              {available.length} of 11 tests currently published
+                              {available.length > 0
+                                ? " · " + availableFree + " free · " + availablePaid + " premium"
+                                : ""}
+                            </div>
+                            <button className={styles.seriesCta} onClick={() => openSeries(series)}>
+                              Explore test series <span aria-hidden="true">→</span>
+                            </button>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+
+              {legacySeries.length > 0 && (
+                <section className={styles.group}>
+                  <div className={styles.groupHeading}>
+                    <div>
+                      <h2>Other available test series</h2>
+                      <p>Previously published examination tests remain available here.</p>
+                    </div>
+                  </div>
+                  <div className={styles.seriesGrid}>
+                    {visibleSeries.filter((series) => series.isLegacy).map((series) => {
+                      const available = tests.filter((test) => test.exam_category === series.examCategory);
+                      const availableFree = available.filter((test) => test.access_type === "free").length;
+                      const availablePaid = available.filter((test) => test.access_type === "paid").length;
+
+                      return (
+                        <article className={styles.seriesCard} key={series.id}>
+                          <div className={styles.seriesCardHead}>
+                            <span className={styles.seriesLogo}>
+                              <img src={series.logoUrl} alt="Bihar School Examination Board emblem" loading="lazy" />
+                            </span>
+                            <span className={styles.seriesAuthority}>{series.boardName}</span>
+                          </div>
+                          <span className={styles.seriesLevel}>EXISTING TEST SERIES</span>
+                          <h3 className={styles.seriesTitle}>{series.subject}</h3>
+                          <p className={styles.seriesDescription}>{series.description}</p>
+                          <div className={styles.stats}>
+                            <span className={styles.stat}>{available.length} published</span>
+                            <span className={styles.stat + " " + styles.statFree}>{availableFree} free</span>
+                            <span className={styles.stat + " " + styles.statPaid}>{availablePaid} premium</span>
+                          </div>
+                          <div className={styles.availability}>Existing published tests and purchases are preserved.</div>
+                          <button className={styles.seriesCta} onClick={() => openSeries(series)}>
+                            View available tests <span aria-hidden="true">→</span>
+                          </button>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+
+              {visibleSeries.length === 0 && (
+                <div className={styles.emptyState}>
+                  <strong>No matching test series found.</strong>
+                  Try another subject name or clear your search.
+                </div>
+              )}
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <button className={styles.backLink} type="button" onClick={() => setSelectedSeriesId("")}>
+            ← Back to all test series
+          </button>
+
+          <div className={styles.detailTop}>
+            <span className={styles.seriesLogo}>
+              <img src={selectedSeries.logoUrl} alt="Bihar School Examination Board emblem" />
+            </span>
+            <div className={styles.detailCopy}>
+              <small>{selectedSeries.boardName} · {selectedSeries.group}</small>
+              <h1>{selectedSeries.subject} Test Series</h1>
+              <p>{selectedSeries.description}</p>
+              {selectedSeries.plannedTests ? (
+                <div className={styles.plan}>
+                  <span>{selectedSeries.plannedTests} tests planned</span>
+                  <span>{selectedSeries.plannedFreeTests} free test</span>
+                  <span>{selectedSeries.plannedPaidTests} premium tests</span>
+                  <span>{selectedTests.length} currently published</span>
+                </div>
+              ) : (
+                <div className={styles.plan}>
+                  <span>{selectedTests.length} published tests</span>
+                  <span>{selectedFreeTests.length} free</span>
+                  <span>{selectedPremiumTests.length} premium</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {message && <div className={styles.alert}>{message}</div>}
+          {error && <div className={styles.alert + " " + styles.error}>{error}</div>}
+
+          <section className={styles.testSection}>
+            <div className={styles.sectionHeading}>
+              <div>
+                <h2>Free Mock Tests</h2>
+                <p>Start practising with the free test in this subject bundle.</p>
+              </div>
+              <span className={styles.testCount}>{selectedFreeTests.length} available</span>
+            </div>
+            {selectedFreeTests.length ? (
+              <div className={styles.testGrid}>
+                {selectedFreeTests.map((test) => <TestCard key={test.id} test={test} />)}
               </div>
             ) : (
-              <div className="test-grid">
-                {freeTests.map((test) => (
-                  <TestCard key={test.id} test={test} />
-                ))}
+              <div className={styles.emptyState}>
+                <strong>The free test is being prepared.</strong>
+                It will appear here as soon as it is published by EduAxis India.
               </div>
             )}
           </section>
 
-          <section className="test-section">
-            <h2>Premium Mock Tests</h2>
-            <p className="section-description">
-              Unlock premium examination tests and specialised test series.
-            </p>
-
-            {premiumTests.length === 0 ? (
-              <div className="empty-state">
-                <h3>Premium mock tests coming soon.</h3>
-                <p>Premium tests will appear here when they are published.</p>
+          <section className={styles.testSection}>
+            <div className={styles.sectionHeading}>
+              <div>
+                <h2>Premium Mock Tests</h2>
+                <p>Unlock additional subject-wise practice tests.</p>
+              </div>
+              <span className={styles.testCount}>{selectedPremiumTests.length} available</span>
+            </div>
+            {selectedPremiumTests.length ? (
+              <div className={styles.testGrid}>
+                {selectedPremiumTests.map((test) => <TestCard key={test.id} test={test} />)}
               </div>
             ) : (
-              <div className="test-grid">
-                {premiumTests.map((test) => (
-                  <TestCard key={test.id} test={test} />
-                ))}
+              <div className={styles.emptyState}>
+                <strong>Premium tests are being prepared.</strong>
+                Published paid tests will appear here with their price and purchase option.
               </div>
             )}
           </section>
@@ -602,4 +619,5 @@ export default function StudentMockTestsPage() {
       )}
     </main>
   );
+}
 }
