@@ -37,6 +37,9 @@ type RefundAction = {
   razorpay_refund_id: string | null;
   reason: string;
   mode: 'live' | 'test';
+  merchant_balance_snapshot_paise: number | null;
+  merchant_balance_checked_at: string | null;
+  merchant_balance_source: string | null;
   provider_error_code: string | null;
   provider_error: string | null;
   created_at: string;
@@ -94,6 +97,8 @@ export default function AdminRefundsPage() {
   const [partialAmount, setPartialAmount] = useState('');
   const [reason, setReason] = useState('');
   const [requestSource, setRequestSource] = useState('student_email');
+  const [merchantBalance, setMerchantBalance] = useState('');
+  const [balanceChecked, setBalanceChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const loadReport = useCallback(async (refresh = false) => {
@@ -178,6 +183,8 @@ export default function AdminRefundsPage() {
     setPartialAmount('');
     setReason('');
     setRequestSource('student_email');
+    setMerchantBalance('');
+    setBalanceChecked(false);
     setNotice('');
     setError('');
   };
@@ -206,9 +213,26 @@ export default function AdminRefundsPage() {
       return;
     }
 
+    const balancePaise = Math.round(Number(merchantBalance) * 100);
+    if (
+      !balanceChecked ||
+      !merchantBalance.trim() ||
+      !Number.isSafeInteger(balancePaise) ||
+      balancePaise < 0
+    ) {
+      setError('Enter the current Razorpay available balance for the same mode and confirm that you checked it just now.');
+      return;
+    }
+
+    if (balancePaise < amountPaise) {
+      const shortfallPaise = amountPaise - balancePaise;
+      setError(`Insufficient Razorpay balance. Required ${money(amountPaise)}; available ${money(balancePaise)}; shortfall ${money(shortfallPaise)}. No refund was sent.`);
+      return;
+    }
+
     const modeLabel = selectedOrder.mode === 'test' ? 'RAZORPAY TEST MODE' : 'LIVE MODE';
     const confirmed = window.confirm(
-      `Confirm ${refundType} refund of ${money(amountPaise)} for ${selectedOrder.title}?\n\n${modeLabel}\nStudent: ${selectedOrder.student_name}\nPayment: ${selectedOrder.payment_id}\n\nThis action sends a refund request to Razorpay.`
+      `Confirm ${refundType} refund of ${money(amountPaise)} for ${selectedOrder.title}?\n\n${modeLabel}\nStudent: ${selectedOrder.student_name}\nPayment: ${selectedOrder.payment_id}\nAvailable balance checked: ${money(balancePaise)}\n\nThis action sends a refund request to Razorpay.`
     );
     if (!confirmed) return;
 
@@ -235,6 +259,8 @@ export default function AdminRefundsPage() {
           paymentOrderId: selectedOrder.id,
           refundType,
           amountPaise: refundType === 'partial' ? amountPaise : undefined,
+          merchantBalancePaise: balancePaise,
+          merchantBalanceChecked: balanceChecked,
           reason: cleanReason,
           requestSource,
         }),
@@ -242,7 +268,7 @@ export default function AdminRefundsPage() {
       const payload = await response.json();
 
       if (!response.ok && !payload.actionId) {
-        throw new Error(payload.error || 'Razorpay refund could not be initiated.');
+        throw new Error(payload.message || payload.error || 'Razorpay refund could not be initiated.');
       }
 
       if (payload.status === 'processed') {
@@ -388,7 +414,7 @@ export default function AdminRefundsPage() {
               ) : (
                 <div className="refund-table-wrap">
                   <table className="refund-table">
-                    <thead><tr><th>Date</th><th>Student / payment</th><th>Category</th><th>Amount</th><th>Mode</th><th>Status</th><th>Provider reference</th></tr></thead>
+                    <thead><tr><th>Date</th><th>Student / payment</th><th>Category</th><th>Amount</th><th>Mode</th><th>Balance checked</th><th>Status</th><th>Provider reference</th></tr></thead>
                     <tbody>
                       {report.actions.map((action) => {
                         const order = report.orders.find((item) => item.id === action.payment_order_id && item.category === action.category);
@@ -399,6 +425,7 @@ export default function AdminRefundsPage() {
                             <td>{action.category.replaceAll('_', ' ')}</td>
                             <td>{money(action.amount_paise)}<small>{action.refund_type} refund</small></td>
                             <td><span className={action.mode === 'test' ? 'refund-mode test' : 'refund-mode live'}>{action.mode.toUpperCase()}</span></td>
+                            <td>{action.merchant_balance_snapshot_paise === null ? '—' : money(action.merchant_balance_snapshot_paise)}<small>{action.merchant_balance_checked_at ? dateLabel(action.merchant_balance_checked_at) : 'Not captured'}</small></td>
                             <td><span className={'refund-status ' + (action.status === 'processed' ? 'is-closed' : action.status === 'failed' ? 'is-failed' : 'is-pending')}>{actionStatusLabel(action.status)}</span>{action.provider_error && <small className="refund-provider-error">{action.provider_error}</small>}</td>
                             <td>{action.razorpay_refund_id || action.id}</td>
                           </tr>
@@ -431,6 +458,50 @@ export default function AdminRefundsPage() {
               </div>
 
               <form onSubmit={submitRefund}>
+                <section className="refund-balance-check">
+                  <div className="refund-balance-heading">
+                    <b>Razorpay available balance pre-check</b>
+                    <span>{selectedOrder.mode === 'test' ? 'Test Mode' : 'Live Mode'}</span>
+                  </div>
+                  <p>Open the Razorpay Dashboard in the same mode and read your current / available merchant balance. Enter that value below. EduAxis cannot fetch the Payment Gateway balance automatically.</p>
+                  <label className="refund-form-label">
+                    Available balance in Razorpay (₹)
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={merchantBalance}
+                      onChange={(event) => {
+                        setMerchantBalance(event.target.value);
+                        setBalanceChecked(false);
+                      }}
+                      placeholder="e.g. 500.00"
+                      required
+                    />
+                  </label>
+                  {merchantBalance.trim() !== '' && Number.isFinite(Number(merchantBalance)) && Number(merchantBalance) >= 0 && (
+                    <div className="refund-balance-math">
+                      <span>Required for this refund <b>{money(refundType === 'full' ? selectedOrder.remaining_paise : Math.round(Number(partialAmount) * 100) || 0)}</b></span>
+                      <span>Entered available balance <b>{money(Math.round(Number(merchantBalance) * 100))}</b></span>
+                      {Math.round(Number(merchantBalance) * 100) < (refundType === 'full' ? selectedOrder.remaining_paise : Math.round(Number(partialAmount) * 100) || 0) && (
+                        <strong>Shortfall: {money((refundType === 'full' ? selectedOrder.remaining_paise : Math.round(Number(partialAmount) * 100) || 0) - Math.round(Number(merchantBalance) * 100))}. Refund will be blocked.</strong>
+                      )}
+                      {Math.round(Number(merchantBalance) * 100) >= (refundType === 'full' ? selectedOrder.remaining_paise : Math.round(Number(partialAmount) * 100) || 0) && (
+                        <strong className="refund-balance-enough">Entered balance covers this refund. Final approval remains subject to Razorpay.</strong>
+                      )}
+                    </div>
+                  )}
+                  <label className="refund-balance-confirm">
+                    <input
+                      type="checkbox"
+                      checked={balanceChecked}
+                      onChange={(event) => setBalanceChecked(event.target.checked)}
+                    />
+                    I checked the available balance in Razorpay just now and selected the correct {selectedOrder.mode === 'test' ? 'Test' : 'Live'} Mode.
+                  </label>
+                  <small className="refund-balance-note">This is a manual dashboard snapshot, not a live balance API. The entered amount and check time will be saved in the admin refund history.</small>
+                </section>
+
                 <label className="refund-form-label">Refund type</label>
                 <div className="refund-type-options">
                   <label><input type="radio" checked={refundType === 'full'} onChange={() => setRefundType('full')} /> Full refund <small>{money(selectedOrder.remaining_paise)}</small></label>
@@ -460,7 +531,7 @@ export default function AdminRefundsPage() {
                 </label>
 
                 <div className="refund-modal-warning">
-                  This sends a real refund request in the selected Razorpay mode. Verify the student request and payment before confirming. Access is revoked only when the complete payment has been refunded and recorded.
+                  This sends a real refund request in the selected Razorpay mode. The balance check is manual and may change before Razorpay processes the request. Verify the student request and payment before confirming. Access is revoked only when the complete payment has been refunded and recorded.
                 </div>
                 <div className="refund-modal-actions">
                   <button type="button" className="refund-cancel-button" onClick={() => setSelectedOrder(null)} disabled={submitting}>Cancel</button>
@@ -539,6 +610,18 @@ export default function AdminRefundsPage() {
         .refund-type-options{display:grid;grid-template-columns:1fr 1fr;gap:9px}
         .refund-type-options label{display:flex;align-items:center;gap:7px;padding:11px;border:1px solid #dce5ea;border-radius:8px;color:#244258;font-size:11px;font-weight:800;cursor:pointer}
         .refund-type-options input{accent-color:#0b887d}
+        .refund-balance-check{padding:14px;margin:15px 0;background:#f2f7fa;border:1px solid #d8e5ec;border-radius:10px}
+        .refund-balance-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;color:#17344c;font-size:12px}
+        .refund-balance-heading span{font-size:9px;font-weight:900;letter-spacing:.4px;color:#0b8278;background:#e1f4ef;padding:5px 8px;border-radius:20px}
+        .refund-balance-check>p{font-size:10px;color:#6f8493;line-height:1.55;margin:7px 0 10px}
+        .refund-balance-math{display:grid;gap:7px;margin:9px 0;padding:10px;background:#fff;border:1px solid #e0e8ed;border-radius:8px}
+        .refund-balance-math span{display:flex;justify-content:space-between;gap:12px;font-size:10px;color:#687d8c}
+        .refund-balance-math b{color:#18364f}
+        .refund-balance-math>strong{font-size:10px;color:#a53b32;line-height:1.5}
+        .refund-balance-math>strong.refund-balance-enough{color:#167347}
+        .refund-balance-confirm{display:flex;align-items:flex-start;gap:8px;margin-top:10px;font-size:10px;line-height:1.5;color:#29465e;cursor:pointer}
+        .refund-balance-confirm input{margin-top:1px;accent-color:#0b887d}
+        .refund-balance-note{display:block;margin-top:9px;font-size:9px;color:#84939e;line-height:1.5}
         .refund-type-options small{margin-left:auto;color:#728592;font-weight:700}
         .refund-modal-warning{padding:11px 12px;margin:15px 0;background:#fff8e9;border:1px solid #efdfbf;border-radius:8px;color:#775515;font-size:10px;line-height:1.55}
         .refund-modal-actions{display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap;margin-top:17px}
