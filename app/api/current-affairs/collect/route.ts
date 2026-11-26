@@ -156,6 +156,7 @@ async function fetchPage(
 
   const etag = response.headers.get("etag");
   const lastModified = response.headers.get("last-modified");
+  const contentType = response.headers.get("content-type") || "";
 
   if (response.status === 304) {
     return {
@@ -174,8 +175,6 @@ async function fetchPage(
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
   }
-
-  const contentType = response.headers.get("content-type") || "";
 
   const sourceHost = new URL(url).hostname.toLowerCase();
   const isApprovedBiharHtmlSource =
