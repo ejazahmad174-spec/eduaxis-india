@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
 import AdminSidebar from '@/components/admin/AdminSidebar';
+import { MOCK_TEST_SERIES_ADMIN_OPTIONS } from '@/lib/mock-test-series';
 
 type Test = {
   id: string;
@@ -61,11 +62,13 @@ export default function AdminMockTests() {
   );
   const [newAccess, setNewAccess] = useState("free");
   const [newPrice, setNewPrice] = useState("0");
+  const [examCategory, setExamCategory] = useState("SLET - Library Science");
 
   // Existing test editing
   const [editingId, setEditingId] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editTitleHi, setEditTitleHi] = useState("");
+  const [editExamCategory, setEditExamCategory] = useState("SLET - Library Science");
   const [editDuration, setEditDuration] = useState("");
   const [editTotalMarks, setEditTotalMarks] = useState("");
   const [editNegative, setEditNegative] = useState("0");
@@ -171,7 +174,7 @@ export default function AdminMockTests() {
       .insert({
         title: title.trim(),
         title_hi: titleHi.trim(),
-        exam_category: "SLET - Library Science",
+        exam_category: examCategory,
         duration_minutes: Number(duration),
         total_marks: Number(totalMarks),
         access_type: newAccess,
@@ -201,6 +204,7 @@ export default function AdminMockTests() {
     setEditingId(test.id);
     setEditTitle(test.title || "");
     setEditTitleHi(test.title_hi || "");
+    setEditExamCategory(test.exam_category || "SLET - Library Science");
     setEditDuration(String(test.duration_minutes));
     setEditTotalMarks(String(test.total_marks));
     setEditNegative(String(test.negative_marking ?? 0));
@@ -246,6 +250,7 @@ export default function AdminMockTests() {
       .update({
         title: editTitle.trim(),
         title_hi: editTitleHi.trim(),
+        exam_category: editExamCategory,
         duration_minutes: Number(editDuration),
         total_marks: Number(editTotalMarks),
         negative_marking: Number(editNegative),
@@ -750,6 +755,13 @@ export default function AdminMockTests() {
             <label>Test title (Hindi)</label>
             <input value={editTitleHi} onChange={(e) => setEditTitleHi(e.target.value)} required />
 
+            <label>Test series / Examination</label>
+            <select value={editExamCategory} onChange={(e) => setEditExamCategory(e.target.value)} required>
+              {MOCK_TEST_SERIES_ADMIN_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+
             <div className="grid">
               <div>
                 <label>Duration (minutes)</label>
@@ -811,6 +823,13 @@ export default function AdminMockTests() {
           <label>Test title (Hindi)</label>
           <input value={titleHi} onChange={(e) => setTitleHi(e.target.value)} required />
 
+          <label>Test series / Examination</label>
+          <select value={examCategory} onChange={(e) => setExamCategory(e.target.value)} required>
+            {MOCK_TEST_SERIES_ADMIN_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+
           <div className="grid">
             <div>
               <label>Duration (minutes)</label>
@@ -853,7 +872,7 @@ export default function AdminMockTests() {
           <textarea value={instructionsHi} onChange={(e) => setInstructionsHi(e.target.value)} rows={3} />
 
           <p>
-            <strong>Examination:</strong> SLET - Library Science |
+            <strong>Examination:</strong> {examCategory} |
             <strong> Initial status:</strong> Draft
           </p>
 

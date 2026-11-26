@@ -1,0 +1,398 @@
+
+.page {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1320px;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 30px 22px 64px;
+  color: #172b3d;
+  background: #f4f8fa;
+}
+.page * { box-sizing: border-box; }
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #174ea6;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.mockHeading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 22px;
+  margin-bottom: 26px;
+}
+.eyebrow {
+  color: #129b98;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.mockHeading h1 {
+  margin: 8px 0 7px;
+  color: #102b46;
+  font: 800 clamp(28px, 4vw, 38px)/1.15 Manrope, "Segoe UI", sans-serif;
+  letter-spacing: -1.2px;
+}
+.mockHeading p {
+  max-width: 720px;
+  margin: 0;
+  color: #657789;
+  font-size: 14px;
+  line-height: 1.75;
+}
+.search {
+  width: min(330px, 100%);
+  flex-shrink: 0;
+  padding: 12px 15px;
+  border: 1px solid #d7e3e8;
+  border-radius: 10px;
+  outline: none;
+  background: #fff;
+  color: #172b3d;
+  font: inherit;
+}
+.search:focus {
+  border-color: #129b98;
+  box-shadow: 0 0 0 3px #129b9818;
+}
+.group { margin-top: 34px; }
+.groupHeading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.groupHeading h2 {
+  margin: 0;
+  color: #102b46;
+  font: 800 24px/1.25 Manrope, "Segoe UI", sans-serif;
+  letter-spacing: -.5px;
+}
+.groupHeading p {
+  margin: 5px 0 0;
+  color: #6b7f8d;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.groupCount {
+  color: #718494;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.seriesGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 17px;
+}
+.seriesCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 284px;
+  overflow: hidden;
+  padding: 21px;
+  border: 1px solid #d3e7e9;
+  border-radius: 19px;
+  background:
+    radial-gradient(circle at 94% 8%, #d8eeee 0 42px, transparent 43px),
+    radial-gradient(circle at 100% 12%, transparent 0 76px, #d9eeef 77px 78px, transparent 79px),
+    linear-gradient(145deg, #f5fbfc 0%, #e8f5f4 100%);
+  box-shadow: 0 8px 24px rgba(16, 43, 70, .045);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.seriesCard:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 13px 28px rgba(16, 43, 70, .10);
+}
+.seriesCardHead {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-height: 66px;
+}
+.seriesLogo {
+  display: grid;
+  width: 66px;
+  height: 66px;
+  flex: 0 0 66px;
+  place-items: center;
+  padding: 7px;
+  border: 1px solid #e0e9ec;
+  border-radius: 15px;
+  background: #fff;
+  box-shadow: 0 5px 16px #102b4610;
+}
+.seriesLogo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.seriesAuthority {
+  color: #587184;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.5;
+  letter-spacing: .7px;
+  text-transform: uppercase;
+}
+.seriesLevel {
+  display: inline-flex;
+  align-self: flex-start;
+  margin-top: 17px;
+  padding: 6px 9px;
+  border-radius: 20px;
+  background: #fff;
+  color: #0c7777;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .4px;
+}
+.seriesTitle {
+  margin: 10px 0 7px;
+  color: #102b46;
+  font: 800 20px/1.3 Manrope, "Segoe UI", sans-serif;
+}
+.seriesDescription {
+  min-height: 40px;
+  margin: 0;
+  color: #657789;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.stat {
+  padding: 6px 9px;
+  border: 1px solid #dce9eb;
+  border-radius: 7px;
+  background: rgba(255,255,255,.82);
+  color: #526b7a;
+  font-size: 11px;
+  font-weight: 700;
+}
+.statFree { color: #15803d; }
+.statPaid { color: #9a5b08; }
+.availability {
+  margin: 10px 0 16px;
+  color: #6b7f8d;
+  font-size: 11px;
+}
+.seriesCta {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-top: auto;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: #129b98;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .18s ease;
+}
+.seriesCta:hover { background: #087d7a; }
+.emptyState {
+  padding: 28px;
+  border: 1px dashed #cbdde3;
+  border-radius: 13px;
+  background: #fff;
+  color: #647789;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.emptyState strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #102b46;
+  font-size: 15px;
+}
+.detailTop {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 12px 0 22px;
+  padding: 22px;
+  border: 1px solid #d3e7e9;
+  border-radius: 17px;
+  background: linear-gradient(120deg, #f4fbfc, #e8f5f4);
+}
+.detailTop .seriesLogo {
+  width: 80px;
+  height: 80px;
+  flex-basis: 80px;
+  border-radius: 17px;
+}
+.detailCopy { flex: 1; min-width: 0; }
+.detailCopy small {
+  color: #0c8884;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.detailCopy h1 {
+  margin: 5px 0;
+  color: #102b46;
+  font: 800 25px/1.25 Manrope, "Segoe UI", sans-serif;
+}
+.detailCopy p {
+  margin: 0;
+  color: #647789;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.plan {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 11px;
+}
+.plan span {
+  padding: 6px 9px;
+  border: 1px solid #d7e7e9;
+  border-radius: 7px;
+  background: #fff;
+  color: #506b7a;
+  font-size: 11px;
+  font-weight: 700;
+}
+.testSection {
+  margin-top: 25px;
+  padding: 24px;
+  border: 1px solid #e0e9ed;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 5px 20px #102b4607;
+}
+.sectionHeading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 16px;
+}
+.sectionHeading h2 {
+  margin: 0;
+  color: #102b46;
+  font: 800 21px/1.3 Manrope, "Segoe UI", sans-serif;
+}
+.sectionHeading p {
+  margin: 4px 0 0;
+  color: #6b7f8d;
+  font-size: 12px;
+}
+.testCount {
+  color: #6b7f8d;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.testGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.testCard {
+  padding: 19px;
+  border: 1px solid #dfe8ee;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 4px 15px #102b4608;
+}
+.testCardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.accessTag {
+  padding: 6px 9px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .4px;
+}
+.free { background: #dcfce7; color: #15803d; }
+.paid { background: #fff1d6; color: #916315; }
+.owned { color: #15803d; font-size: 11px; font-weight: 800; }
+.testTitle {
+  margin: 13px 0 9px;
+  color: #102b46;
+  font: 750 17px/1.4 Manrope, "Segoe UI", sans-serif;
+}
+.testMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 15px;
+  color: #657789;
+  font-size: 12px;
+}
+.testMeta b { color: #455e70; }
+.testAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: #174ea6;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
+.testAction:disabled { cursor: not-allowed; opacity: .6; }
+.alert {
+  margin: 17px 0 0;
+  padding: 13px 15px;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+.loading { padding: 28px; color: #647789; }
+@media (max-width: 900px) {
+  .seriesGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mockHeading { align-items: flex-start; flex-direction: column; }
+  .search { width: 100%; }
+}
+@media (max-width: 640px) {
+  .page { padding: 24px 14px 42px; }
+  .seriesGrid, .testGrid { grid-template-columns: 1fr; }
+  .seriesCard { min-height: 0; }
+  .groupHeading { align-items: flex-start; flex-direction: column; }
+  .detailTop { align-items: flex-start; flex-wrap: wrap; padding: 17px; }
+  .detailCopy h1 { font-size: 21px; }
+  .testSection { padding: 17px; }
+  .sectionHeading { align-items: flex-start; flex-direction: column; }
+}
