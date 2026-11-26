@@ -9,6 +9,21 @@ export const runtime = "nodejs";
 type RefundCategory = "mock_test" | "course" | "study_material" | "qa_study_material";
 type RefundType = "partial" | "full";
 
+type QueuedRefundAction = {
+  id: string;
+  category: RefundCategory;
+  payment_order_id: string;
+  student_id: string;
+  razorpay_payment_id: string;
+  mode: "live" | "test";
+  refund_type: RefundType;
+  amount_paise: number;
+  reason: string;
+  request_source: string;
+  status: string;
+  razorpay_refund_id: string | null;
+};
+
 type RazorpayPayment = {
   id: string;
   order_id: string;
@@ -448,20 +463,7 @@ export async function POST(request: Request) {
       ? body.retryActionId
       : null;
 
-    let retryAction: {
-      id: string;
-      category: RefundCategory;
-      payment_order_id: string;
-      student_id: string;
-      razorpay_payment_id: string;
-      mode: "live" | "test";
-      refund_type: RefundType;
-      amount_paise: number;
-      reason: string;
-      request_source: string;
-      status: string;
-      razorpay_refund_id: string | null;
-    } | null = null;
+    let retryAction: QueuedRefundAction | null = null;
 
     if (retryActionId) {
       const { data, error } = await adminClient
@@ -474,7 +476,7 @@ export async function POST(request: Request) {
       if (data.status !== "awaiting_funds" || data.razorpay_refund_id) {
         return jsonError("Only a refund explicitly waiting for funds can be retried. Refresh the refund history first.", 409);
       }
-      retryAction = data as typeof retryAction;
+      retryAction = data as QueuedRefundAction;
     }
 
     const category = (retryAction?.category || body.category) as RefundCategory;
