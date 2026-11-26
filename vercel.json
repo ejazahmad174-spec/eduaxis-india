@@ -5,6 +5,10 @@
     {
       "path": "/api/jobs/collect",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/current-affairs/collect",
+      "schedule": "30 0 * * *"
     }
   ]
 }
