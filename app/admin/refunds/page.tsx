@@ -37,9 +37,6 @@ type RefundAction = {
   razorpay_refund_id: string | null;
   reason: string;
   mode: 'live' | 'test';
-  merchant_balance_snapshot_paise: number | null;
-  merchant_balance_checked_at: string | null;
-  merchant_balance_source: string | null;
   provider_error_code: string | null;
   provider_error: string | null;
   created_at: string;
@@ -79,6 +76,7 @@ function actionStatusLabel(status: string) {
   if (status === 'pending') return 'Pending with Razorpay';
   if (status === 'initiating') return 'Initiating';
   if (status === 'failed') return 'Failed';
+  if (status === 'awaiting_funds') return 'Awaiting funds';
   if (status === 'review_required') return 'Manual review required';
   return status.replaceAll('_', ' ');
 }
@@ -97,9 +95,8 @@ export default function AdminRefundsPage() {
   const [partialAmount, setPartialAmount] = useState('');
   const [reason, setReason] = useState('');
   const [requestSource, setRequestSource] = useState('student_email');
-  const [merchantBalance, setMerchantBalance] = useState('');
-  const [balanceChecked, setBalanceChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [retryingActionId, setRetryingActionId] = useState<string | null>(null);
 
   const loadReport = useCallback(async (refresh = false) => {
     if (!supabase) {
@@ -169,7 +166,7 @@ export default function AdminRefundsPage() {
         (filter === 'pending' && (report?.actions || []).some((action) =>
           action.payment_order_id === order.id &&
           action.category === order.category &&
-          ['initiating', 'pending', 'review_required'].includes(action.status)
+          ['initiating', 'pending', 'review_required', 'awaiting_funds'].includes(action.status)
         )) ||
         (filter === 'test' && order.mode === 'test');
 
@@ -183,8 +180,6 @@ export default function AdminRefundsPage() {
     setPartialAmount('');
     setReason('');
     setRequestSource('student_email');
-    setMerchantBalance('');
-    setBalanceChecked(false);
     setNotice('');
     setError('');
   };
@@ -213,26 +208,9 @@ export default function AdminRefundsPage() {
       return;
     }
 
-    const balancePaise = Math.round(Number(merchantBalance) * 100);
-    if (
-      !balanceChecked ||
-      !merchantBalance.trim() ||
-      !Number.isSafeInteger(balancePaise) ||
-      balancePaise < 0
-    ) {
-      setError('Enter the current Razorpay available balance for the same mode and confirm that you checked it just now.');
-      return;
-    }
-
-    if (balancePaise < amountPaise) {
-      const shortfallPaise = amountPaise - balancePaise;
-      setError(`Insufficient Razorpay balance. Required ${money(amountPaise)}; available ${money(balancePaise)}; shortfall ${money(shortfallPaise)}. No refund was sent.`);
-      return;
-    }
-
     const modeLabel = selectedOrder.mode === 'test' ? 'RAZORPAY TEST MODE' : 'LIVE MODE';
     const confirmed = window.confirm(
-      `Confirm ${refundType} refund of ${money(amountPaise)} for ${selectedOrder.title}?\n\n${modeLabel}\nStudent: ${selectedOrder.student_name}\nPayment: ${selectedOrder.payment_id}\nAvailable balance checked: ${money(balancePaise)}\n\nThis action sends a refund request to Razorpay.`
+      `Confirm ${refundType} refund of ${money(amountPaise)} for ${selectedOrder.title}?\n\n${modeLabel}\nStudent: ${selectedOrder.student_name}\nPayment: ${selectedOrder.payment_id}\n\nEduAxis will send the refund directly to Razorpay. If Razorpay reports insufficient balance, the full claim will remain queued as Awaiting funds and can be retried later.`
     );
     if (!confirmed) return;
 
@@ -259,8 +237,6 @@ export default function AdminRefundsPage() {
           paymentOrderId: selectedOrder.id,
           refundType,
           amountPaise: refundType === 'partial' ? amountPaise : undefined,
-          merchantBalancePaise: balancePaise,
-          merchantBalanceChecked: balanceChecked,
           reason: cleanReason,
           requestSource,
         }),
@@ -275,6 +251,8 @@ export default function AdminRefundsPage() {
         setNotice(`Refund processed: ${money(payload.amountPaise)}. The purchase ledger has been updated.`);
       } else if (payload.status === 'pending') {
         setNotice(`Razorpay accepted the refund of ${money(payload.amountPaise)}. The record will update after Razorpay confirms processing.`);
+      } else if (payload.status === 'awaiting_funds') {
+        setNotice(`Refund approved and queued: ${money(payload.amountPaise)} remains unchanged. It is Awaiting funds and can be retried when sufficient merchant balance is available. Student access remains active until the full refund is confirmed.`);
       } else {
         setError(payload.error || 'The refund requires manual review. Do not initiate a second refund until the provider record is checked.');
       }
@@ -288,52 +266,65 @@ export default function AdminRefundsPage() {
     }
   }
 
+  async function retryAwaitingRefund(action: RefundAction) {
+    if (!supabase || submitting || action.status !== 'awaiting_funds' || action.razorpay_refund_id) return;
+
+    const confirmed = window.confirm(
+      `Retry the queued ${money(action.amount_paise)} refund now?\n\nMode: ${action.mode.toUpperCase()}\nPayment: ${action.payment_order_id}\n\nEduAxis will send the same outstanding amount to Razorpay. If funds are still insufficient, it will remain Awaiting funds. Do not retry if you have already refunded this claim outside EduAxis.`
+    );
+    if (!confirmed) return;
+
+    setSubmitting(true);
+    setRetryingActionId(action.id);
+    setError('');
+    setNotice('');
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        router.replace('/admin/login');
+        return;
+      }
+
+      const response = await fetch('/api/admin/refunds', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + token,
+        },
+        body: JSON.stringify({ retryActionId: action.id }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok && !payload.actionId) {
+        throw new Error(payload.message || payload.error || 'The queued refund could not be retried.');
+      }
+
+      if (payload.status === 'processed') {
+        setNotice(`Queued refund processed: ${money(payload.amountPaise)}. The purchase ledger has been updated.`);
+      } else if (payload.status === 'pending') {
+        setNotice(`Razorpay accepted the queued refund of ${money(payload.amountPaise)}. Waiting for provider confirmation.`);
+      } else if (payload.status === 'awaiting_funds') {
+        setNotice(`Razorpay still reports insufficient balance. The full ${money(payload.amountPaise)} claim remains Awaiting funds; no amount has been reduced.`);
+      } else {
+        setError(payload.error || 'The queued refund requires manual review. Check Razorpay before retrying again.');
+      }
+
+      await loadReport(true);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'The queued refund could not be retried.');
+    } finally {
+      setSubmitting(false);
+      setRetryingActionId(null);
+    }
+  }
+
   const totalRefundable = (report?.orders || []).reduce((sum, order) =>
     sum + (['paid', 'partially_refunded'].includes(order.status) ? order.remaining_paise : 0), 0);
   const pendingActions = (report?.actions || []).filter((action) =>
     ['initiating', 'pending', 'review_required'].includes(action.status)
   ).length;
-
-  const currentBalanceSnapshotPaise = Math.round(Number(merchantBalance) * 100);
-  const modalRefundAmountPaise = selectedOrder
-    ? refundType === 'full'
-      ? selectedOrder.remaining_paise
-      : Math.round(Number(partialAmount) * 100) || 0
-    : 0;
-  const balanceInputValid = Boolean(
-    merchantBalance.trim() &&
-    Number.isSafeInteger(currentBalanceSnapshotPaise) &&
-    currentBalanceSnapshotPaise >= 0
-  );
-  const refundAmountValid = Boolean(
-    selectedOrder &&
-    modalRefundAmountPaise >= 100 &&
-    modalRefundAmountPaise <= selectedOrder.remaining_paise &&
-    (refundType !== 'partial' || modalRefundAmountPaise < selectedOrder.remaining_paise)
-  );
-  const balanceShortfallPaise = balanceInputValid && refundAmountValid
-    ? Math.max(0, modalRefundAmountPaise - currentBalanceSnapshotPaise)
-    : 0;
-  const balanceSufficient = Boolean(
-    selectedOrder &&
-    balanceChecked &&
-    balanceInputValid &&
-    refundAmountValid &&
-    balanceShortfallPaise === 0
-  );
-  const refundButtonLabel = submitting
-    ? 'Submitting refund…'
-    : !merchantBalance.trim()
-      ? 'Enter available balance'
-      : !balanceInputValid
-        ? 'Enter a valid balance'
-        : !balanceChecked
-          ? 'Confirm balance check'
-          : !refundAmountValid
-            ? 'Enter a valid refund amount'
-            : balanceShortfallPaise > 0
-              ? `Insufficient balance · short ${money(balanceShortfallPaise)}`
-              : `Confirm refund · ${money(modalRefundAmountPaise)}`;
 
   return (
     <main className="admin-shell">
@@ -455,7 +446,7 @@ export default function AdminRefundsPage() {
               ) : (
                 <div className="refund-table-wrap">
                   <table className="refund-table">
-                    <thead><tr><th>Date</th><th>Student / payment</th><th>Category</th><th>Amount</th><th>Mode</th><th>Balance checked</th><th>Status</th><th>Provider reference</th></tr></thead>
+                    <thead><tr><th>Date</th><th>Student / payment</th><th>Category</th><th>Amount</th><th>Mode</th><th>Status</th><th>Provider reference</th><th>Action</th></tr></thead>
                     <tbody>
                       {report.actions.map((action) => {
                         const order = report.orders.find((item) => item.id === action.payment_order_id && item.category === action.category);
@@ -466,9 +457,13 @@ export default function AdminRefundsPage() {
                             <td>{action.category.replaceAll('_', ' ')}</td>
                             <td>{money(action.amount_paise)}<small>{action.refund_type} refund</small></td>
                             <td><span className={action.mode === 'test' ? 'refund-mode test' : 'refund-mode live'}>{action.mode.toUpperCase()}</span></td>
-                            <td>{action.merchant_balance_snapshot_paise === null ? '—' : money(action.merchant_balance_snapshot_paise)}<small>{action.merchant_balance_checked_at ? dateLabel(action.merchant_balance_checked_at) : 'Not captured'}</small></td>
                             <td><span className={'refund-status ' + (action.status === 'processed' ? 'is-closed' : action.status === 'failed' ? 'is-failed' : 'is-pending')}>{actionStatusLabel(action.status)}</span>{action.provider_error && <small className="refund-provider-error">{action.provider_error}</small>}</td>
                             <td>{action.razorpay_refund_id || action.id}</td>
+                            <td>{action.status === 'awaiting_funds' && !action.razorpay_refund_id ? (
+                              <button className="refund-open-button" disabled={submitting} onClick={() => void retryAwaitingRefund(action)}>
+                                {retryingActionId === action.id ? 'Retrying…' : 'Retry refund'}
+                              </button>
+                            ) : '—'}</td>
                           </tr>
                         );
                       })}
@@ -501,46 +496,11 @@ export default function AdminRefundsPage() {
               <form onSubmit={submitRefund}>
                 <section className="refund-balance-check">
                   <div className="refund-balance-heading">
-                    <b>Razorpay available balance pre-check</b>
+                    <b>Direct refund through Razorpay</b>
                     <span>{selectedOrder.mode === 'test' ? 'Test Mode' : 'Live Mode'}</span>
                   </div>
-                  <p>Open the Razorpay Dashboard in the same mode and read your current / available merchant balance. Enter that value below. EduAxis cannot fetch the Payment Gateway balance automatically.</p>
-                  <label className="refund-form-label">
-                    Available balance in Razorpay (₹)
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={merchantBalance}
-                      onChange={(event) => {
-                        setMerchantBalance(event.target.value);
-                        setBalanceChecked(false);
-                      }}
-                      placeholder="e.g. 500.00"
-                      required
-                    />
-                  </label>
-                  {merchantBalance.trim() !== '' && Number.isFinite(Number(merchantBalance)) && Number(merchantBalance) >= 0 && (
-                    <div className="refund-balance-math">
-                      <span>Required for this refund <b>{money(refundType === 'full' ? selectedOrder.remaining_paise : Math.round(Number(partialAmount) * 100) || 0)}</b></span>
-                      <span>Entered available balance <b>{money(Math.round(Number(merchantBalance) * 100))}</b></span>
-                      {Math.round(Number(merchantBalance) * 100) < (refundType === 'full' ? selectedOrder.remaining_paise : Math.round(Number(partialAmount) * 100) || 0) && (
-                        <strong>Shortfall: {money((refundType === 'full' ? selectedOrder.remaining_paise : Math.round(Number(partialAmount) * 100) || 0) - Math.round(Number(merchantBalance) * 100))}. Refund will be blocked.</strong>
-                      )}
-                      {Math.round(Number(merchantBalance) * 100) >= (refundType === 'full' ? selectedOrder.remaining_paise : Math.round(Number(partialAmount) * 100) || 0) && (
-                        <strong className="refund-balance-enough">Entered balance covers this refund. Final approval remains subject to Razorpay.</strong>
-                      )}
-                    </div>
-                  )}
-                  <label className="refund-balance-confirm">
-                    <input
-                      type="checkbox"
-                      checked={balanceChecked}
-                      onChange={(event) => setBalanceChecked(event.target.checked)}
-                    />
-                    I checked the available balance in Razorpay just now and selected the correct {selectedOrder.mode === 'test' ? 'Test' : 'Live'} Mode.
-                  </label>
-                  <small className="refund-balance-note">This is a manual dashboard snapshot, not a live balance API. The entered amount and check time will be saved in the admin refund history.</small>
+                  <p>EduAxis sends the approved full or partial refund request directly to Razorpay. You do not need to check or enter your merchant balance.</p>
+                  <p>If Razorpay reports insufficient funds, the approved amount stays unchanged in the Awaiting funds queue. The student keeps access until a full refund is confirmed. An administrator can retry the same queued amount when funds are available.</p>
                 </section>
 
                 <label className="refund-form-label">Refund type</label>
@@ -572,17 +532,16 @@ export default function AdminRefundsPage() {
                 </label>
 
                 <div className="refund-modal-warning">
-                  This sends a real refund request in the selected Razorpay mode. The balance check is manual and may change before Razorpay processes the request. Verify the student request and payment before confirming. Access is revoked only when the complete payment has been refunded and recorded.
+                  This sends a real refund request directly to Razorpay in the selected mode. If the merchant balance is insufficient, the full claim amount will be queued for later retry; it will not be reduced. Student access is revoked only after the complete refund is processed and recorded.
                 </div>
                 <div className="refund-modal-actions">
                   <button type="button" className="refund-cancel-button" onClick={() => setSelectedOrder(null)} disabled={submitting}>Cancel</button>
                   <button
                     type="submit"
-                    className={`refund-submit-button ${submitting ? 'is-loading' : balanceSufficient ? 'is-ready' : 'is-disabled'}`}
-                    disabled={submitting || !balanceSufficient}
-                    aria-disabled={submitting || !balanceSufficient}
+                    className={`refund-submit-button ${submitting ? 'is-loading' : 'is-ready'}`}
+                    disabled={submitting}
                   >
-                    {refundButtonLabel}
+                    {submitting ? 'Submitting refund…' : `Confirm refund · ${money(refundType === 'full' ? selectedOrder.remaining_paise : Math.round(Number(partialAmount) * 100) || 0)}`}
                   </button>
                 </div>
               </form>
