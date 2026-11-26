@@ -20,6 +20,7 @@ const sections = [
       { href: '/admin/career-updates', title: 'Government Jobs & Updates', icon: '💼' },
       { href: '/admin/government-jobs/discoveries', title: 'Discovered Notices', icon: '↳', child: true },
       { href: '/admin/courses', title: 'Online Courses', icon: '🎓' },
+      { href: '/admin/current-affairs', title: 'Current Affairs', icon: '📰' },
       { href: '/admin/mock-tests', title: 'Mock Tests', icon: '📝' },
     ],
   },
@@ -51,6 +52,7 @@ export default function AdminSidebar() {
           {section.links.map((link) => {
             const active =
               pathname === link.href ||
+              (link.href === '/admin/current-affairs' && pathname.startsWith('/admin/current-affairs')) ||
               (link.href === '/admin/career-updates' && pathname === '/admin/career-updates');
 
             return (
