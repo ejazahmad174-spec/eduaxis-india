@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type RefundNotificationStatus = "pending" | "processed" | "failed";
+export type RefundNotificationStatus = "pending" | "processed" | "failed" | "awaiting_funds";
 
 type RefundNotificationInput = {
   studentId: string;
@@ -43,6 +43,10 @@ export async function notifyStudentOfRefund(
     pending: {
       title: "Refund initiated",
       phrase: "Your refund has been initiated and is being processed by the payment provider.",
+    },
+    awaiting_funds: {
+      title: "Refund approved — awaiting funds",
+      phrase: "Your refund request is approved and the full amount is reserved in the EduAxis refund queue. Razorpay has not processed it yet because the merchant balance is insufficient. We will retry when sufficient funds are available; you do not need to submit another request.",
     },
     processed: {
       title: "Refund processed",
