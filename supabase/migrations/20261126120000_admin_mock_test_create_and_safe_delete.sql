@@ -103,7 +103,7 @@ BEGIN
     'draft',
     v_admin_id
   )
-  RETURNING to_jsonb(mock_tests.*) INTO v_test;
+  RETURNING to_jsonb(mock_tests) INTO v_test;
 
   RETURN v_test;
 END;
