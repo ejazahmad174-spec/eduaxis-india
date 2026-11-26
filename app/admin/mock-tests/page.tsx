@@ -167,37 +167,56 @@ export default function AdminMockTests() {
     setBusy(true);
     setMessage("");
 
-    const { data: auth } = await supabase.auth.getUser();
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
 
-    const { data, error } = await supabase
-      .from("mock_tests")
-      .insert({
-        title: title.trim(),
-        title_hi: titleHi.trim(),
-        exam_category: examCategory,
-        duration_minutes: Number(duration),
-        total_marks: Number(totalMarks),
-        access_type: newAccess,
-        price,
-        negative_marking: Number(negative),
-        pass_marks: passMarks === "" ? null : Number(passMarks),
-        instructions,
-        instructions_hi: instructionsHi,
-        status: "draft",
-        created_by: auth.user?.id
-      })
-      .select()
-      .single();
+      if (authError || !authData.user) {
+        throw new Error("Your admin session has expired. Please log in again.");
+      }
 
-    if (error) {
-      setMessage("Could not create test: " + error.message);
-    } else {
-      setTests((current) => [data as Test, ...current]);
-      setSelected(data.id);
-      setMessage("Mock test created successfully. It is saved as Draft.");
+      const { data: adminProfile, error: profileError } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", authData.user.id)
+        .maybeSingle();
+
+      if (profileError || adminProfile?.role !== "admin") {
+        throw new Error("Your current account is not recognised as an administrator. Sign out and log in again with the admin account.");
+      }
+
+      // A SECURITY DEFINER RPC performs the same admin check server-side and
+      // creates the row as a draft, without relying on a client-supplied created_by.
+      const { data, error } = await supabase.rpc("admin_create_mock_test", {
+        p_title: title.trim(),
+        p_title_hi: titleHi.trim(),
+        p_exam_category: examCategory,
+        p_duration_minutes: Number(duration),
+        p_total_marks: Number(totalMarks),
+        p_access_type: newAccess,
+        p_price: price,
+        p_negative_marking: Number(negative),
+        p_pass_marks: passMarks === "" ? null : Number(passMarks),
+        p_instructions: instructions,
+        p_instructions_hi: instructionsHi
+      });
+
+      if (error) throw error;
+      if (!data || typeof data !== "object" || !("id" in data)) {
+        throw new Error("The database created no test record. Please refresh and check Existing Mock Tests.");
+      }
+
+      const createdTest = data as Test;
+      setTests((current) => [createdTest, ...current]);
+      setSelected(createdTest.id);
+      setMessage("Mock test created successfully. It is saved as Draft in " + examCategory + ".");
+    } catch (createError) {
+      setMessage(
+        "Could not create test: " +
+          (createError instanceof Error ? createError.message : "Unexpected error.")
+      );
+    } finally {
+      setBusy(false);
     }
-
-    setBusy(false);
   }
 
   function startEditing(test: Test) {
@@ -642,6 +661,58 @@ export default function AdminMockTests() {
     }
   }
 
+  async function deleteTest(test: Test) {
+    if (!supabase || busy) return;
+
+    if (test.status === "published") {
+      setMessage("Please unpublish this test before deleting it. This prevents removing a test that is currently visible to students.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete "${test.title}"?
+
+This permanently deletes the test and its attached questions. Tests with student attempts, purchases or payment records cannot be deleted. This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setBusy(true);
+    setMessage("");
+
+    try {
+      const { data, error } = await supabase.rpc("admin_delete_mock_test", {
+        p_test_id: test.id
+      });
+
+      if (error) throw error;
+      if (!data || data.deleted !== true) {
+        throw new Error("The database did not confirm deletion. Refresh the page and check the test list.");
+      }
+
+      const remainingTests = tests.filter((item) => item.id !== test.id);
+      setTests(remainingTests);
+
+      if (selected === test.id) {
+        setSelected(remainingTests[0]?.id || "");
+        setQuestions([]);
+      }
+
+      if (editingId === test.id) {
+        setEditingId("");
+      }
+
+      setMessage("Test deleted successfully. Its attached draft questions were removed; student and payment history is protected.");
+    } catch (deleteError) {
+      setMessage(
+        "Could not delete test: " +
+          (deleteError instanceof Error ? deleteError.message : "Unexpected error.")
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function deleteQuestion(id: string) {
     if (!supabase || !window.confirm("Delete this question?")) return;
 
@@ -704,6 +775,12 @@ export default function AdminMockTests() {
           margin: 4px;
         }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .danger-button {
+          background: #b42318;
+        }
+        .danger-button:hover:not(:disabled) {
+          background: #8f1d14;
+        }
         .notice {
           padding: 12px;
           background: #eef5ff;
@@ -900,10 +977,19 @@ export default function AdminMockTests() {
             <button onClick={() => setSelected(test.id)}>Manage Questions</button>
 
             {test.status === "published" ? (
-              <button onClick={() => changeStatus(test, "draft")}>Unpublish</button>
+              <button onClick={() => changeStatus(test, "draft")} disabled={busy}>Unpublish</button>
             ) : (
-              <button onClick={() => changeStatus(test, "published")}>Publish</button>
+              <button onClick={() => changeStatus(test, "published")} disabled={busy}>Publish</button>
             )}
+            <button
+              type="button"
+              className="danger-button"
+              onClick={() => deleteTest(test)}
+              disabled={busy}
+              title={test.status === "published" ? "Unpublish this test before deleting it" : "Delete this test"}
+            >
+              Delete Test
+            </button>
           </div>
         ))}
       </section>
