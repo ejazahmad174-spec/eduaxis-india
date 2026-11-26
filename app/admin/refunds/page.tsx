@@ -300,17 +300,40 @@ export default function AdminRefundsPage() {
       ? selectedOrder.remaining_paise
       : Math.round(Number(partialAmount) * 100) || 0
     : 0;
+  const balanceInputValid = Boolean(
+    merchantBalance.trim() &&
+    Number.isSafeInteger(currentBalanceSnapshotPaise) &&
+    currentBalanceSnapshotPaise >= 0
+  );
+  const refundAmountValid = Boolean(
+    selectedOrder &&
+    modalRefundAmountPaise >= 100 &&
+    modalRefundAmountPaise <= selectedOrder.remaining_paise &&
+    (refundType !== 'partial' || modalRefundAmountPaise < selectedOrder.remaining_paise)
+  );
+  const balanceShortfallPaise = balanceInputValid && refundAmountValid
+    ? Math.max(0, modalRefundAmountPaise - currentBalanceSnapshotPaise)
+    : 0;
   const balanceSufficient = Boolean(
     selectedOrder &&
     balanceChecked &&
-    merchantBalance.trim() &&
-    Number.isSafeInteger(currentBalanceSnapshotPaise) &&
-    currentBalanceSnapshotPaise >= 0 &&
-    modalRefundAmountPaise >= 100 &&
-    modalRefundAmountPaise <= selectedOrder.remaining_paise &&
-    (refundType !== 'partial' || modalRefundAmountPaise < selectedOrder.remaining_paise) &&
-    currentBalanceSnapshotPaise >= modalRefundAmountPaise
+    balanceInputValid &&
+    refundAmountValid &&
+    balanceShortfallPaise === 0
   );
+  const refundButtonLabel = submitting
+    ? 'Submitting refund…'
+    : !merchantBalance.trim()
+      ? 'Enter available balance'
+      : !balanceInputValid
+        ? 'Enter a valid balance'
+        : !balanceChecked
+          ? 'Confirm balance check'
+          : !refundAmountValid
+            ? 'Enter a valid refund amount'
+            : balanceShortfallPaise > 0
+              ? `Insufficient balance · short ${money(balanceShortfallPaise)}`
+              : `Confirm refund · ${money(modalRefundAmountPaise)}`;
 
   return (
     <main className="admin-shell">
@@ -553,8 +576,13 @@ export default function AdminRefundsPage() {
                 </div>
                 <div className="refund-modal-actions">
                   <button type="button" className="refund-cancel-button" onClick={() => setSelectedOrder(null)} disabled={submitting}>Cancel</button>
-                  <button type="submit" className="refund-submit-button" disabled={submitting || !balanceSufficient}>
-                    {submitting ? 'Submitting…' : `Confirm refund · ${money(refundType === 'full' ? selectedOrder.remaining_paise : Math.round(Number(partialAmount) * 100) || 0)}`}
+                  <button
+                    type="submit"
+                    className={`refund-submit-button ${submitting ? 'is-loading' : balanceSufficient ? 'is-ready' : 'is-disabled'}`}
+                    disabled={submitting || !balanceSufficient}
+                    aria-disabled={submitting || !balanceSufficient}
+                  >
+                    {refundButtonLabel}
                   </button>
                 </div>
               </form>
@@ -645,8 +673,12 @@ export default function AdminRefundsPage() {
         .refund-modal-actions{display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap;margin-top:17px}
         .refund-cancel-button,.refund-submit-button{border-radius:8px;padding:10px 14px;font:inherit;font-size:11px;font-weight:800;cursor:pointer}
         .refund-cancel-button{background:#fff;border:1px solid #d3dfe6;color:#526a7e}
-        .refund-submit-button{background:#0b887d;border:1px solid #0b887d;color:#fff}
-        .refund-cancel-button:disabled,.refund-submit-button:disabled{opacity:.55;cursor:wait}
+        .refund-submit-button{background:#0b887d;border:1px solid #0b887d;color:#fff;min-width:190px;transition:background .15s ease,border-color .15s ease}
+        .refund-submit-button.is-ready{background:#087f75;border-color:#087f75;cursor:pointer}
+        .refund-submit-button.is-ready:hover{background:#066b63;border-color:#066b63}
+        .refund-submit-button.is-disabled:disabled{background:#e8edf1;border-color:#d5dee5;color:#627485;opacity:1;cursor:not-allowed;box-shadow:none}
+        .refund-submit-button.is-loading:disabled{background:#0b887d;border-color:#0b887d;color:#fff;opacity:.72;cursor:wait}
+        .refund-cancel-button:disabled{opacity:.55;cursor:not-allowed}
         @media(max-width:900px){.refund-kpis{grid-template-columns:1fr}.refund-toolbar{grid-template-columns:1fr}}
         @media(max-width:520px){.refund-modal{padding:18px}.refund-modal-summary{grid-template-columns:1fr}.refund-type-options{grid-template-columns:1fr}}
       `}</style>
