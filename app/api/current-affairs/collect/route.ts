@@ -96,41 +96,30 @@ function absoluteUrl(link: string, base: string): string | null {
 }
 
 function getCategory(title: string, sourceName: string): string {
-  const text = `${title} ${sourceName}`.toLowerCase();
+  const text = [title, sourceName].join(" ").toLowerCase();
+  const source = sourceName.toLowerCase();
 
-  if (/bihar|patna|nalanda/.test(text)) return "bihar";
-
-  if (
-    /education|school|university|ugc|teacher|exam|education policy/.test(text)
-  ) {
+  if (/education|school|university|ugc|teacher|exam|academic|scholarship|board result/.test(text)) {
     return "education";
   }
 
-  if (/international|united nations|world|global|foreign/.test(text)) {
+  if (
+    source.includes("bihar") ||
+    /\bbihar\b|patna|nalanda|gaya district|muzaffarpur|darbhanga|bhagalpur|purnia|magadh/.test(text)
+  ) {
+    return "bihar";
+  }
+
+  if (/international|united nations|world bank|imf|global|foreign affairs|bilateral|summit|diplomatic/.test(text)) {
     return "international";
   }
 
-  if (/bill|parliament|lok sabha|rajya sabha|act|supreme court/.test(text)) {
-    return "polity";
-  }
-
-  if (
-    /rbi|reserve bank|banking|monetary|repo rate|inflation|gdp|finance|securities|currency|interest rate|financial/.test(
-      text
-    )
-  ) {
-    return "economy";
-  }
-
-  if (/scheme|ministry|government|cabinet|policy/.test(text)) {
-    return "national";
-  }
-
-  return "general";
+  return "national";
 }
 
 type FetchResult = {
   body: string | null;
+  contentType: string;
   etag: string | null;
   lastModified: string | null;
   notModified: boolean;
@@ -171,6 +160,7 @@ async function fetchPage(
   if (response.status === 304) {
     return {
       body: null,
+      contentType,
       etag,
       lastModified,
       notModified: true,
@@ -187,11 +177,13 @@ async function fetchPage(
 
   const contentType = response.headers.get("content-type") || "";
 
-  if (
-    !/xml|rss|atom/i.test(contentType) &&
-    !/text\/plain/i.test(contentType)
-  ) {
-    throw new Error(`Unexpected feed content type: ${contentType}`);
+  const sourceHost = new URL(url).hostname.toLowerCase();
+  const isApprovedBiharHtmlSource =
+    sourceHost === "betastate.bihar.gov.in" &&
+    /text\/html|application\/xhtml\+xml/i.test(contentType);
+
+  if (!isApprovedBiharHtmlSource && !/xml|rss|atom|text\/plain/i.test(contentType)) {
+    throw new Error("Unexpected source content type: " + contentType);
   }
 
   const contentLength = Number(
@@ -208,14 +200,17 @@ async function fetchPage(
     throw new Error("Feed response exceeds the size limit");
   }
 
-  if (!/<rss\b|<feed\b|<rdf:rdf\b/i.test(body)) {
-    throw new Error(
-      "The source did not return a recognised RSS or Atom feed"
-    );
+  if (!isApprovedBiharHtmlSource && !/<rss\b|<feed\b|<rdf:rdf\b/i.test(body)) {
+    throw new Error("The source did not return a recognised RSS or Atom feed");
+  }
+
+  if (isApprovedBiharHtmlSource && !/<html\b|<!doctype html/i.test(body)) {
+    throw new Error("The Bihar government source did not return an HTML page");
   }
 
   return {
     body,
+    contentType,
     etag,
     lastModified,
     notModified: false,
@@ -246,12 +241,16 @@ function parseRss(xml: string, baseUrl: string): NewsItem[] {
 
     const title = getTag(block, "title");
 
-    const linkTag = block.match(/<link\b[^>]*>/i)?.[0] || "";
-    const linkAttribute = linkTag.match(/href=["']([^"']+)["']/i)?.[1];
+    const linkTags = block.match(/<link\b[^>]*>/gi) || [];
+    const preferredLink = linkTags.find((tag) => {
+      const rel = tag.match(/rel=["']([^"']+)["']/i)?.[1]?.toLowerCase();
+      return !rel || rel === "alternate";
+    });
+    const linkAttribute = preferredLink?.match(/href=["']([^"']+)["']/i)?.[1];
 
     const rawLink =
-      getTag(block, "link") ||
       linkAttribute ||
+      getTag(block, "link") ||
       getTag(block, "guid") ||
       getTag(block, "id");
 
@@ -294,6 +293,74 @@ function parseRss(xml: string, baseUrl: string): NewsItem[] {
           ? parsedDate.toISOString()
           : null,
     });
+  }
+
+  return items;
+}
+
+function parseBiharHtmlNews(html: string, baseUrl: string): NewsItem[] {
+  const items: NewsItem[] = [];
+  const cutoff = Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+  const seenUrls = new Set<string>();
+  const rows = html.match(/<tr\b[\s\S]*?<\/tr>/gi) || [];
+
+  const addItem = (titleValue: string, rawUrl: string, context: string) => {
+    const title = cleanText(titleValue);
+    const link = absoluteUrl(rawUrl, baseUrl);
+    if (!title || title.length < 18 || !link || seenUrls.has(link)) return;
+    if (/^(home|about us|contact us|read more|view all|download|login|search|tender)$/i.test(title)) return;
+    if (/privacy policy|terms and conditions|screen reader|skip navigation|website policies/i.test(title)) return;
+
+    const dateMatch = context.match(/\b(?:0?[1-9]|[12]\d|3[01])[\s/-]+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s,-]+20\d{2}\b|\b(?:0?[1-9]|[12]\d|3[01])[/-](?:0?[1-9]|1[0-2])[/-]20\d{2}\b/i);
+    let publishedAt: string | null = null;
+    if (dateMatch) {
+      const parsed = new Date(dateMatch[0]);
+      if (!Number.isNaN(parsed.getTime())) {
+        if (parsed.getTime() < cutoff) return;
+        publishedAt = parsed.toISOString();
+      }
+    }
+
+    seenUrls.add(link);
+    items.push({
+      title: title.slice(0, 500),
+      summary: context ? cleanText(context).slice(0, 1200) : null,
+      source_url: link,
+      original_published_at: publishedAt,
+    });
+  };
+
+  for (const row of rows) {
+    if (items.length >= MAX_ITEMS_PER_SOURCE) break;
+    const anchors = [...row.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)];
+    if (!anchors.length) continue;
+
+    const candidates = anchors.map((match) => {
+      const href = match[1].match(/href=["']([^"']+)["']/i)?.[1] || "";
+      const title = cleanText(match[2]);
+      return { href, title };
+    }).filter((item) =>
+      item.href &&
+      item.title.length >= 18 &&
+      !/^(home|about us|contact us|read more|view all|download|login|tender)$/i.test(item.title)
+    );
+
+    if (!candidates.length) continue;
+    candidates.sort((left, right) => right.title.length - left.title.length);
+    const chosen = candidates[0];
+    const rowText = cleanText(row).replace(chosen.title, "").slice(0, 1200);
+    addItem(chosen.title, chosen.href, rowText);
+  }
+
+  if (items.length === 0) {
+    const anchors = [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)];
+    for (const match of anchors) {
+      if (items.length >= MAX_ITEMS_PER_SOURCE) break;
+      const href = match[1].match(/href=["']([^"']+)["']/i)?.[1] || "";
+      const title = cleanText(match[2]);
+      if (title.length < 24 || !href) continue;
+      addItem(title, href, "");
+    }
   }
 
   return items;
@@ -354,7 +421,9 @@ async function collectSource(source: {
       };
     }
 
-    const items = parseRss(fetched.body || "", source.source_url);
+    const items = /html/i.test(fetched.contentType)
+      ? parseBiharHtmlNews(fetched.body || "", source.source_url)
+      : parseRss(fetched.body || "", source.source_url);
 
     const records = items.map((item) => ({
       source_id: source.id,
@@ -460,11 +529,9 @@ async function handleCollection(request: NextRequest) {
     );
   }
 
-  const results = [];
-
-  for (const source of sources || []) {
-    results.push(await collectSource(source));
-  }
+  const results = await Promise.all(
+    (sources || []).map((source) => collectSource(source))
+  );
 
   const inserted = results.reduce(
     (total, result) =>
