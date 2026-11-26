@@ -276,7 +276,7 @@ async function getProductsAndOrders(adminClient: SupabaseClient) {
     adminClient.from("study_materials").select("id,title"),
     adminClient.from("study_material_qa_payment_orders").select("id,user_id,study_material_id,amount_paise,currency,status,razorpay_payment_id,refunded_paise,created_at,paid_at").not("razorpay_payment_id", "is", null).order("paid_at", { ascending: false }).range(0, 249),
     adminClient.from("study_material_qa_payment_refunds").select("payment_order_id,razorpay_refund_id,amount_paise,created_at"),
-    adminClient.from("admin_refund_actions").select("id,category,payment_order_id,student_id,amount_paise,refund_type,status,razorpay_refund_id,reason,mode,provider_error_code,provider_error,created_at,processed_at").order("created_at", { ascending: false }).limit(150),
+    adminClient.from("admin_refund_actions").select("id,category,payment_order_id,student_id,amount_paise,refund_type,status,razorpay_refund_id,reason,mode,merchant_balance_snapshot_paise,merchant_balance_checked_at,merchant_balance_source,provider_error_code,provider_error,created_at,processed_at").order("created_at", { ascending: false }).limit(150),
   ]);
 
   const allResults = [
@@ -448,6 +448,8 @@ export async function POST(request: Request) {
     const paymentOrderId = body.paymentOrderId;
     const refundType = body.refundType as RefundType;
     const amountInput = body.amountPaise;
+    const merchantBalanceSnapshotPaise = body.merchantBalancePaise;
+    const merchantBalanceChecked = body.merchantBalanceChecked === true;
     const reason = typeof body.reason === "string" ? body.reason.trim() : "";
     const requestSource = ["student_email", "admin_initiated", "support_email", "other"].includes(body.requestSource)
       ? body.requestSource
@@ -536,6 +538,28 @@ export async function POST(request: Request) {
       return jsonError("The refund amount must be at least ₹1 and cannot exceed the remaining payment balance. Use Full refund for the complete balance.", 400);
     }
 
+    if (
+      !Number.isSafeInteger(merchantBalanceSnapshotPaise) ||
+      merchantBalanceSnapshotPaise < 0 ||
+      !merchantBalanceChecked
+    ) {
+      return jsonError("Check the current Razorpay merchant balance for the same Test/Live mode, enter it in ₹, and confirm that you checked it just now.", 400);
+    }
+
+    if (merchantBalanceSnapshotPaise < refundAmountPaise) {
+      const shortfallPaise = refundAmountPaise - merchantBalanceSnapshotPaise;
+      return NextResponse.json({
+        error: "Insufficient Razorpay merchant balance. No refund request was sent.",
+        code: "INSUFFICIENT_DECLARED_MERCHANT_BALANCE",
+        requiredPaise: refundAmountPaise,
+        availablePaise: merchantBalanceSnapshotPaise,
+        shortfallPaise,
+        message: `Required ${money(refundAmountPaise)}. Entered available balance ${money(merchantBalanceSnapshotPaise)}. Shortfall ${money(shortfallPaise)}.`,
+      }, { status: 409 });
+    }
+
+    const merchantBalanceCheckedAt = new Date().toISOString();
+
     const actionUuid = randomUUID();
     const idempotencyKey = randomUUID();
     const { data: action, error: actionError } = await adminClient
@@ -550,6 +574,9 @@ export async function POST(request: Request) {
         refund_type: refundType,
         amount_paise: refundAmountPaise,
         currency: order.currency,
+        merchant_balance_snapshot_paise: merchantBalanceSnapshotPaise,
+        merchant_balance_checked_at: merchantBalanceCheckedAt,
+        merchant_balance_source: "razorpay_dashboard_manual",
         reason,
         request_source: requestSource,
         source_reference: typeof body.sourceReference === "string" ? body.sourceReference.trim().slice(0, 180) : null,
