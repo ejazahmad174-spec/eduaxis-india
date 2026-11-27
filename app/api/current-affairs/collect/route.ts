@@ -464,13 +464,16 @@ async function updateSourceSuccess(
   if (error) throw error;
 }
 
-async function collectSource(source: {
-  id: string;
-  source_name: string;
-  source_url: string;
-  etag: string | null;
-  last_modified: string | null;
-}) {
+async function collectSource(
+  source: {
+    id: string;
+    source_name: string;
+    source_url: string;
+    etag: string | null;
+    last_modified: string | null;
+  },
+  selectedCategories: string[] | null
+) {
   const now = new Date().toISOString();
 
   try {
@@ -506,14 +509,22 @@ async function collectSource(source: {
         : parseBiharHtmlNews(fetched.body || "", source.source_url)
       : parseRss(fetched.body || "", source.source_url);
 
-    const records = items.map((item) => ({
+    const classifiedItems = items.map((item) => ({
+      ...item,
+      category: getCategory(item.title, source.source_name),
+    }));
+    const matchingItems = selectedCategories
+      ? classifiedItems.filter((item) => selectedCategories.includes(item.category))
+      : classifiedItems;
+
+    const records = matchingItems.map((item) => ({
       source_id: source.id,
       source_name: source.source_name,
       title: item.title,
       summary: null,
       source_excerpt: item.summary,
       source_url: item.source_url,
-      category: getCategory(item.title, source.source_name),
+      category: item.category,
       original_published_at: item.original_published_at,
       fetched_at: now,
       status: "pending",
@@ -597,6 +608,26 @@ async function handleCollection(request: NextRequest) {
     );
   }
 
+  const validCategories = ["national", "international", "education", "bihar"];
+  let selectedCategories: string[] | null = null;
+
+  if (request.method === "POST") {
+    const body = await request.json().catch(() => null) as { categories?: unknown } | null;
+    if (body && Object.prototype.hasOwnProperty.call(body, "categories")) {
+      if (
+        !Array.isArray(body.categories) ||
+        body.categories.length < 1 ||
+        body.categories.some((value) => typeof value !== "string" || !validCategories.includes(value))
+      ) {
+        return NextResponse.json(
+          { error: "Select one or more valid Current Affairs categories." },
+          { status: 400 }
+        );
+      }
+      selectedCategories = [...new Set(body.categories as string[])];
+    }
+  }
+
   const { data: sources, error } = await supabase
     .from("current_affairs_sources")
     .select(
@@ -612,7 +643,7 @@ async function handleCollection(request: NextRequest) {
   }
 
   const results = await Promise.all(
-    (sources || []).map((source) => collectSource(source))
+    (sources || []).map((source) => collectSource(source, selectedCategories))
   );
 
   const inserted = results.reduce(
@@ -628,6 +659,7 @@ async function handleCollection(request: NextRequest) {
     success: true,
     checked: results.length,
     inserted,
+    selected_categories: selectedCategories || validCategories,
     results,
     collected_at: new Date().toISOString(),
   });
