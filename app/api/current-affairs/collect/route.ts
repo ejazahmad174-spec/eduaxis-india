@@ -192,11 +192,11 @@ async function fetchPage(
   if (!response.ok) throw new Error("HTTP " + response.status);
 
   const sourceHost = new URL(currentUrl).hostname.toLowerCase();
-  const isApprovedBiharHtmlSource =
-    sourceHost === "betastate.bihar.gov.in" &&
+  const isApprovedHtmlSource =
+    ["betastate.bihar.gov.in", "prsindia.org", "www.prsindia.org"].includes(sourceHost) &&
     /text\/html|application\/xhtml\+xml/i.test(contentType);
 
-  if (!isApprovedBiharHtmlSource && !/xml|rss|atom|text\/plain/i.test(contentType)) {
+  if (!isApprovedHtmlSource && !/xml|rss|atom|text\/plain/i.test(contentType)) {
     throw new Error("Unexpected source content type: " + contentType);
   }
 
@@ -206,11 +206,11 @@ async function fetchPage(
   const body = await response.text();
   if (body.length > MAX_RESPONSE_SIZE) throw new Error("Feed response exceeds the size limit");
 
-  if (!isApprovedBiharHtmlSource && !/<rss\b|<feed\b|<rdf:rdf\b/i.test(body)) {
+  if (!isApprovedHtmlSource && !/<rss\b|<feed\b|<rdf:rdf\b/i.test(body)) {
     throw new Error("The source did not return a recognised RSS or Atom feed");
   }
 
-  if (isApprovedBiharHtmlSource && !/<html\b|<!doctype html/i.test(body)) {
+  if (isApprovedHtmlSource && !/<html\b|<!doctype html/i.test(body)) {
     throw new Error("The Bihar government source did not return an HTML page");
   }
 
@@ -366,6 +366,83 @@ function parseBiharHtmlNews(html: string, baseUrl: string): NewsItem[] {
   return items;
 }
 
+function parsePrsHtmlNews(html: string, baseUrl: string): NewsItem[] {
+  const items: NewsItem[] = [];
+  const cutoff = Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+  const seen = new Set<string>();
+
+  const add = (block: string) => {
+    const anchors = [...block.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)];
+    const candidate = anchors
+      .map((match) => ({
+        href: match[1].match(/href=["']([^"']+)["']/i)?.[1] || "",
+        title: cleanText(match[2]),
+      }))
+      .filter((entry) =>
+        entry.href &&
+        entry.title.length >= 24 &&
+        !/^(home|about|contact|careers|read more|view all|search|login|menu)$/i.test(entry.title)
+      )
+      .sort((left, right) => right.title.length - left.title.length)[0];
+
+    if (!candidate) return;
+    const link = absoluteUrl(candidate.href, baseUrl);
+    if (!link || seen.has(link)) return;
+    const parsedDateText = cleanText(block).match(/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+20\d{2}\b/i)?.[0];
+    const parsedDate = parsedDateText ? new Date(parsedDateText) : null;
+    if (parsedDate && !Number.isNaN(parsedDate.getTime()) && parsedDate.getTime() < cutoff) return;
+    const summary = cleanText(block)
+      .replace(candidate.title, "")
+      .replace(parsedDateText || "", "")
+      .slice(0, 1600);
+
+    seen.add(link);
+    items.push({
+      title: candidate.title.slice(0, 500),
+      summary: summary || null,
+      source_url: link,
+      original_published_at: parsedDate && !Number.isNaN(parsedDate.getTime())
+        ? parsedDate.toISOString()
+        : null,
+    });
+  };
+
+  const articleBlocks = html.match(/<article\b[\s\S]*?<\/article>/gi) || [];
+  for (const block of articleBlocks) {
+    if (items.length >= MAX_ITEMS_PER_SOURCE) break;
+    add(block);
+  }
+
+  // PRS pages can also render recent legislative updates as linked cards
+  // without semantic <article> wrappers. This fallback only accepts internal
+  // news/report/Bill routes on the allow-listed PRS host.
+  if (items.length === 0) {
+    const anchors = [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)];
+    for (const match of anchors) {
+      if (items.length >= MAX_ITEMS_PER_SOURCE) break;
+      const href = match[1].match(/href=["']([^"']+)["']/i)?.[1] || "";
+      const title = cleanText(match[2]);
+      if (
+        !href ||
+        title.length < 28 ||
+        !/(bill|legislative|parliament|state|analysis|explained|budget|finance|report|committee|law|policy)/i.test(title)
+      ) continue;
+
+      const link = absoluteUrl(href, baseUrl);
+      if (!link || seen.has(link)) continue;
+      seen.add(link);
+      items.push({
+        title: title.slice(0, 500),
+        summary: null,
+        source_url: link,
+        original_published_at: null,
+      });
+    }
+  }
+
+  return items;
+}
+
 async function updateSourceSuccess(
   sourceId: string,
   now: string,
@@ -421,8 +498,12 @@ async function collectSource(source: {
       };
     }
 
-    const items = /html/i.test(fetched.contentType)
-      ? parseBiharHtmlNews(fetched.body || "", source.source_url)
+    const sourceHost = new URL(source.source_url).hostname.toLowerCase();
+    const isHtmlSource = /html/i.test(fetched.contentType);
+    const items = isHtmlSource
+      ? sourceHost === "prsindia.org" || sourceHost === "www.prsindia.org"
+        ? parsePrsHtmlNews(fetched.body || "", source.source_url)
+        : parseBiharHtmlNews(fetched.body || "", source.source_url)
       : parseRss(fetched.body || "", source.source_url);
 
     const records = items.map((item) => ({
