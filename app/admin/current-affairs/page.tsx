@@ -84,11 +84,11 @@ function getPublicationIssues(item: CurrentAffairsItem) {
 
   if (!item.title?.trim()) issues.push("English headline is missing");
   if (!item.title_hi?.trim()) issues.push("Hindi headline is missing");
-  if (englishCount < 4) issues.push("English summary needs at least 4 sentences");
-  else if (englishCount > 5) issues.push("English summary must be shortened to 4–5 sentences");
-  if (hindiCount < 4) issues.push("Hindi summary needs at least 4 sentences");
-  else if (hindiCount > 5) issues.push("Hindi summary must be shortened to 4–5 sentences");
-  if (factsCount < 3) issues.push("Add at least 3 key facts (one per line)");
+  if (englishCount < 3) issues.push("English summary needs at least 3 sentences");
+  else if (englishCount > 4) issues.push("English summary must be shortened to 3–4 sentences");
+  if (hindiCount < 3) issues.push("Hindi summary needs at least 3 sentences");
+  else if (hindiCount > 4) issues.push("Hindi summary must be shortened to 3–4 sentences");
+  if (factsCount < 2) issues.push("Add at least 2 key facts (one per line)");
   else if (factsCount > 5) issues.push("Keep no more than 5 key facts");
   if (!item.exam_relevance?.trim()) issues.push("Exam relevance is missing");
   if (!["generated", "edited", "manual"].includes(item.ai_generation_status)) {
@@ -140,6 +140,10 @@ export default function AdminCurrentAffairsPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [collecting, setCollecting] = useState(false);
+  const [showCollectionOptions, setShowCollectionOptions] = useState(false);
+  const [collectionCategories, setCollectionCategories] = useState<string[]>([
+    "national", "international", "education", "bihar",
+  ]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [editingItemId, setEditingItemId] = useState("");
@@ -201,6 +205,7 @@ export default function AdminCurrentAffairsPage() {
     setShowManualForm(true);
     setEditingItemId("");
     setDraft(null);
+    setEditorError("");
     setManualError("");
     setMessage("");
     setManualDraft({
@@ -374,6 +379,7 @@ export default function AdminCurrentAffairsPage() {
   }, [items, filter, search]);
 
   function openEditor(item: CurrentAffairsItem) {
+    setShowManualForm(false);
     setEditingItemId(item.id);
     setDraft({
       headlineEn: item.title || "",
@@ -470,7 +476,7 @@ export default function AdminCurrentAffairsPage() {
       return;
     }
     if (englishSentences > 8 || hindiSentences > 8) {
-      setEditorError("Please shorten each summary to eight sentences or fewer. The recommended publishing format is 4–5 sentences.");
+      setEditorError("Please keep each draft to eight sentences or fewer. For publication, use 3–4 concise sentences in each language.");
       return;
     }
     if (englishWords > 150) {
@@ -478,7 +484,7 @@ export default function AdminCurrentAffairsPage() {
       return;
     }
     if (facts.length > 5) {
-      setEditorError("Add no more than five key facts. Three to five are required before publication.");
+      setEditorError("Add no more than five key facts. At least two separate facts are needed before publication.");
       return;
     }
     if (!draft.verifiedByAdmin) {
@@ -517,6 +523,8 @@ export default function AdminCurrentAffairsPage() {
       setEditorError("Could not save the editorial draft: " + saveError.message);
     } else {
       const updated = data as CurrentAffairsItem;
+      setShowManualForm(false);
+      setEditingItemId(updated.id);
       setItems((current) => current.map((entry) => entry.id === updated.id ? updated : entry));
       setDraft({
         headlineEn: updated.title,
@@ -544,7 +552,8 @@ export default function AdminCurrentAffairsPage() {
       const issues = getPublicationIssues(item);
       if (issues.length > 0) {
         openEditor(item);
-        setMessage("Not ready to publish: " + issues.join(" · ") + ". Complete these items in the editor, save the draft, then publish.");
+        setShowManualForm(false);
+        setMessage("This article is still a draft. Its editor is open; complete the publishing checklist there, save, then publish.");
         return;
       }
     }
@@ -601,8 +610,19 @@ export default function AdminCurrentAffairsPage() {
     setBusy("");
   }
 
+  function toggleCollectionCategory(category: string, checked: boolean) {
+    setCollectionCategories((current) => {
+      if (checked) return current.includes(category) ? current : [...current, category];
+      return current.filter((value) => value !== category);
+    });
+  }
+
   async function runCollection() {
     if (!supabase || collecting) return;
+    if (collectionCategories.length === 0) {
+      setError("Select at least one Current Affairs category before collecting.");
+      return;
+    }
 
     setCollecting(true);
     setMessage("");
@@ -617,7 +637,11 @@ export default function AdminCurrentAffairsPage() {
 
       const response = await fetch("/api/admin/current-affairs/collect", {
         method: "POST",
-        headers: { Authorization: "Bearer " + accessToken },
+        headers: {
+          Authorization: "Bearer " + accessToken,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ categories: collectionCategories }),
         cache: "no-store",
       });
 
@@ -625,9 +649,17 @@ export default function AdminCurrentAffairsPage() {
       if (!response.ok) throw new Error(result.error || "Collection could not be started.");
 
       const failed = (result.results || []).filter((entry: { success: boolean }) => !entry.success).length;
+      const categoryNames: Record<string, string> = {
+        national: "National Affairs",
+        international: "International Affairs",
+        education: "Education & Exams",
+        bihar: "Bihar Special",
+      };
+      const selectedNames = collectionCategories.map((category) => categoryNames[category]).join(", ");
       setMessage(
-        "Collection finished: " + result.checked + " sources checked, " +
-        result.inserted + " new updates added to the review queue" +
+        "Collection finished for " + selectedNames + ": " +
+        result.checked + " active sources checked, " +
+        result.inserted + " matching updates added to the review queue" +
         (failed ? ", " + failed + " source(s) need attention." : ".")
       );
 
@@ -654,9 +686,47 @@ export default function AdminCurrentAffairsPage() {
               <button className={styles.secondaryButton} onClick={openManualEntry}>
                 + Add article manually
               </button>
-              <button className={styles.primaryButton} onClick={runCollection} disabled={collecting}>
-                {collecting ? "Collecting updates..." : "↻ Run collection now"}
-              </button>
+              <div className={styles.collectionControls}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => setShowCollectionOptions((open) => !open)}
+                  aria-expanded={showCollectionOptions}
+                >
+                  Categories ({collectionCategories.length}/4) ▾
+                </button>
+                <button className={styles.primaryButton} onClick={runCollection} disabled={collecting || collectionCategories.length === 0}>
+                  {collecting ? "Collecting updates..." : "↻ Run collection now"}
+                </button>
+                {showCollectionOptions && (
+                  <div className={styles.collectionOptions} role="group" aria-label="Select collection categories">
+                    <div className={styles.collectionOptionsHeader}>
+                      <strong>Choose categories to collect</strong>
+                      <button type="button" className={styles.collectionClose} onClick={() => setShowCollectionOptions(false)}>×</button>
+                    </div>
+                    <p>All active sources are checked. Only updates classified into selected categories are added to the queue.</p>
+                    {[
+                      { id: "national", label: "National Affairs" },
+                      { id: "international", label: "International Affairs" },
+                      { id: "education", label: "Education & Exams" },
+                      { id: "bihar", label: "Bihar Special" },
+                    ].map((category) => (
+                      <label className={styles.collectionOption} key={category.id}>
+                        <input
+                          type="checkbox"
+                          checked={collectionCategories.includes(category.id)}
+                          onChange={(event) => toggleCollectionCategory(category.id, event.target.checked)}
+                        />
+                        <span>{category.label}</span>
+                      </label>
+                    ))}
+                    <div className={styles.collectionOptionActions}>
+                      <button type="button" onClick={() => setCollectionCategories(["national", "international", "education", "bihar"])}>Select all</button>
+                      <button type="button" onClick={() => setCollectionCategories([])}>Clear</button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </header>
 
@@ -717,7 +787,7 @@ export default function AdminCurrentAffairsPage() {
                 </label>
                 <label className={styles.editorField}>
                   <span>Short summary (English) *</span>
-                  <textarea rows={5} value={manualDraft.summaryEn} onChange={(event) => setManualDraft({ ...manualDraft, summaryEn: event.target.value })} placeholder="Write your own summary. Aim for 4–5 sentences and 50–80 words." />
+                  <textarea rows={5} value={manualDraft.summaryEn} onChange={(event) => setManualDraft({ ...manualDraft, summaryEn: event.target.value })} placeholder="Write your own summary. Aim for 3–4 concise sentences." />
                   <small>{manualDraft.summaryEn.trim() ? manualDraft.summaryEn.trim().split(/\s+/).filter(Boolean).length : 0} words · {countSentences(manualDraft.summaryEn)} sentences</small>
                 </label>
                 <label className={styles.editorField}>
@@ -726,7 +796,7 @@ export default function AdminCurrentAffairsPage() {
                   <small>{countSentences(manualDraft.summaryHi, true)} वाक्य</small>
                 </label>
                 <label className={styles.editorField}>
-                  <span>Key facts (up to 5, one per line)</span>
+                  <span>Key facts (2–5, one per line)</span>
                   <textarea rows={4} value={manualDraft.keyFactsText} onChange={(event) => setManualDraft({ ...manualDraft, keyFactsText: event.target.value })} placeholder={"Ministry: ...\nDate: ...\nAmount / figure: ..."} />
                 </label>
                 <label className={styles.editorField}>
@@ -781,8 +851,14 @@ export default function AdminCurrentAffairsPage() {
                   {generating ? "Generating bilingual draft..." : "✦ Generate AI summary"}
                 </button>
                 <span className={styles.editorHint}>
-                  Target: 4–5 sentences · 50–80 English words · 3–5 key facts
+                  Publish standard: 3–4 sentences per language · 2–5 key facts
                 </span>
+              </div>
+
+              <div className={styles.publishGuidance}>
+                <strong>Publishing checklist</strong>
+                <span>Use 3–4 sentences in English and Hindi, 2–5 key facts, exam relevance, and verified source details.</span>
+                <small>You can save an incomplete draft and complete it later.</small>
               </div>
 
               <div className={styles.editorGrid}>
@@ -796,18 +872,18 @@ export default function AdminCurrentAffairsPage() {
                 </label>
                 <label className={styles.editorField}>
                   <span>Short summary (English)</span>
-                  <textarea rows={5} value={draft.summaryEn} onChange={(event) => setDraft({ ...draft, summaryEn: event.target.value })} placeholder="Write 4–5 sentences (50–80 words)." />
+                  <textarea rows={5} value={draft.summaryEn} onChange={(event) => setDraft({ ...draft, summaryEn: event.target.value })} placeholder="Write 3–4 concise sentences (about 40–80 words)." />
                   <small>{draft.summaryEn.trim() ? draft.summaryEn.trim().split(/\s+/).filter(Boolean).length : 0} words · {countSentences(draft.summaryEn)} sentences</small>
                 </label>
                 <label className={styles.editorField}>
                   <span>संक्षिप्त सारांश (हिंदी)</span>
-                  <textarea rows={5} value={draft.summaryHi} onChange={(event) => setDraft({ ...draft, summaryHi: event.target.value })} placeholder="4–5 वाक्यों में संक्षिप्त सारांश लिखें।" />
+                  <textarea rows={5} value={draft.summaryHi} onChange={(event) => setDraft({ ...draft, summaryHi: event.target.value })} placeholder="3–4 वाक्यों में संक्षिप्त सारांश लिखें।" />
                   <small>{countSentences(draft.summaryHi, true)} वाक्य</small>
                 </label>
                 <label className={styles.editorField}>
-                  <span>Key facts (3–5, one per line)</span>
+                  <span>Key facts (2–5, one per line)</span>
                   <textarea rows={5} value={draft.keyFactsText} onChange={(event) => setDraft({ ...draft, keyFactsText: event.target.value })} placeholder={"Initiative: ...\nMinistry: ...\nDate: ..."} />
-                  <small>{draft.keyFactsText.split("\n").map((fact) => fact.trim()).filter(Boolean).length} facts entered · add 3–5 separate facts</small>
+                  <small>{draft.keyFactsText.split("\n").map((fact) => fact.trim()).filter(Boolean).length} facts entered · add 2–5 separate facts before publishing</small>
                 </label>
                 <label className={styles.editorField}>
                   <span>Exam relevance</span>
