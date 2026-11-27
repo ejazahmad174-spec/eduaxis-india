@@ -400,37 +400,6 @@ export default function AdminCurrentAffairsPage() {
 
     setBusy("");
   }
-    if (!supabase || busy) return;
-
-    const action = status === "published" ? "publish" : status === "rejected" ? "reject" : "return to pending";
-    if (!window.confirm("Are you sure you want to " + action + " this update?")) return;
-
-    setBusy(item.id);
-    setMessage("");
-    setError("");
-
-    const now = new Date().toISOString();
-    const { data, error: updateError } = await supabase
-      .from("current_affairs_items")
-      .update({
-        status,
-        approved_at: status === "published" ? now : null,
-        updated_at: now,
-      })
-      .eq("id", item.id)
-      .select("id,title,title_hi,summary,summary_hi,source_excerpt,key_facts,exam_relevance,editorial_note,ai_generation_status,ai_model,ai_generated_at,category,source_name,source_url,original_published_at,fetched_at,status,approved_at")
-      .single();
-
-    if (updateError) {
-      setError("Could not update this item: " + updateError.message);
-    } else {
-      setItems((current) => current.map((entry) => entry.id === item.id ? data as CurrentAffairsItem : entry));
-      setMessage(status === "published" ? "Update published on the public Current Affairs page." : status === "rejected" ? "Update rejected and hidden from the public page." : "Update returned to the review queue.");
-    }
-
-    setBusy("");
-  }
-
   async function toggleSource(source: CurrentAffairsSource) {
     if (!supabase || busy) return;
 
