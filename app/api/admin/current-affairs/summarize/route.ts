@@ -183,14 +183,6 @@ export async function POST(request: Request) {
     return errorResponse("The server database configuration is incomplete.", 500);
   }
 
-  if (!openAiApiKey) {
-    return errorResponse(
-      "AI summarisation is not configured yet. Add OPENAI_API_KEY to the Vercel Production environment to enable it.",
-      503,
-      "AI_KEY_MISSING"
-    );
-  }
-
   const authorization = request.headers.get("authorization");
   const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : null;
   if (!token) return errorResponse("Administrator sign-in is required.", 401);
@@ -216,6 +208,14 @@ export async function POST(request: Request) {
 
   if (profileError || profile?.role !== "admin") {
     return errorResponse("You are not authorised to generate Current Affairs summaries.", 403);
+  }
+
+  if (!openAiApiKey) {
+    return errorResponse(
+      "AI summarisation is not configured yet. Add OPENAI_API_KEY to the Vercel Production environment to enable it.",
+      503,
+      "AI_KEY_MISSING"
+    );
   }
 
   let body: { id?: unknown };
@@ -369,7 +369,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     return errorResponse(
-      error instanceof Error && error.name === "AbortError"
+      error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)
         ? "The AI request timed out. Please try again."
         : "The AI summarisation service is temporarily unavailable.",
       502
