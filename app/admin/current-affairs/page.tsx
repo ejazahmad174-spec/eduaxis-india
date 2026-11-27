@@ -55,6 +55,27 @@ type CurrentAffairsSource = {
   last_error: string | null;
 };
 
+type ManualArticleDraft = {
+  headlineEn: string;
+  headlineHi: string;
+  category: string;
+  sourceName: string;
+  sourceUrl: string;
+  publishedDate: string;
+  summaryEn: string;
+  summaryHi: string;
+  sourceExcerpt: string;
+  keyFactsText: string;
+  examRelevance: string;
+  editorialNote: string;
+  verifiedByAdmin: boolean;
+};
+
+function countSentences(value: string, hindi = false) {
+  const punctuation = hindi ? /[.!?।]+/ : /[.!?]+/;
+  return value.split(punctuation).map((part) => part.trim()).filter(Boolean).length;
+}
+
 function formatDate(value: string | null) {
   if (!value) return "Not checked yet";
   const date = new Date(value);
@@ -105,6 +126,24 @@ export default function AdminCurrentAffairsPage() {
   const [generating, setGenerating] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [editorError, setEditorError] = useState("");
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [savingManual, setSavingManual] = useState(false);
+  const [manualError, setManualError] = useState("");
+  const [manualDraft, setManualDraft] = useState<ManualArticleDraft>({
+    headlineEn: "",
+    headlineHi: "",
+    category: "national",
+    sourceName: "",
+    sourceUrl: "",
+    publishedDate: "",
+    summaryEn: "",
+    summaryHi: "",
+    sourceExcerpt: "",
+    keyFactsText: "",
+    examRelevance: "",
+    editorialNote: "",
+    verifiedByAdmin: false,
+  });
 
   const loadData = useCallback(async () => {
     if (!supabase) {
@@ -136,6 +175,129 @@ export default function AdminCurrentAffairsPage() {
     setError("");
     setLoading(false);
   }, []);
+
+  function openManualEntry() {
+    setShowManualForm(true);
+    setEditingItemId("");
+    setDraft(null);
+    setManualError("");
+    setMessage("");
+    setManualDraft({
+      headlineEn: "",
+      headlineHi: "",
+      category: "national",
+      sourceName: "",
+      sourceUrl: "",
+      publishedDate: "",
+      summaryEn: "",
+      summaryHi: "",
+      sourceExcerpt: "",
+      keyFactsText: "",
+      examRelevance: "",
+      editorialNote: "",
+      verifiedByAdmin: false,
+    });
+    setTimeout(() => {
+      document.getElementById("manual-current-affairs-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }
+
+  async function saveManualArticle() {
+    if (!supabase || savingManual) return;
+
+    const facts = manualDraft.keyFactsText
+      .split("\n")
+      .map((fact) => fact.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "").trim())
+      .filter(Boolean);
+
+    if (!manualDraft.headlineEn.trim() || !manualDraft.headlineHi.trim()) {
+      setManualError("Please enter both English and Hindi headlines.");
+      return;
+    }
+
+    if (!manualDraft.category || !["national", "international", "education", "bihar"].includes(manualDraft.category)) {
+      setManualError("Please select a Current Affairs category.");
+      return;
+    }
+
+    if (!manualDraft.sourceName.trim() || !manualDraft.sourceUrl.trim()) {
+      setManualError("Please enter the source name and original source URL. This helps students verify the update.");
+      return;
+    }
+
+    let parsedSourceUrl: URL;
+    try {
+      parsedSourceUrl = new URL(manualDraft.sourceUrl.trim());
+      if (parsedSourceUrl.protocol !== "https:") throw new Error("HTTPS is required.");
+    } catch {
+      setManualError("Enter a valid HTTPS source URL, for example https://pib.gov.in/...");
+      return;
+    }
+
+    if (!manualDraft.summaryEn.trim() || !manualDraft.summaryHi.trim()) {
+      setManualError("Enter at least a short English and Hindi summary. They can be improved before publication.");
+      return;
+    }
+
+    if (facts.length > 5) {
+      setManualError("Add no more than five key facts. You can save three to five for publication.");
+      return;
+    }
+
+    if (!manualDraft.verifiedByAdmin) {
+      setManualError("Please open the original source and tick the verification confirmation before saving.");
+      return;
+    }
+
+    setSavingManual(true);
+    setManualError("");
+    setMessage("");
+
+    const originalDate = manualDraft.publishedDate
+      ? new Date(manualDraft.publishedDate + "T12:00:00+05:30").toISOString()
+      : null;
+
+    const { data, error: insertError } = await supabase
+      .from("current_affairs_items")
+      .insert({
+        title: manualDraft.headlineEn.trim(),
+        title_hi: manualDraft.headlineHi.trim(),
+        category: manualDraft.category,
+        source_name: manualDraft.sourceName.trim(),
+        source_url: parsedSourceUrl.toString(),
+        original_published_at: originalDate,
+        source_excerpt: manualDraft.sourceExcerpt.trim() || null,
+        summary: manualDraft.summaryEn.trim(),
+        summary_hi: manualDraft.summaryHi.trim(),
+        key_facts: facts,
+        exam_relevance: manualDraft.examRelevance.trim() || null,
+        editorial_note: manualDraft.editorialNote.trim() || null,
+        ai_generation_status: "manual",
+        ai_model: null,
+        ai_generated_at: null,
+        status: "pending",
+        approved_at: null,
+      })
+      .select("id,title,title_hi,summary,summary_hi,source_excerpt,key_facts,exam_relevance,editorial_note,ai_generation_status,ai_model,ai_generated_at,category,source_name,source_url,original_published_at,fetched_at,status,approved_at")
+      .single();
+
+    if (insertError) {
+      setManualError(
+        insertError.code === "23505"
+          ? "This source URL is already in the Current Affairs list. Search for the existing article and edit it instead of adding a duplicate."
+          : "Could not save the manual article: " + insertError.message
+      );
+    } else {
+      const created = data as CurrentAffairsItem;
+      setItems((current) => [created, ...current]);
+      setFilter("pending");
+      setShowManualForm(false);
+      setManualError("");
+      setMessage("Manual Current Affairs article saved successfully as Pending. It has not been published yet.");
+    }
+
+    setSavingManual(false);
+  }
 
   useEffect(() => {
     let active = true;
@@ -271,28 +433,28 @@ export default function AdminCurrentAffairsPage() {
     if (!supabase || !editingItemId || !draft || savingDraft) return;
 
     const facts = draft.keyFactsText.split("\n").map((fact) => fact.trim()).filter(Boolean);
-    const englishSentences = draft.summaryEn.split(/[.!?]+/).filter((sentence) => sentence.trim().length > 0);
-    const hindiSentences = draft.summaryHi.split(/[.!?।]+/).filter((sentence) => sentence.trim().length > 0);
+    const englishSentences = countSentences(draft.summaryEn);
+    const hindiSentences = countSentences(draft.summaryHi, true);
     const englishWords = draft.summaryEn.trim().split(/\s+/).filter(Boolean).length;
 
     if (!draft.headlineEn.trim() || !draft.headlineHi.trim()) {
       setEditorError("Enter both English and Hindi headlines.");
       return;
     }
-    if (englishSentences.length < 4 || englishSentences.length > 5 || hindiSentences.length < 4 || hindiSentences.length > 5) {
-      setEditorError("Both English and Hindi summaries must contain 4–5 sentences.");
+    if (!draft.summaryEn.trim() || !draft.summaryHi.trim()) {
+      setEditorError("Enter both English and Hindi summaries before saving this draft.");
       return;
     }
-    if (englishWords < 40 || englishWords > 100) {
-      setEditorError("Keep the English summary between 40 and 100 words (target: 50–80).");
+    if (englishSentences > 8 || hindiSentences > 8) {
+      setEditorError("Please shorten each summary to eight sentences or fewer. The recommended publishing format is 4–5 sentences.");
       return;
     }
-    if (facts.length < 3 || facts.length > 5) {
-      setEditorError("Add 3–5 key facts, one per line.");
+    if (englishWords > 150) {
+      setEditorError("Please keep the English draft under 150 words. The recommended publishing length is 50–80 words.");
       return;
     }
-    if (!draft.examRelevance.trim()) {
-      setEditorError("Add exam relevance, or write 'General awareness; limited direct exam relevance'.");
+    if (facts.length > 5) {
+      setEditorError("Add no more than five key facts. Three to five are required before publication.");
       return;
     }
     if (!draft.verifiedByAdmin) {
@@ -355,20 +517,27 @@ export default function AdminCurrentAffairsPage() {
     if (!supabase || busy) return;
 
     if (status === "published") {
-      const sentenceCount = (item.summary || "").split(/[.!?]+/).filter((sentence) => sentence.trim().length > 0).length;
+      const englishCount = countSentences(item.summary || "");
+      const hindiCount = countSentences(item.summary_hi || "", true);
       if (
+        !item.title_hi?.trim() ||
         !item.summary?.trim() ||
         !item.summary_hi?.trim() ||
+        englishCount < 4 ||
+        englishCount > 5 ||
+        hindiCount < 4 ||
+        hindiCount > 5 ||
         !Array.isArray(item.key_facts) ||
         item.key_facts.length < 3 ||
+        item.key_facts.length > 5 ||
         !item.exam_relevance?.trim() ||
         !["generated", "edited", "manual"].includes(item.ai_generation_status) ||
-        item.ai_generation_status === "needs_review" ||
-        sentenceCount < 4 ||
-        sentenceCount > 5
+        item.ai_generation_status === "needs_review"
       ) {
         openEditor(item);
-        setMessage("Prepare and save the bilingual 4–5 sentence summary and key facts before publishing.");
+        setMessage(
+          "This article is saved as a draft. Before publishing, complete 4–5 sentences in both languages, 3–5 key facts and exam relevance."
+        );
         return;
       }
     }
@@ -474,9 +643,14 @@ export default function AdminCurrentAffairsPage() {
               <h1>Current Affairs Management</h1>
               <p>Collect updates from approved sources, review the headlines and publish only verified items.</p>
             </div>
-            <button className={styles.primaryButton} onClick={runCollection} disabled={collecting}>
-              {collecting ? "Collecting updates..." : "↻ Run collection now"}
-            </button>
+            <div className={styles.headerActions}>
+              <button className={styles.secondaryButton} onClick={openManualEntry}>
+                + Add article manually
+              </button>
+              <button className={styles.primaryButton} onClick={runCollection} disabled={collecting}>
+                {collecting ? "Collecting updates..." : "↻ Run collection now"}
+              </button>
+            </div>
           </header>
 
           {message && <div className={styles.notice}>{message}</div>}
@@ -488,6 +662,97 @@ export default function AdminCurrentAffairsPage() {
             <div><strong>{counts.rejected}</strong><span>Rejected</span></div>
             <div><strong>{sources.filter((source) => source.is_active).length}/{sources.length}</strong><span>Active sources</span></div>
           </div>
+
+          {showManualForm && (
+            <section className={styles.editorPanel} id="manual-current-affairs-form">
+              <div className={styles.panelHeader}>
+                <div>
+                  <div className={styles.kicker}>MANUAL PUBLISHING DESK</div>
+                  <h2>Add Current Affairs Article Manually</h2>
+                  <p>No AI credits are needed. Enter your own headline, bilingual summary, key facts and original source.</p>
+                </div>
+                <button className={styles.secondaryButton} onClick={() => { setShowManualForm(false); setManualError(""); }}>
+                  Close form
+                </button>
+              </div>
+
+              {manualError && <div className={styles.error}>{manualError}</div>}
+
+              <div className={styles.editorGrid}>
+                <label className={styles.editorField}>
+                  <span>Headline (English) *</span>
+                  <input value={manualDraft.headlineEn} onChange={(event) => setManualDraft({ ...manualDraft, headlineEn: event.target.value })} placeholder="Enter a clear news headline" />
+                </label>
+                <label className={styles.editorField}>
+                  <span>Headline (Hindi) *</span>
+                  <input value={manualDraft.headlineHi} onChange={(event) => setManualDraft({ ...manualDraft, headlineHi: event.target.value })} placeholder="समाचार का शीर्षक लिखें" />
+                </label>
+                <label className={styles.editorField}>
+                  <span>Category *</span>
+                  <select value={manualDraft.category} onChange={(event) => setManualDraft({ ...manualDraft, category: event.target.value })}>
+                    <option value="national">National Affairs</option>
+                    <option value="international">International Affairs</option>
+                    <option value="education">Education & Exams</option>
+                    <option value="bihar">Bihar Special</option>
+                  </select>
+                </label>
+                <label className={styles.editorField}>
+                  <span>Original publication date</span>
+                  <input type="date" value={manualDraft.publishedDate} onChange={(event) => setManualDraft({ ...manualDraft, publishedDate: event.target.value })} />
+                </label>
+                <label className={styles.editorField}>
+                  <span>Source name *</span>
+                  <input value={manualDraft.sourceName} onChange={(event) => setManualDraft({ ...manualDraft, sourceName: event.target.value })} placeholder="e.g. PIB, RBI, Bihar Government" />
+                </label>
+                <label className={styles.editorField}>
+                  <span>Original source URL (HTTPS) *</span>
+                  <input type="url" value={manualDraft.sourceUrl} onChange={(event) => setManualDraft({ ...manualDraft, sourceUrl: event.target.value })} placeholder="https://..." />
+                </label>
+                <label className={styles.editorField}>
+                  <span>Short summary (English) *</span>
+                  <textarea rows={5} value={manualDraft.summaryEn} onChange={(event) => setManualDraft({ ...manualDraft, summaryEn: event.target.value })} placeholder="Write your own summary. Aim for 4–5 sentences and 50–80 words." />
+                  <small>{manualDraft.summaryEn.trim() ? manualDraft.summaryEn.trim().split(/\s+/).filter(Boolean).length : 0} words · {countSentences(manualDraft.summaryEn)} sentences</small>
+                </label>
+                <label className={styles.editorField}>
+                  <span>संक्षिप्त सारांश (हिंदी) *</span>
+                  <textarea rows={5} value={manualDraft.summaryHi} onChange={(event) => setManualDraft({ ...manualDraft, summaryHi: event.target.value })} placeholder="4–5 वाक्यों में हिंदी सारांश लिखें।" />
+                  <small>{countSentences(manualDraft.summaryHi, true)} वाक्य</small>
+                </label>
+                <label className={styles.editorField}>
+                  <span>Key facts (up to 5, one per line)</span>
+                  <textarea rows={4} value={manualDraft.keyFactsText} onChange={(event) => setManualDraft({ ...manualDraft, keyFactsText: event.target.value })} placeholder={"Ministry: ...\nDate: ...\nAmount / figure: ..."} />
+                </label>
+                <label className={styles.editorField}>
+                  <span>Exam relevance</span>
+                  <textarea rows={4} value={manualDraft.examRelevance} onChange={(event) => setManualDraft({ ...manualDraft, examRelevance: event.target.value })} placeholder="e.g. UPSC GS-II, BPSC General Studies, BPSC TRE..." />
+                </label>
+                <label className={styles.editorField + " " + styles.fullWidth}>
+                  <span>Original source text / notes (optional, for your records)</span>
+                  <textarea rows={4} value={manualDraft.sourceExcerpt} onChange={(event) => setManualDraft({ ...manualDraft, sourceExcerpt: event.target.value })} placeholder="Paste source notes or a short factual extract. This is not displayed as the public summary." />
+                </label>
+                <label className={styles.editorField + " " + styles.fullWidth}>
+                  <span>Editorial note (optional)</span>
+                  <textarea rows={2} value={manualDraft.editorialNote} onChange={(event) => setManualDraft({ ...manualDraft, editorialNote: event.target.value })} placeholder="Internal note for the EduAxis editorial team" />
+                </label>
+              </div>
+
+              <label className={styles.verifyCheck}>
+                <input
+                  type="checkbox"
+                  checked={manualDraft.verifiedByAdmin}
+                  onChange={(event) => setManualDraft({ ...manualDraft, verifiedByAdmin: event.target.checked })}
+                />
+                <span>I have checked the original source and verified the headline, dates, figures, English and Hindi summaries and key facts.</span>
+              </label>
+
+              <div className={styles.editorActions}>
+                <button className={styles.publishButton} onClick={saveManualArticle} disabled={savingManual}>
+                  {savingManual ? "Saving article..." : "Save as pending article"}
+                </button>
+                <span className={styles.editorHint}>This creates a Pending article. It will not appear publicly until you publish it.</span>
+              </div>
+            </section>
+          )}
 
           {editingItemId && draft && (
             <section className={styles.editorPanel} id="current-affairs-editor">
@@ -525,11 +790,12 @@ export default function AdminCurrentAffairsPage() {
                 <label className={styles.editorField}>
                   <span>Short summary (English)</span>
                   <textarea rows={5} value={draft.summaryEn} onChange={(event) => setDraft({ ...draft, summaryEn: event.target.value })} placeholder="Write 4–5 sentences (50–80 words)." />
-                  <small>{draft.summaryEn.trim() ? draft.summaryEn.trim().split(/\s+/).filter(Boolean).length : 0} words</small>
+                  <small>{draft.summaryEn.trim() ? draft.summaryEn.trim().split(/\s+/).filter(Boolean).length : 0} words · {countSentences(draft.summaryEn)} sentences</small>
                 </label>
                 <label className={styles.editorField}>
                   <span>संक्षिप्त सारांश (हिंदी)</span>
                   <textarea rows={5} value={draft.summaryHi} onChange={(event) => setDraft({ ...draft, summaryHi: event.target.value })} placeholder="4–5 वाक्यों में संक्षिप्त सारांश लिखें।" />
+                  <small>{countSentences(draft.summaryHi, true)} वाक्य</small>
                 </label>
                 <label className={styles.editorField}>
                   <span>Key facts (3–5, one per line)</span>
@@ -621,7 +887,7 @@ export default function AdminCurrentAffairsPage() {
                         {item.ai_generation_status === "needs_review"
                           ? "Needs verification"
                           : ["generated", "edited", "manual"].includes(item.ai_generation_status)
-                            ? "Summary ready"
+                            ? (countSentences(item.summary || "") >= 4 && countSentences(item.summary || "") <= 5 && countSentences(item.summary_hi || "", true) >= 4 && countSentences(item.summary_hi || "", true) <= 5 && (item.key_facts || []).length >= 3 && !!item.exam_relevance ? "Summary ready" : "Draft incomplete")
                             : "Not summarised"}
                       </span>
                     </div>
