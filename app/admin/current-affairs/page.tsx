@@ -76,6 +76,27 @@ function countSentences(value: string, hindi = false) {
   return value.split(punctuation).map((part) => part.trim()).filter(Boolean).length;
 }
 
+function getPublicationIssues(item: CurrentAffairsItem) {
+  const issues: string[] = [];
+  const englishCount = countSentences(item.summary || "");
+  const hindiCount = countSentences(item.summary_hi || "", true);
+  const factsCount = Array.isArray(item.key_facts) ? item.key_facts.length : 0;
+
+  if (!item.title?.trim()) issues.push("English headline is missing");
+  if (!item.title_hi?.trim()) issues.push("Hindi headline is missing");
+  if (englishCount < 4) issues.push("English summary needs at least 4 sentences");
+  else if (englishCount > 5) issues.push("English summary must be shortened to 4–5 sentences");
+  if (hindiCount < 4) issues.push("Hindi summary needs at least 4 sentences");
+  else if (hindiCount > 5) issues.push("Hindi summary must be shortened to 4–5 sentences");
+  if (factsCount < 3) issues.push("Add at least 3 key facts (one per line)");
+  else if (factsCount > 5) issues.push("Keep no more than 5 key facts");
+  if (!item.exam_relevance?.trim()) issues.push("Exam relevance is missing");
+  if (!["generated", "edited", "manual"].includes(item.ai_generation_status)) {
+    issues.push("Save the editorial summary before publishing");
+  }
+  return issues;
+}
+
 function formatDate(value: string | null) {
   if (!value) return "Not checked yet";
   const date = new Date(value);
@@ -432,7 +453,10 @@ export default function AdminCurrentAffairsPage() {
   async function saveEditorialDraft() {
     if (!supabase || !editingItemId || !draft || savingDraft) return;
 
-    const facts = draft.keyFactsText.split("\n").map((fact) => fact.trim()).filter(Boolean);
+    const facts = draft.keyFactsText
+      .split("\n")
+      .map((fact) => fact.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "").trim())
+      .filter(Boolean);
     const englishSentences = countSentences(draft.summaryEn);
     const hindiSentences = countSentences(draft.summaryHi, true);
     const englishWords = draft.summaryEn.trim().split(/\s+/).filter(Boolean).length;
@@ -517,27 +541,10 @@ export default function AdminCurrentAffairsPage() {
     if (!supabase || busy) return;
 
     if (status === "published") {
-      const englishCount = countSentences(item.summary || "");
-      const hindiCount = countSentences(item.summary_hi || "", true);
-      if (
-        !item.title_hi?.trim() ||
-        !item.summary?.trim() ||
-        !item.summary_hi?.trim() ||
-        englishCount < 4 ||
-        englishCount > 5 ||
-        hindiCount < 4 ||
-        hindiCount > 5 ||
-        !Array.isArray(item.key_facts) ||
-        item.key_facts.length < 3 ||
-        item.key_facts.length > 5 ||
-        !item.exam_relevance?.trim() ||
-        !["generated", "edited", "manual"].includes(item.ai_generation_status) ||
-        item.ai_generation_status === "needs_review"
-      ) {
+      const issues = getPublicationIssues(item);
+      if (issues.length > 0) {
         openEditor(item);
-        setMessage(
-          "This article is saved as a draft. Before publishing, complete 4–5 sentences in both languages, 3–5 key facts and exam relevance."
-        );
+        setMessage("Not ready to publish: " + issues.join(" · ") + ". Complete these items in the editor, save the draft, then publish.");
         return;
       }
     }
@@ -800,6 +807,7 @@ export default function AdminCurrentAffairsPage() {
                 <label className={styles.editorField}>
                   <span>Key facts (3–5, one per line)</span>
                   <textarea rows={5} value={draft.keyFactsText} onChange={(event) => setDraft({ ...draft, keyFactsText: event.target.value })} placeholder={"Initiative: ...\nMinistry: ...\nDate: ..."} />
+                  <small>{draft.keyFactsText.split("\n").map((fact) => fact.trim()).filter(Boolean).length} facts entered · add 3–5 separate facts</small>
                 </label>
                 <label className={styles.editorField}>
                   <span>Exam relevance</span>
@@ -887,7 +895,7 @@ export default function AdminCurrentAffairsPage() {
                         {item.ai_generation_status === "needs_review"
                           ? "Needs verification"
                           : ["generated", "edited", "manual"].includes(item.ai_generation_status)
-                            ? (countSentences(item.summary || "") >= 4 && countSentences(item.summary || "") <= 5 && countSentences(item.summary_hi || "", true) >= 4 && countSentences(item.summary_hi || "", true) <= 5 && (item.key_facts || []).length >= 3 && !!item.exam_relevance ? "Summary ready" : "Draft incomplete")
+                            ? (getPublicationIssues(item).length === 0 ? "Ready to publish" : "Draft incomplete · " + getPublicationIssues(item).length + " items")
                             : "Not summarised"}
                       </span>
                     </div>
@@ -917,8 +925,13 @@ export default function AdminCurrentAffairsPage() {
                         </button>
                       )}
                       {item.status !== "published" && (
-                        <button className={styles.publishButton} onClick={() => changeItemStatus(item, "published")} disabled={!!busy || !item.summary || !item.summary_hi || (item.key_facts || []).length < 3}>
-                          Publish
+                        <button
+                          className={styles.publishButton}
+                          onClick={() => changeItemStatus(item, "published")}
+                          disabled={!!busy}
+                          title={getPublicationIssues(item).length ? "Open the editor to complete: " + getPublicationIssues(item).join("; ") : "Publish this verified article"}
+                        >
+                          {getPublicationIssues(item).length ? "Complete & publish" : "Publish"}
                         </button>
                       )}
                       {item.status !== "rejected" && (
