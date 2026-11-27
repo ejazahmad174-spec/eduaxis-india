@@ -1,5 +1,6 @@
 -- Preserve fetched source text separately from concise editorial summaries.
 ALTER TABLE public.current_affairs_items
+  ADD COLUMN IF NOT EXISTS title_hi text,
   ADD COLUMN IF NOT EXISTS source_excerpt text,
   ADD COLUMN IF NOT EXISTS summary_hi text,
   ADD COLUMN IF NOT EXISTS key_facts jsonb NOT NULL DEFAULT '[]'::jsonb,
