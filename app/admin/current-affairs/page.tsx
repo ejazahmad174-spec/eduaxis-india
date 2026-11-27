@@ -76,6 +76,19 @@ function labelCategory(value: string | null) {
   return "National Affairs";
 }
 
+function readableExcerpt(value: string | null) {
+  return (value || "")
+    .replace(/&nbsp;|&#160;|&#xA0;/gi, " ")
+    .replace(/&ensp;|&emsp;|&thinsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&ndash;/gi, "–")
+    .replace(/&mdash;/gi, "—")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export default function AdminCurrentAffairsPage() {
   const router = useRouter();
   const [items, setItems] = useState<CurrentAffairsItem[]>([]);
@@ -182,8 +195,8 @@ export default function AdminCurrentAffairsPage() {
     setDraft({
       headlineEn: item.title || "",
       headlineHi: item.title_hi || "",
-      summaryEn: item.summary || "",
-      summaryHi: item.summary_hi || "",
+      summaryEn: ["generated", "edited", "manual", "needs_review"].includes(item.ai_generation_status) ? item.summary || "" : "",
+      summaryHi: ["generated", "edited", "manual", "needs_review"].includes(item.ai_generation_status) ? item.summary_hi || "" : "",
       keyFactsText: (item.key_facts || []).join("\n"),
       examRelevance: item.exam_relevance || "",
       editorialNote: item.editorial_note || "",
@@ -646,8 +659,8 @@ export default function AdminCurrentAffairsPage() {
                       <p className={styles.summary}>{item.summary}</p>
                     ) : (
                       <p className={styles.summary}>
-                        Original source text: {(item.source_excerpt || "No description was provided by the source.").slice(0, 220)}
-                        {(item.source_excerpt || "").length > 220 ? "…" : ""}
+                        Original source text: {readableExcerpt(item.source_excerpt || item.summary || "No description was provided by the source.").slice(0, 220)}
+                        {readableExcerpt(item.source_excerpt || item.summary || "").length > 220 ? "…" : ""}
                       </p>
                     )}
                     <div className={styles.meta}>
@@ -658,7 +671,7 @@ export default function AdminCurrentAffairsPage() {
                     {item.source_excerpt && (
                       <details className={styles.sourceDetails}>
                         <summary>View original fetched text</summary>
-                        <p>{item.source_excerpt.slice(0, 6000)}</p>
+                        <p>{readableExcerpt(item.source_excerpt || item.summary).slice(0, 6000)}</p>
                       </details>
                     )}
                     <div className={styles.actions}>
