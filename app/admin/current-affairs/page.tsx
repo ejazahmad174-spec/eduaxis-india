@@ -282,8 +282,8 @@ export default function AdminCurrentAffairsPage() {
       setEditorError("Add exam relevance, or write 'General awareness; limited direct exam relevance'.");
       return;
     }
-    if (draft.needsManualVerification && !draft.verifiedByAdmin) {
-      setEditorError("This AI draft is flagged for manual verification. Open the source and tick the verification confirmation after checking it.");
+    if (!draft.verifiedByAdmin) {
+      setEditorError("Open the original source, verify the headline, dates, figures and summary, then tick the verification confirmation before saving.");
       return;
     }
 
