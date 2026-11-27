@@ -392,3 +392,99 @@
   .panelHeader { align-items: flex-start; flex-direction: column; }
   .source { align-items: flex-start; flex-direction: column; }
 }
+
+
+.collectionControls {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.collectionOptions {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 9px);
+  right: 0;
+  width: min(330px, calc(100vw - 32px));
+  padding: 15px;
+  border: 1px solid #dbe6eb;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 14px 38px #102b4620;
+}
+.collectionOptionsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #102b46;
+  font-size: 13px;
+}
+.collectionClose {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: #eef3f6;
+  color: #355166;
+  font-size: 18px;
+  cursor: pointer;
+}
+.collectionOptions > p {
+  margin: 7px 0 12px;
+  color: #738493;
+  font-size: 10px;
+  line-height: 1.55;
+}
+.collectionOption {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 2px;
+  color: #355166;
+  font-size: 12px;
+  cursor: pointer;
+}
+.collectionOption input { accent-color: #129b98; }
+.collectionOptionActions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 9px;
+  padding-top: 10px;
+  border-top: 1px solid #edf1f3;
+}
+.collectionOptionActions button {
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: #eef8f7;
+  color: #087d7a;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.publishGuidance {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 14px 0 16px;
+  padding: 12px 14px;
+  border: 1px solid #dbeae8;
+  border-radius: 9px;
+  background: #f4faf9;
+  color: #286c68;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.publishGuidance strong { color: #087d7a; font-size: 11px; }
+.publishGuidance small { color: #71868d; font-size: 10px; }
+@media (max-width: 900px) {
+  .collectionControls { align-items: stretch; flex-wrap: wrap; width: 100%; }
+  .collectionControls > button { flex: 1 1 auto; }
+  .collectionOptions { left: 0; right: auto; }
+}
+@media (max-width: 600px) {
+  .collectionControls { flex-direction: column; }
+  .collectionControls > button { width: 100%; }
+}
