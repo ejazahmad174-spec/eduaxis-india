@@ -53,9 +53,16 @@ function cleanText(value: string): string {
   return value
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
     .replace(/<[^>]*>/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&nbsp;|&#160;|&#xA0;/gi, " ")
+    .replace(/&ensp;|&emsp;|&thinsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&ndash;/gi, "–")
+    .replace(/&mdash;/gi, "—")
+    .replace(/&rsquo;|&lsquo;/gi, "'")
+    .replace(/&rdquo;|&ldquo;/gi, '"')
+    .replace(/&hellip;/gi, "…")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&#(\d+);/g, (_, n) => {
@@ -126,11 +133,11 @@ type FetchResult = {
 };
 
 async function fetchPage(
-  url: string,
+  initialUrl: string,
   previousEtag: string | null,
   previousLastModified: string | null
 ): Promise<FetchResult> {
-  if (!isAllowedUrl(url)) {
+  if (!isAllowedUrl(initialUrl)) {
     throw new Error("Source URL is not approved");
   }
 
@@ -139,44 +146,52 @@ async function fetchPage(
     Accept: "application/rss+xml, application/xml, text/xml, text/html",
   };
 
-  if (previousEtag) {
-    headers["If-None-Match"] = previousEtag;
+  if (previousEtag) headers["If-None-Match"] = previousEtag;
+  if (previousLastModified) headers["If-Modified-Since"] = previousLastModified;
+
+  let currentUrl = initialUrl;
+  let response: Response | null = null;
+
+  for (let redirects = 0; redirects <= 3; redirects += 1) {
+    if (!isAllowedUrl(currentUrl)) {
+      throw new Error("Source redirect points to a host that is not allow-listed");
+    }
+
+    response = await fetch(currentUrl, {
+      headers,
+      signal: AbortSignal.timeout(20000),
+      cache: "no-store",
+      redirect: "manual",
+    });
+
+    if (![301, 302, 303, 307, 308].includes(response.status)) break;
+
+    const location = response.headers.get("location");
+    if (!location || redirects === 3) {
+      throw new Error("Source returned too many or invalid redirects");
+    }
+
+    const nextUrl = new URL(location, currentUrl).toString();
+    if (!isAllowedUrl(nextUrl)) {
+      throw new Error("Source redirect points outside the approved source list");
+    }
+
+    currentUrl = nextUrl;
   }
 
-  if (previousLastModified) {
-    headers["If-Modified-Since"] = previousLastModified;
-  }
-
-  const response = await fetch(url, {
-    headers,
-    signal: AbortSignal.timeout(20000),
-    cache: "no-store",
-    redirect: "manual",
-  });
+  if (!response) throw new Error("Source did not return a response");
 
   const etag = response.headers.get("etag");
   const lastModified = response.headers.get("last-modified");
   const contentType = response.headers.get("content-type") || "";
 
   if (response.status === 304) {
-    return {
-      body: null,
-      contentType,
-      etag,
-      lastModified,
-      notModified: true,
-    };
+    return { body: null, contentType, etag, lastModified, notModified: true };
   }
 
-  if (response.status >= 300 && response.status < 400) {
-    throw new Error("Redirect blocked for security");
-  }
+  if (!response.ok) throw new Error("HTTP " + response.status);
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-
-  const sourceHost = new URL(url).hostname.toLowerCase();
+  const sourceHost = new URL(currentUrl).hostname.toLowerCase();
   const isApprovedBiharHtmlSource =
     sourceHost === "betastate.bihar.gov.in" &&
     /text\/html|application\/xhtml\+xml/i.test(contentType);
@@ -185,19 +200,11 @@ async function fetchPage(
     throw new Error("Unexpected source content type: " + contentType);
   }
 
-  const contentLength = Number(
-    response.headers.get("content-length") || 0
-  );
-
-  if (contentLength > MAX_RESPONSE_SIZE) {
-    throw new Error("Feed response exceeds the size limit");
-  }
+  const contentLength = Number(response.headers.get("content-length") || 0);
+  if (contentLength > MAX_RESPONSE_SIZE) throw new Error("Feed response exceeds the size limit");
 
   const body = await response.text();
-
-  if (body.length > MAX_RESPONSE_SIZE) {
-    throw new Error("Feed response exceeds the size limit");
-  }
+  if (body.length > MAX_RESPONSE_SIZE) throw new Error("Feed response exceeds the size limit");
 
   if (!isApprovedBiharHtmlSource && !/<rss\b|<feed\b|<rdf:rdf\b/i.test(body)) {
     throw new Error("The source did not return a recognised RSS or Atom feed");
@@ -207,13 +214,7 @@ async function fetchPage(
     throw new Error("The Bihar government source did not return an HTML page");
   }
 
-  return {
-    body,
-    contentType,
-    etag,
-    lastModified,
-    notModified: false,
-  };
+  return { body, contentType, etag, lastModified, notModified: false };
 }
 
 type NewsItem = {
@@ -428,7 +429,8 @@ async function collectSource(source: {
       source_id: source.id,
       source_name: source.source_name,
       title: item.title,
-      summary: item.summary,
+      summary: null,
+      source_excerpt: item.summary,
       source_url: item.source_url,
       category: getCategory(item.title, source.source_name),
       original_published_at: item.original_published_at,
