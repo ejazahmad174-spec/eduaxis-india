@@ -336,6 +336,48 @@
 }
 .sourceInfo small { color: #83919c; font-size: 10px; line-height: 1.5; }
 .sourceInfo .sourceError { color: #b42318; }
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.editorField select {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid #d9e4e9;
+  border-radius: 8px;
+  background: #fff;
+  color: #172b3d;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.editorField select:focus {
+  border-color: #129b98;
+  box-shadow: 0 0 0 3px #129b9818;
+}
+.fullWidth { grid-column: 1 / -1; }
+.editorActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 17px;
+}
+@media (max-width: 900px) {
+  .headerActions { justify-content: flex-start; }
+}
+@media (max-width: 600px) {
+  .headerActions { width: 100%; }
+  .headerActions button { width: 100%; }
+  .fullWidth { grid-column: auto; }
+  .editorActions { align-items: flex-start; flex-direction: column; }
+}
+
 @media (max-width: 900px) {
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .header { align-items: flex-start; flex-direction: column; }
