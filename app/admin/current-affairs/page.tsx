@@ -453,7 +453,10 @@ export default function AdminCurrentAffairsPage() {
   async function saveEditorialDraft() {
     if (!supabase || !editingItemId || !draft || savingDraft) return;
 
-    const facts = draft.keyFactsText.split("\n").map((fact) => fact.trim()).filter(Boolean);
+    const facts = draft.keyFactsText
+      .split("\n")
+      .map((fact) => fact.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "").trim())
+      .filter(Boolean);
     const englishSentences = countSentences(draft.summaryEn);
     const hindiSentences = countSentences(draft.summaryHi, true);
     const englishWords = draft.summaryEn.trim().split(/\s+/).filter(Boolean).length;
