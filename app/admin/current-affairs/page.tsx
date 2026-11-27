@@ -182,7 +182,7 @@ export default function AdminCurrentAffairsPage() {
     return items.filter((item) => {
       if (filter !== "all" && item.status !== filter) return false;
       if (!term) return true;
-      return [item.title, item.summary, item.source_name, item.category]
+      return [item.title, item.title_hi, item.summary, item.summary_hi, item.source_excerpt, item.source_name, item.category]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
@@ -624,7 +624,7 @@ export default function AdminCurrentAffairsPage() {
                             : "Not summarised"}
                       </span>
                     </div>
-                    {item.summary ? (
+                    {["generated", "edited", "manual"].includes(item.ai_generation_status) && item.summary ? (
                       <p className={styles.summary}>{item.summary}</p>
                     ) : (
                       <p className={styles.summary}>
@@ -646,7 +646,7 @@ export default function AdminCurrentAffairsPage() {
                     <div className={styles.actions}>
                       {item.status !== "published" && (
                         <button className={styles.secondaryButton} onClick={() => openEditor(item)} disabled={!!busy}>
-                          {item.summary ? "Edit summary" : "Prepare short summary"}
+                          {["generated", "edited", "manual"].includes(item.ai_generation_status) ? "Edit summary" : "Prepare short summary"}
                         </button>
                       )}
                       {item.status !== "published" && (
