@@ -65,8 +65,12 @@ BEGIN
         USING ERRCODE = '23514';
     END IF;
 
-    IF jsonb_typeof(NEW.key_facts) IS DISTINCT FROM 'array'
-       OR jsonb_array_length(NEW.key_facts) NOT BETWEEN 3 AND 5 THEN
+    IF jsonb_typeof(NEW.key_facts) IS DISTINCT FROM 'array' THEN
+      RAISE EXCEPTION 'Key facts must be stored as a JSON array.'
+        USING ERRCODE = '23514';
+    END IF;
+
+    IF jsonb_array_length(NEW.key_facts) NOT BETWEEN 3 AND 5 THEN
       RAISE EXCEPTION 'A published Current Affairs article requires 3–5 key facts.'
         USING ERRCODE = '23514';
     END IF;
