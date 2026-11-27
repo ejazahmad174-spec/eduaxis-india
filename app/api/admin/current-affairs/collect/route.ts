@@ -50,6 +50,26 @@ export async function POST(request: Request) {
     return jsonError("You are not authorised to run Current Affairs collection.", 403);
   }
 
+  let categories: string[] = ["national", "international", "education", "bihar"];
+  try {
+    const body = await request.json();
+    if (
+      !body ||
+      !Array.isArray(body.categories) ||
+      body.categories.length < 1 ||
+      body.categories.some(
+        (value: unknown) =>
+          typeof value !== "string" ||
+          !["national", "international", "education", "bihar"].includes(value)
+      )
+    ) {
+      return jsonError("Select one or more valid Current Affairs categories.", 400);
+    }
+    categories = [...new Set(body.categories as string[])];
+  } catch {
+    return jsonError("A valid category selection is required.", 400);
+  }
+
   try {
     const collectionUrl = new URL("/api/current-affairs/collect", request.url);
     const response = await fetch(collectionUrl, {
@@ -57,7 +77,9 @@ export async function POST(request: Request) {
       headers: {
         Authorization: "Bearer " + cronSecret,
         Accept: "application/json",
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({ categories }),
       cache: "no-store",
       signal: AbortSignal.timeout(55000),
     });
