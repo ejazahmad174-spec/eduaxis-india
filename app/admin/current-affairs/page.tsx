@@ -362,6 +362,7 @@ export default function AdminCurrentAffairsPage() {
         !Array.isArray(item.key_facts) ||
         item.key_facts.length < 3 ||
         !item.exam_relevance?.trim() ||
+        !["generated", "edited", "manual"].includes(item.ai_generation_status) ||
         item.ai_generation_status === "needs_review" ||
         sentenceCount < 4 ||
         sentenceCount > 5
