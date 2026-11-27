@@ -149,6 +149,54 @@
   text-decoration: none;
   white-space: nowrap;
 }
+
+.hindiTitle {
+  margin: 8px 0 5px;
+  color: #31566a;
+  font-size: 16px;
+  font-weight: 700;
+}
+.hindiSummary {
+  margin-top: 13px;
+  padding: 13px 15px;
+  border-left: 3px solid #129b98;
+  border-radius: 0 9px 9px 0;
+  background: #f0f8f7;
+  color: #365d68;
+}
+.hindiSummary span {
+  color: #087d7a;
+  font-size: 10px;
+  font-weight: 800;
+}
+.hindiSummary p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.keyFacts {
+  margin-top: 14px;
+  padding: 13px 15px;
+  border: 1px solid #e1eaed;
+  border-radius: 9px;
+  background: #fbfdfe;
+  color: #38576a;
+  font-size: 12px;
+}
+.keyFacts strong { color: #102b46; font-size: 12px; }
+.keyFacts ul {
+  margin: 8px 0 0;
+  padding-left: 19px;
+  line-height: 1.75;
+}
+.examRelevance {
+  margin-top: 11px;
+  color: #617687;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.examRelevance strong { color: #129b98; }
+
 .empty, .state, .error {
   padding: 30px;
   border: 1px dashed #cbdde3;
