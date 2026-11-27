@@ -76,6 +76,31 @@ function countSentences(value: string, hindi = false) {
   return value.split(punctuation).map((part) => part.trim()).filter(Boolean).length;
 }
 
+function parseKeyFacts(value: string) {
+  const lines = value
+    .split(/\r?\n/)
+    .map((fact) => fact.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "").trim())
+    .filter(Boolean);
+
+  // If a single paragraph was pasted, split each sentence into a separate fact.
+  if (lines.length === 1) {
+    const sentences = lines[0]
+      .split(/(?<=[.!?।])\s+(?=\S)/u)
+      .map((fact) => fact.trim())
+      .filter(Boolean);
+    if (sentences.length > 1) return sentences;
+  }
+  return lines;
+}
+
+function formatSavedKeyFacts(value: string[] | null) {
+  return parseKeyFacts((value || []).join("\n")).join("\n");
+}
+
+function isSavedEditorialDraft(item: CurrentAffairsItem) {
+  return ["generated", "manual", "edited", "needs_review"].includes(item.ai_generation_status);
+}
+
 function getPublicationIssues(item: CurrentAffairsItem) {
   const issues: string[] = [];
   const englishCount = countSentences(item.summary || "");
@@ -135,7 +160,7 @@ export default function AdminCurrentAffairsPage() {
   const router = useRouter();
   const [items, setItems] = useState<CurrentAffairsItem[]>([]);
   const [sources, setSources] = useState<CurrentAffairsSource[]>([]);
-  const [filter, setFilter] = useState<"all" | ItemStatus>("pending");
+  const [filter, setFilter] = useState<"all" | "drafts" | ItemStatus>("pending");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -231,10 +256,7 @@ export default function AdminCurrentAffairsPage() {
   async function saveManualArticle() {
     if (!supabase || savingManual) return;
 
-    const facts = manualDraft.keyFactsText
-      .split("\n")
-      .map((fact) => fact.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "").trim())
-      .filter(Boolean);
+    const facts = parseKeyFacts(manualDraft.keyFactsText);
 
     if (!manualDraft.headlineEn.trim() || !manualDraft.headlineHi.trim()) {
       setManualError("Please enter both English and Hindi headlines.");
@@ -316,7 +338,7 @@ export default function AdminCurrentAffairsPage() {
     } else {
       const created = data as CurrentAffairsItem;
       setItems((current) => [created, ...current]);
-      setFilter("pending");
+      setFilter("drafts");
       setShowManualForm(false);
       setManualError("");
       setMessage("Manual Current Affairs article saved successfully as Pending. It has not been published yet.");
@@ -360,6 +382,7 @@ export default function AdminCurrentAffairsPage() {
 
   const counts = useMemo(() => ({
     pending: items.filter((item) => item.status === "pending").length,
+    drafts: items.filter((item) => item.status === "pending" && isSavedEditorialDraft(item)).length,
     published: items.filter((item) => item.status === "published").length,
     rejected: items.filter((item) => item.status === "rejected").length,
   }), [items]);
@@ -368,7 +391,11 @@ export default function AdminCurrentAffairsPage() {
     const term = search.trim().toLowerCase();
 
     return items.filter((item) => {
-      if (filter !== "all" && item.status !== filter) return false;
+      if (filter === "drafts") {
+        if (item.status !== "pending" || !isSavedEditorialDraft(item)) return false;
+      } else if (filter !== "all" && item.status !== filter) {
+        return false;
+      }
       if (!term) return true;
       return [item.title, item.title_hi, item.summary, item.summary_hi, item.source_excerpt, item.source_name, item.category]
         .filter(Boolean)
@@ -386,7 +413,7 @@ export default function AdminCurrentAffairsPage() {
       headlineHi: item.title_hi || "",
       summaryEn: ["generated", "edited", "manual", "needs_review"].includes(item.ai_generation_status) ? item.summary || "" : "",
       summaryHi: ["generated", "edited", "manual", "needs_review"].includes(item.ai_generation_status) ? item.summary_hi || "" : "",
-      keyFactsText: (item.key_facts || []).join("\n"),
+      keyFactsText: formatSavedKeyFacts(item.key_facts),
       examRelevance: item.exam_relevance || "",
       editorialNote: item.editorial_note || "",
       aiModel: item.ai_model || "",
@@ -459,10 +486,7 @@ export default function AdminCurrentAffairsPage() {
   async function saveEditorialDraft() {
     if (!supabase || !editingItemId || !draft || savingDraft) return;
 
-    const facts = draft.keyFactsText
-      .split("\n")
-      .map((fact) => fact.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "").trim())
-      .filter(Boolean);
+    const facts = parseKeyFacts(draft.keyFactsText);
     const englishSentences = countSentences(draft.summaryEn);
     const hindiSentences = countSentences(draft.summaryHi, true);
     const englishWords = draft.summaryEn.trim().split(/\s+/).filter(Boolean).length;
@@ -523,23 +547,18 @@ export default function AdminCurrentAffairsPage() {
       setEditorError("Could not save the editorial draft: " + saveError.message);
     } else {
       const updated = data as CurrentAffairsItem;
-      setShowManualForm(false);
-      setEditingItemId(updated.id);
       setItems((current) => current.map((entry) => entry.id === updated.id ? updated : entry));
-      setDraft({
-        headlineEn: updated.title,
-        headlineHi: updated.title_hi || "",
-        summaryEn: updated.summary || "",
-        summaryHi: updated.summary_hi || "",
-        keyFactsText: (updated.key_facts || []).join("\n"),
-        examRelevance: updated.exam_relevance || "",
-        editorialNote: updated.editorial_note || "",
-        aiModel: updated.ai_model || "",
-        aiGenerated: ["generated", "edited", "needs_review"].includes(updated.ai_generation_status),
-        needsManualVerification: updated.ai_generation_status === "needs_review",
-        verifiedByAdmin: updated.ai_generation_status === "manual" || updated.ai_generation_status === "edited",
-      });
-      setMessage("Editorial draft saved. It is still pending and has not been published.");
+      setShowManualForm(false);
+      setEditingItemId("");
+      setDraft(null);
+      setEditorError("");
+      setFilter("drafts");
+      const remainingIssues = getPublicationIssues(updated);
+      setMessage(
+        remainingIssues.length === 0
+          ? "Draft saved successfully. It is listed under Drafts and ready to publish. Nothing has been published yet."
+          : "Draft saved successfully under Drafts. " + remainingIssues.length + " item(s) still need attention: " + remainingIssues.join(" · ")
+      );
     }
 
     setSavingDraft(false);
@@ -553,7 +572,7 @@ export default function AdminCurrentAffairsPage() {
       if (issues.length > 0) {
         openEditor(item);
         setShowManualForm(false);
-        setMessage("This article is still a draft. Its editor is open; complete the publishing checklist there, save, then publish.");
+        setMessage("Not published yet. The editor is open. Please fix: " + issues.join(" · ") + ". Save the draft, then click Publish now.");
         return;
       }
     }
@@ -581,7 +600,9 @@ export default function AdminCurrentAffairsPage() {
       setError("Could not update this item: " + updateError.message);
     } else {
       setItems((current) => current.map((entry) => entry.id === item.id ? data as CurrentAffairsItem : entry));
-      setMessage(status === "published" ? "Update published on the public Current Affairs page." : status === "rejected" ? "Update rejected and hidden from the public page." : "Update returned to the review queue.");
+      if (status === "published") setFilter("published");
+      if (status === "rejected") setFilter("rejected");
+      setMessage(status === "published" ? "Published successfully. The article is now visible on the public Current Affairs page." : status === "rejected" ? "Update rejected and hidden from the public page." : "Update returned to the review queue.");
     }
 
     setBusy("");
@@ -883,7 +904,7 @@ export default function AdminCurrentAffairsPage() {
                 <label className={styles.editorField}>
                   <span>Key facts (2–5, one per line)</span>
                   <textarea rows={5} value={draft.keyFactsText} onChange={(event) => setDraft({ ...draft, keyFactsText: event.target.value })} placeholder={"Initiative: ...\nMinistry: ...\nDate: ..."} />
-                  <small>{draft.keyFactsText.split("\n").map((fact) => fact.trim()).filter(Boolean).length} facts entered · add 2–5 separate facts before publishing</small>
+                  <small>{parseKeyFacts(draft.keyFactsText).length} facts detected · a pasted paragraph is split into separate sentences</small>
                 </label>
                 <label className={styles.editorField}>
                   <span>Exam relevance</span>
@@ -933,13 +954,13 @@ export default function AdminCurrentAffairsPage() {
 
             <div className={styles.filters}>
               <div className={styles.tabs}>
-                {(["pending", "published", "rejected", "all"] as const).map((status) => (
+                {(["pending", "drafts", "published", "rejected", "all"] as const).map((status) => (
                   <button
                     key={status}
                     className={filter === status ? styles.tabActive : styles.tab}
                     onClick={() => setFilter(status)}
                   >
-                    {status === "all" ? "All" : status[0].toUpperCase() + status.slice(1)}
+                    {status === "drafts" ? "Drafts" : status === "all" ? "All" : status[0].toUpperCase() + status.slice(1)}
                     {status !== "all" ? " (" + counts[status] + ")" : ""}
                   </button>
                 ))}
@@ -963,7 +984,9 @@ export default function AdminCurrentAffairsPage() {
                   <article className={styles.item} key={item.id}>
                     <div className={styles.itemTop}>
                       <span className={styles.category}>{labelCategory(item.category)}</span>
-                      <span className={styles.status + " " + styles[item.status]}>{item.status}</span>
+                      <span className={styles.status + " " + styles[item.status]}>
+                        {isSavedEditorialDraft(item) && item.status === "pending" ? "Draft · not published" : item.status}
+                      </span>
                     </div>
                     <div className={styles.headlineRow}>
                       <h3>{item.title}</h3>
@@ -971,7 +994,7 @@ export default function AdminCurrentAffairsPage() {
                         {item.ai_generation_status === "needs_review"
                           ? "Needs verification"
                           : ["generated", "edited", "manual"].includes(item.ai_generation_status)
-                            ? (getPublicationIssues(item).length === 0 ? "Ready to publish" : "Draft incomplete · " + getPublicationIssues(item).length + " items")
+                            ? (getPublicationIssues(item).length === 0 ? "Ready to publish" : "Draft incomplete · " + getPublicationIssues(item).length + " to fix")
                             : "Not summarised"}
                       </span>
                     </div>
@@ -1007,7 +1030,7 @@ export default function AdminCurrentAffairsPage() {
                           disabled={!!busy}
                           title={getPublicationIssues(item).length ? "Open the editor to complete: " + getPublicationIssues(item).join("; ") : "Publish this verified article"}
                         >
-                          {getPublicationIssues(item).length ? "Complete & publish" : "Publish"}
+                          {getPublicationIssues(item).length ? "Complete draft" : "Publish now"}
                         </button>
                       )}
                       {item.status !== "rejected" && (
