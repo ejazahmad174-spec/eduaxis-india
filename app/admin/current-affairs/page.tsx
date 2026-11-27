@@ -12,7 +12,16 @@ type ItemStatus = "pending" | "published" | "rejected";
 type CurrentAffairsItem = {
   id: string;
   title: string;
+  title_hi: string | null;
   summary: string | null;
+  summary_hi: string | null;
+  source_excerpt: string | null;
+  key_facts: string[] | null;
+  exam_relevance: string | null;
+  editorial_note: string | null;
+  ai_generation_status: "not_generated" | "generated" | "manual" | "edited" | "needs_review";
+  ai_model: string | null;
+  ai_generated_at: string | null;
   category: string | null;
   source_name: string | null;
   source_url: string;
@@ -20,6 +29,20 @@ type CurrentAffairsItem = {
   fetched_at: string;
   status: ItemStatus;
   approved_at: string | null;
+};
+
+type EditorialDraft = {
+  headlineEn: string;
+  headlineHi: string;
+  summaryEn: string;
+  summaryHi: string;
+  keyFactsText: string;
+  examRelevance: string;
+  editorialNote: string;
+  aiModel: string;
+  aiGenerated: boolean;
+  needsManualVerification: boolean;
+  verifiedByAdmin: boolean;
 };
 
 type CurrentAffairsSource = {
@@ -53,6 +76,19 @@ function labelCategory(value: string | null) {
   return "National Affairs";
 }
 
+function readableExcerpt(value: string | null) {
+  return (value || "")
+    .replace(/&nbsp;|&#160;|&#xA0;/gi, " ")
+    .replace(/&ensp;|&emsp;|&thinsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&ndash;/gi, "–")
+    .replace(/&mdash;/gi, "—")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export default function AdminCurrentAffairsPage() {
   const router = useRouter();
   const [items, setItems] = useState<CurrentAffairsItem[]>([]);
@@ -64,6 +100,11 @@ export default function AdminCurrentAffairsPage() {
   const [collecting, setCollecting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [editingItemId, setEditingItemId] = useState("");
+  const [draft, setDraft] = useState<EditorialDraft | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [editorError, setEditorError] = useState("");
 
   const loadData = useCallback(async () => {
     if (!supabase) {
@@ -75,7 +116,7 @@ export default function AdminCurrentAffairsPage() {
     const [itemResult, sourceResult] = await Promise.all([
       supabase
         .from("current_affairs_items")
-        .select("id,title,summary,category,source_name,source_url,original_published_at,fetched_at,status,approved_at")
+        .select("id,title,title_hi,summary,summary_hi,source_excerpt,key_facts,exam_relevance,editorial_note,ai_generation_status,ai_model,ai_generated_at,category,source_name,source_url,original_published_at,fetched_at,status,approved_at")
         .order("fetched_at", { ascending: false })
         .limit(150),
       supabase
@@ -141,7 +182,7 @@ export default function AdminCurrentAffairsPage() {
     return items.filter((item) => {
       if (filter !== "all" && item.status !== filter) return false;
       if (!term) return true;
-      return [item.title, item.summary, item.source_name, item.category]
+      return [item.title, item.title_hi, item.summary, item.summary_hi, item.source_excerpt, item.source_name, item.category]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
@@ -149,8 +190,188 @@ export default function AdminCurrentAffairsPage() {
     });
   }, [items, filter, search]);
 
+  function openEditor(item: CurrentAffairsItem) {
+    setEditingItemId(item.id);
+    setDraft({
+      headlineEn: item.title || "",
+      headlineHi: item.title_hi || "",
+      summaryEn: ["generated", "edited", "manual", "needs_review"].includes(item.ai_generation_status) ? item.summary || "" : "",
+      summaryHi: ["generated", "edited", "manual", "needs_review"].includes(item.ai_generation_status) ? item.summary_hi || "" : "",
+      keyFactsText: (item.key_facts || []).join("\n"),
+      examRelevance: item.exam_relevance || "",
+      editorialNote: item.editorial_note || "",
+      aiModel: item.ai_model || "",
+      aiGenerated: ["generated", "edited", "needs_review"].includes(item.ai_generation_status),
+      needsManualVerification: item.ai_generation_status === "needs_review",
+      verifiedByAdmin: item.ai_generation_status === "manual" || item.ai_generation_status === "edited",
+    });
+    setEditorError("");
+    setMessage("");
+    document.getElementById("current-affairs-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function generateSummary() {
+    if (!supabase || !editingItemId || generating) return;
+
+    setGenerating(true);
+    setEditorError("");
+    setMessage("");
+
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (sessionError || !token) throw new Error("Your admin session has expired. Please sign in again.");
+
+      const response = await fetch("/api/admin/current-affairs/summarize", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify({ id: editingItemId }),
+        cache: "no-store",
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        if (result.code === "AI_KEY_MISSING") {
+          throw new Error("AI is not connected yet. Add OPENAI_API_KEY to the Vercel Production environment. You can still write and save the summary manually.");
+        }
+        throw new Error(result.error || "Could not generate the summary.");
+      }
+
+      const generated = result.draft;
+      setDraft((current) => current ? {
+        ...current,
+        headlineEn: generated.headline_en,
+        headlineHi: generated.headline_hi,
+        summaryEn: generated.summary_en,
+        summaryHi: generated.summary_hi,
+        keyFactsText: (generated.key_facts || []).join("\n"),
+        examRelevance: generated.exam_relevance,
+        editorialNote: generated.editorial_note,
+        aiModel: result.model || "",
+        aiGenerated: true,
+        needsManualVerification: !!generated.needs_manual_verification || !generated.suitable_for_publication,
+        verifiedByAdmin: false,
+      } : current);
+      setMessage(
+        generated.needs_manual_verification || !generated.suitable_for_publication
+          ? "AI created a draft but flagged this source for manual verification. Check the original before saving for publication."
+          : "AI draft generated. Review every fact and edit it before saving."
+      );
+    } catch (generationError) {
+      setEditorError(generationError instanceof Error ? generationError.message : "Could not generate the summary.");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function saveEditorialDraft() {
+    if (!supabase || !editingItemId || !draft || savingDraft) return;
+
+    const facts = draft.keyFactsText.split("\n").map((fact) => fact.trim()).filter(Boolean);
+    const englishSentences = draft.summaryEn.split(/[.!?]+/).filter((sentence) => sentence.trim().length > 0);
+    const hindiSentences = draft.summaryHi.split(/[.!?।]+/).filter((sentence) => sentence.trim().length > 0);
+    const englishWords = draft.summaryEn.trim().split(/\s+/).filter(Boolean).length;
+
+    if (!draft.headlineEn.trim() || !draft.headlineHi.trim()) {
+      setEditorError("Enter both English and Hindi headlines.");
+      return;
+    }
+    if (englishSentences.length < 4 || englishSentences.length > 5 || hindiSentences.length < 4 || hindiSentences.length > 5) {
+      setEditorError("Both English and Hindi summaries must contain 4–5 sentences.");
+      return;
+    }
+    if (englishWords < 40 || englishWords > 100) {
+      setEditorError("Keep the English summary between 40 and 100 words (target: 50–80).");
+      return;
+    }
+    if (facts.length < 3 || facts.length > 5) {
+      setEditorError("Add 3–5 key facts, one per line.");
+      return;
+    }
+    if (!draft.examRelevance.trim()) {
+      setEditorError("Add exam relevance, or write 'General awareness; limited direct exam relevance'.");
+      return;
+    }
+    if (!draft.verifiedByAdmin) {
+      setEditorError("Open the original source, verify the headline, dates, figures and summary, then tick the verification confirmation before saving.");
+      return;
+    }
+
+    setSavingDraft(true);
+    setEditorError("");
+    setError("");
+
+    const generationStatus = draft.aiGenerated
+      ? (draft.verifiedByAdmin ? "edited" : "generated")
+      : "manual";
+
+    const { data, error: saveError } = await supabase
+      .from("current_affairs_items")
+      .update({
+        title: draft.headlineEn.trim(),
+        title_hi: draft.headlineHi.trim(),
+        summary: draft.summaryEn.trim(),
+        summary_hi: draft.summaryHi.trim(),
+        key_facts: facts,
+        exam_relevance: draft.examRelevance.trim(),
+        editorial_note: draft.editorialNote.trim() || null,
+        ai_generation_status: generationStatus,
+        ai_model: draft.aiGenerated ? draft.aiModel || null : null,
+        ai_generated_at: draft.aiGenerated ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", editingItemId)
+      .select("id,title,title_hi,summary,summary_hi,source_excerpt,key_facts,exam_relevance,editorial_note,ai_generation_status,ai_model,ai_generated_at,category,source_name,source_url,original_published_at,fetched_at,status,approved_at")
+      .single();
+
+    if (saveError) {
+      setEditorError("Could not save the editorial draft: " + saveError.message);
+    } else {
+      const updated = data as CurrentAffairsItem;
+      setItems((current) => current.map((entry) => entry.id === updated.id ? updated : entry));
+      setDraft({
+        headlineEn: updated.title,
+        headlineHi: updated.title_hi || "",
+        summaryEn: updated.summary || "",
+        summaryHi: updated.summary_hi || "",
+        keyFactsText: (updated.key_facts || []).join("\n"),
+        examRelevance: updated.exam_relevance || "",
+        editorialNote: updated.editorial_note || "",
+        aiModel: updated.ai_model || "",
+        aiGenerated: ["generated", "edited", "needs_review"].includes(updated.ai_generation_status),
+        needsManualVerification: updated.ai_generation_status === "needs_review",
+        verifiedByAdmin: updated.ai_generation_status === "manual" || updated.ai_generation_status === "edited",
+      });
+      setMessage("Editorial draft saved. It is still pending and has not been published.");
+    }
+
+    setSavingDraft(false);
+  }
+
   async function changeItemStatus(item: CurrentAffairsItem, status: ItemStatus) {
     if (!supabase || busy) return;
+
+    if (status === "published") {
+      const sentenceCount = (item.summary || "").split(/[.!?]+/).filter((sentence) => sentence.trim().length > 0).length;
+      if (
+        !item.summary?.trim() ||
+        !item.summary_hi?.trim() ||
+        !Array.isArray(item.key_facts) ||
+        item.key_facts.length < 3 ||
+        !item.exam_relevance?.trim() ||
+        !["generated", "edited", "manual"].includes(item.ai_generation_status) ||
+        item.ai_generation_status === "needs_review" ||
+        sentenceCount < 4 ||
+        sentenceCount > 5
+      ) {
+        openEditor(item);
+        setMessage("Prepare and save the bilingual 4–5 sentence summary and key facts before publishing.");
+        return;
+      }
+    }
 
     const action = status === "published" ? "publish" : status === "rejected" ? "reject" : "return to pending";
     if (!window.confirm("Are you sure you want to " + action + " this update?")) return;
@@ -168,7 +389,7 @@ export default function AdminCurrentAffairsPage() {
         updated_at: now,
       })
       .eq("id", item.id)
-      .select("id,title,summary,category,source_name,source_url,original_published_at,fetched_at,status,approved_at")
+      .select("id,title,title_hi,summary,summary_hi,source_excerpt,key_facts,exam_relevance,editorial_note,ai_generation_status,ai_model,ai_generated_at,category,source_name,source_url,original_published_at,fetched_at,status,approved_at")
       .single();
 
     if (updateError) {
@@ -180,7 +401,6 @@ export default function AdminCurrentAffairsPage() {
 
     setBusy("");
   }
-
   async function toggleSource(source: CurrentAffairsSource) {
     if (!supabase || busy) return;
 
@@ -269,6 +489,89 @@ export default function AdminCurrentAffairsPage() {
             <div><strong>{sources.filter((source) => source.is_active).length}/{sources.length}</strong><span>Active sources</span></div>
           </div>
 
+          {editingItemId && draft && (
+            <section className={styles.editorPanel} id="current-affairs-editor">
+              <div className={styles.panelHeader}>
+                <div>
+                  <div className={styles.kicker}>EDITORIAL DESK</div>
+                  <h2>Prepare Current Affairs Article</h2>
+                  <p>Generate a short draft, check it against the original source, edit it and save before publishing.</p>
+                </div>
+                <button className={styles.secondaryButton} onClick={() => { setEditingItemId(""); setDraft(null); setEditorError(""); }}>
+                  Close editor
+                </button>
+              </div>
+
+              {editorError && <div className={styles.error}>{editorError}</div>}
+
+              <div className={styles.editorToolbar}>
+                <button className={styles.primaryButton} onClick={generateSummary} disabled={generating || savingDraft}>
+                  {generating ? "Generating bilingual draft..." : "✦ Generate AI summary"}
+                </button>
+                <span className={styles.editorHint}>
+                  Target: 4–5 sentences · 50–80 English words · 3–5 key facts
+                </span>
+              </div>
+
+              <div className={styles.editorGrid}>
+                <label className={styles.editorField}>
+                  <span>Headline (English)</span>
+                  <input value={draft.headlineEn} onChange={(event) => setDraft({ ...draft, headlineEn: event.target.value })} />
+                </label>
+                <label className={styles.editorField}>
+                  <span>Headline (Hindi)</span>
+                  <input value={draft.headlineHi} onChange={(event) => setDraft({ ...draft, headlineHi: event.target.value })} />
+                </label>
+                <label className={styles.editorField}>
+                  <span>Short summary (English)</span>
+                  <textarea rows={5} value={draft.summaryEn} onChange={(event) => setDraft({ ...draft, summaryEn: event.target.value })} placeholder="Write 4–5 sentences (50–80 words)." />
+                  <small>{draft.summaryEn.trim() ? draft.summaryEn.trim().split(/\s+/).filter(Boolean).length : 0} words</small>
+                </label>
+                <label className={styles.editorField}>
+                  <span>संक्षिप्त सारांश (हिंदी)</span>
+                  <textarea rows={5} value={draft.summaryHi} onChange={(event) => setDraft({ ...draft, summaryHi: event.target.value })} placeholder="4–5 वाक्यों में संक्षिप्त सारांश लिखें।" />
+                </label>
+                <label className={styles.editorField}>
+                  <span>Key facts (3–5, one per line)</span>
+                  <textarea rows={5} value={draft.keyFactsText} onChange={(event) => setDraft({ ...draft, keyFactsText: event.target.value })} placeholder={"Initiative: ...\nMinistry: ...\nDate: ..."} />
+                </label>
+                <label className={styles.editorField}>
+                  <span>Exam relevance</span>
+                  <textarea rows={3} value={draft.examRelevance} onChange={(event) => setDraft({ ...draft, examRelevance: event.target.value })} placeholder="e.g. UPSC GS-II, BPSC General Studies, UGC NET Paper I..." />
+                </label>
+              </div>
+
+              {draft.editorialNote && (
+                <div className={draft.needsManualVerification ? styles.editorWarning : styles.editorHintBox}>
+                  <strong>{draft.needsManualVerification ? "Manual verification required" : "Editorial note"}</strong>
+                  <p>{draft.editorialNote}</p>
+                </div>
+              )}
+
+              {draft.aiGenerated && (
+                <div className={styles.modelNote}>AI draft generated using {draft.aiModel || "configured model"}. AI output can contain errors; verify the source before publishing.</div>
+              )}
+
+              <label className={styles.verifyCheck}>
+                <input
+                  type="checkbox"
+                  checked={draft.verifiedByAdmin}
+                  onChange={(event) => setDraft({ ...draft, verifiedByAdmin: event.target.checked })}
+                />
+                <span>I have checked the original source and verified the headline, dates, figures, summary and key facts.</span>
+              </label>
+
+              <div className={styles.actions}>
+                <button className={styles.publishButton} onClick={saveEditorialDraft} disabled={savingDraft || generating}>
+                  {savingDraft ? "Saving..." : "Save editorial draft"}
+                </button>
+                <button className={styles.secondaryButton} onClick={() => { setEditingItemId(""); setDraft(null); setEditorError(""); }}>
+                  Cancel
+                </button>
+              </div>
+            </section>
+          )}
+
           <section className={styles.panel}>
             <div className={styles.panelHeader}>
               <div>
@@ -312,16 +615,43 @@ export default function AdminCurrentAffairsPage() {
                       <span className={styles.category}>{labelCategory(item.category)}</span>
                       <span className={styles.status + " " + styles[item.status]}>{item.status}</span>
                     </div>
-                    <h3>{item.title}</h3>
-                    {item.summary && <p className={styles.summary}>{item.summary}</p>}
+                    <div className={styles.headlineRow}>
+                      <h3>{item.title}</h3>
+                      <span className={styles.aiStatus}>
+                        {item.ai_generation_status === "needs_review"
+                          ? "Needs verification"
+                          : ["generated", "edited", "manual"].includes(item.ai_generation_status)
+                            ? "Summary ready"
+                            : "Not summarised"}
+                      </span>
+                    </div>
+                    {["generated", "edited", "manual"].includes(item.ai_generation_status) && item.summary ? (
+                      <p className={styles.summary}>{item.summary}</p>
+                    ) : (
+                      <p className={styles.summary}>
+                        Original source text: {readableExcerpt(item.source_excerpt || item.summary || "No description was provided by the source.").slice(0, 220)}
+                        {readableExcerpt(item.source_excerpt || item.summary || "").length > 220 ? "…" : ""}
+                      </p>
+                    )}
                     <div className={styles.meta}>
                       <span>{item.source_name || "Source not named"}</span>
                       <span>Fetched: {formatDate(item.fetched_at)}</span>
                       <a href={item.source_url} target="_blank" rel="noopener noreferrer">Open source ↗</a>
                     </div>
+                    {item.source_excerpt && (
+                      <details className={styles.sourceDetails}>
+                        <summary>View original fetched text</summary>
+                        <p>{readableExcerpt(item.source_excerpt || item.summary).slice(0, 6000)}</p>
+                      </details>
+                    )}
                     <div className={styles.actions}>
                       {item.status !== "published" && (
-                        <button className={styles.publishButton} onClick={() => changeItemStatus(item, "published")} disabled={!!busy}>
+                        <button className={styles.secondaryButton} onClick={() => openEditor(item)} disabled={!!busy}>
+                          {["generated", "edited", "manual"].includes(item.ai_generation_status) ? "Edit summary" : "Prepare short summary"}
+                        </button>
+                      )}
+                      {item.status !== "published" && (
+                        <button className={styles.publishButton} onClick={() => changeItemStatus(item, "published")} disabled={!!busy || !item.summary || !item.summary_hi || (item.key_facts || []).length < 3}>
                           Publish
                         </button>
                       )}

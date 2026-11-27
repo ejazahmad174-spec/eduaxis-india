@@ -53,9 +53,16 @@ function cleanText(value: string): string {
   return value
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
     .replace(/<[^>]*>/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&nbsp;|&#160;|&#xA0;/gi, " ")
+    .replace(/&ensp;|&emsp;|&thinsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&ndash;/gi, "–")
+    .replace(/&mdash;/gi, "—")
+    .replace(/&rsquo;|&lsquo;/gi, "'")
+    .replace(/&rdquo;|&ldquo;/gi, '"')
+    .replace(/&hellip;/gi, "…")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&#(\d+);/g, (_, n) => {
@@ -126,11 +133,11 @@ type FetchResult = {
 };
 
 async function fetchPage(
-  url: string,
+  initialUrl: string,
   previousEtag: string | null,
   previousLastModified: string | null
 ): Promise<FetchResult> {
-  if (!isAllowedUrl(url)) {
+  if (!isAllowedUrl(initialUrl)) {
     throw new Error("Source URL is not approved");
   }
 
@@ -139,81 +146,75 @@ async function fetchPage(
     Accept: "application/rss+xml, application/xml, text/xml, text/html",
   };
 
-  if (previousEtag) {
-    headers["If-None-Match"] = previousEtag;
+  if (previousEtag) headers["If-None-Match"] = previousEtag;
+  if (previousLastModified) headers["If-Modified-Since"] = previousLastModified;
+
+  let currentUrl = initialUrl;
+  let response: Response | null = null;
+
+  for (let redirects = 0; redirects <= 3; redirects += 1) {
+    if (!isAllowedUrl(currentUrl)) {
+      throw new Error("Source redirect points to a host that is not allow-listed");
+    }
+
+    response = await fetch(currentUrl, {
+      headers,
+      signal: AbortSignal.timeout(20000),
+      cache: "no-store",
+      redirect: "manual",
+    });
+
+    if (![301, 302, 303, 307, 308].includes(response.status)) break;
+
+    const location = response.headers.get("location");
+    if (!location || redirects === 3) {
+      throw new Error("Source returned too many or invalid redirects");
+    }
+
+    const nextUrl = new URL(location, currentUrl).toString();
+    if (!isAllowedUrl(nextUrl)) {
+      throw new Error("Source redirect points outside the approved source list");
+    }
+
+    currentUrl = nextUrl;
   }
 
-  if (previousLastModified) {
-    headers["If-Modified-Since"] = previousLastModified;
-  }
-
-  const response = await fetch(url, {
-    headers,
-    signal: AbortSignal.timeout(20000),
-    cache: "no-store",
-    redirect: "manual",
-  });
+  if (!response) throw new Error("Source did not return a response");
 
   const etag = response.headers.get("etag");
   const lastModified = response.headers.get("last-modified");
   const contentType = response.headers.get("content-type") || "";
 
   if (response.status === 304) {
-    return {
-      body: null,
-      contentType,
-      etag,
-      lastModified,
-      notModified: true,
-    };
+    return { body: null, contentType, etag, lastModified, notModified: true };
   }
 
-  if (response.status >= 300 && response.status < 400) {
-    throw new Error("Redirect blocked for security");
-  }
+  if (!response.ok) throw new Error("HTTP " + response.status);
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-
-  const sourceHost = new URL(url).hostname.toLowerCase();
-  const isApprovedBiharHtmlSource =
-    sourceHost === "betastate.bihar.gov.in" &&
+  const sourceHost = new URL(currentUrl).hostname.toLowerCase();
+  const isApprovedHtmlSource =
+    ["betastate.bihar.gov.in", "prsindia.org", "www.prsindia.org"].includes(sourceHost) &&
     /text\/html|application\/xhtml\+xml/i.test(contentType);
 
-  if (!isApprovedBiharHtmlSource && !/xml|rss|atom|text\/plain/i.test(contentType)) {
+  if (!isApprovedHtmlSource && !/xml|rss|atom|text\/plain/i.test(contentType)) {
     throw new Error("Unexpected source content type: " + contentType);
   }
 
-  const contentLength = Number(
-    response.headers.get("content-length") || 0
-  );
-
-  if (contentLength > MAX_RESPONSE_SIZE) {
-    throw new Error("Feed response exceeds the size limit");
-  }
+  const contentLength = Number(response.headers.get("content-length") || 0);
+  if (contentLength > MAX_RESPONSE_SIZE) throw new Error("Feed response exceeds the size limit");
 
   const body = await response.text();
+  if (body.length > MAX_RESPONSE_SIZE) throw new Error("Feed response exceeds the size limit");
 
-  if (body.length > MAX_RESPONSE_SIZE) {
-    throw new Error("Feed response exceeds the size limit");
-  }
-
-  if (!isApprovedBiharHtmlSource && !/<rss\b|<feed\b|<rdf:rdf\b/i.test(body)) {
+  if (!isApprovedHtmlSource && !/<rss\b|<feed\b|<rdf:rdf\b/i.test(body)) {
     throw new Error("The source did not return a recognised RSS or Atom feed");
   }
 
-  if (isApprovedBiharHtmlSource && !/<html\b|<!doctype html/i.test(body)) {
+  if (isApprovedHtmlSource && !/<html\b|<!doctype html/i.test(body)) {
     throw new Error("The Bihar government source did not return an HTML page");
   }
 
-  return {
-    body,
-    contentType,
-    etag,
-    lastModified,
-    notModified: false,
-  };
+  return { body, contentType, etag, lastModified, notModified: false };
 }
 
 type NewsItem = {
@@ -365,6 +366,83 @@ function parseBiharHtmlNews(html: string, baseUrl: string): NewsItem[] {
   return items;
 }
 
+function parsePrsHtmlNews(html: string, baseUrl: string): NewsItem[] {
+  const items: NewsItem[] = [];
+  const cutoff = Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+  const seen = new Set<string>();
+
+  const add = (block: string) => {
+    const anchors = [...block.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)];
+    const candidate = anchors
+      .map((match) => ({
+        href: match[1].match(/href=["']([^"']+)["']/i)?.[1] || "",
+        title: cleanText(match[2]),
+      }))
+      .filter((entry) =>
+        entry.href &&
+        entry.title.length >= 24 &&
+        !/^(home|about|contact|careers|read more|view all|search|login|menu)$/i.test(entry.title)
+      )
+      .sort((left, right) => right.title.length - left.title.length)[0];
+
+    if (!candidate) return;
+    const link = absoluteUrl(candidate.href, baseUrl);
+    if (!link || seen.has(link)) return;
+    const parsedDateText = cleanText(block).match(/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+20\d{2}\b/i)?.[0];
+    const parsedDate = parsedDateText ? new Date(parsedDateText) : null;
+    if (parsedDate && !Number.isNaN(parsedDate.getTime()) && parsedDate.getTime() < cutoff) return;
+    const summary = cleanText(block)
+      .replace(candidate.title, "")
+      .replace(parsedDateText || "", "")
+      .slice(0, 1600);
+
+    seen.add(link);
+    items.push({
+      title: candidate.title.slice(0, 500),
+      summary: summary || null,
+      source_url: link,
+      original_published_at: parsedDate && !Number.isNaN(parsedDate.getTime())
+        ? parsedDate.toISOString()
+        : null,
+    });
+  };
+
+  const articleBlocks = html.match(/<article\b[\s\S]*?<\/article>/gi) || [];
+  for (const block of articleBlocks) {
+    if (items.length >= MAX_ITEMS_PER_SOURCE) break;
+    add(block);
+  }
+
+  // PRS pages can also render recent legislative updates as linked cards
+  // without semantic <article> wrappers. This fallback only accepts internal
+  // news/report/Bill routes on the allow-listed PRS host.
+  if (items.length === 0) {
+    const anchors = [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)];
+    for (const match of anchors) {
+      if (items.length >= MAX_ITEMS_PER_SOURCE) break;
+      const href = match[1].match(/href=["']([^"']+)["']/i)?.[1] || "";
+      const title = cleanText(match[2]);
+      if (
+        !href ||
+        title.length < 28 ||
+        !/(bill|legislative|parliament|state|analysis|explained|budget|finance|report|committee|law|policy)/i.test(title)
+      ) continue;
+
+      const link = absoluteUrl(href, baseUrl);
+      if (!link || seen.has(link)) continue;
+      seen.add(link);
+      items.push({
+        title: title.slice(0, 500),
+        summary: null,
+        source_url: link,
+        original_published_at: null,
+      });
+    }
+  }
+
+  return items;
+}
+
 async function updateSourceSuccess(
   sourceId: string,
   now: string,
@@ -420,15 +498,20 @@ async function collectSource(source: {
       };
     }
 
-    const items = /html/i.test(fetched.contentType)
-      ? parseBiharHtmlNews(fetched.body || "", source.source_url)
+    const sourceHost = new URL(source.source_url).hostname.toLowerCase();
+    const isHtmlSource = /html/i.test(fetched.contentType);
+    const items = isHtmlSource
+      ? sourceHost === "prsindia.org" || sourceHost === "www.prsindia.org"
+        ? parsePrsHtmlNews(fetched.body || "", source.source_url)
+        : parseBiharHtmlNews(fetched.body || "", source.source_url)
       : parseRss(fetched.body || "", source.source_url);
 
     const records = items.map((item) => ({
       source_id: source.id,
       source_name: source.source_name,
       title: item.title,
-      summary: item.summary,
+      summary: null,
+      source_excerpt: item.summary,
       source_url: item.source_url,
       category: getCategory(item.title, source.source_name),
       original_published_at: item.original_published_at,

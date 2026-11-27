@@ -8,7 +8,11 @@ import styles from "./current-affairs.module.css";
 type CurrentAffairsItem = {
   id: string;
   title: string;
+  title_hi: string | null;
   summary: string | null;
+  summary_hi: string | null;
+  key_facts: string[] | null;
+  exam_relevance: string | null;
   content: string | null;
   category: string | null;
   source_name: string | null;
@@ -70,7 +74,7 @@ export default function CurrentAffairsPage() {
 
       const { data, error: queryError } = await supabase
         .from("current_affairs_items")
-        .select("id,title,summary,content,category,source_name,source_url,original_published_at,approved_at")
+        .select("id,title,title_hi,summary,summary_hi,key_facts,exam_relevance,content,category,source_name,source_url,original_published_at,approved_at")
         .eq("status", "published")
         .order("original_published_at", { ascending: false })
         .limit(100);
@@ -194,6 +198,26 @@ export default function CurrentAffairsPage() {
                   </div>
                   <h3>{item.title}</h3>
                   {summary && <p className={styles.summary}>{summary}</p>}
+                  {item.title_hi && <h4 className={styles.hindiTitle}>{item.title_hi}</h4>}
+                  {item.summary_hi && (
+                    <div className={styles.hindiSummary}>
+                      <span>संक्षेप में</span>
+                      <p>{item.summary_hi}</p>
+                    </div>
+                  )}
+                  {item.key_facts && item.key_facts.length > 0 && (
+                    <div className={styles.keyFacts}>
+                      <strong>Key Facts</strong>
+                      <ul>
+                        {item.key_facts.map((fact, index) => <li key={index}>{fact}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {item.exam_relevance && (
+                    <div className={styles.examRelevance}>
+                      <strong>Exam Relevance:</strong> {item.exam_relevance}
+                    </div>
+                  )}
                   <div className={styles.articleFooter}>
                     <span className={styles.source}>Source: {item.source_name || "Official source"}</span>
                     <a className={styles.read} href={item.source_url} target="_blank" rel="noopener noreferrer">
